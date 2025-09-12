@@ -49,7 +49,9 @@
   cd backend 
   ```
 - 2. 创建虚拟环境
-  python -m venv venv  
+  ```bash
+  python -m venv venv
+  ``` 
 - 3. 激活虚拟环境（Windows CMD）
   ```bash
   venv\Scripts\activate.bat
@@ -60,7 +62,7 @@
   ```
 - 5. 启动Flask服务器
   ```bash
-  python main.py
+  python app.py
   ```
 
 ### 前端设置
@@ -108,8 +110,8 @@ animal-lab-management/
 │   │   ├── components/
 │   │   ├── views/
 │   │   ├── router/
-│   │   └── store/
-│   ├── app.vue
+│   │   ├── store/
+│   │   └──app.vue
 │   ├── package.json
 │   └── vue.config.js
 └── README.md
