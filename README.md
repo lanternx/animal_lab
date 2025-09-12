@@ -131,7 +131,7 @@ animal-lab-management/
 ## 致谢
 - 本项目得益于以下优秀开源项目的支持：
   - **Flask生态系统** - 提供简洁高效的Web服务支持
-  - - **Vue.js框架** - 构建现代化的响应式用户界面
+  - **Vue.js框架** - 构建现代化的响应式用户界面
   - **PyWebView团队** - 实现轻量级桌面应用封装
   - **Material Design Icons** - 提供美观的图标资源
   - **Chart.js & D3.js** - 强大的数据可视化能力
