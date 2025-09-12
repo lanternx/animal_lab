@@ -43,15 +43,25 @@
 
 ### 后端设置
 
-1. 克隆项目并安装Python依赖：
-```bash
-pip install flask flask_sqlalchemy flask_cors pandas openpyxl pywebview pyinstaller
-```
 
-2. 运行Flask服务器：
-```bash
-python app.py
-```
+- 1. 进入后端目录
+  ```bash
+  cd backend 
+  ```
+- 2. 创建虚拟环境
+  python -m venv venv  
+- 3. 激活虚拟环境（Windows CMD）
+  ```bash
+  venv\Scripts\activate.bat
+  ```
+- 4. 安装依赖包
+  ```bash
+  pip install -r requirements.txt
+  ```
+- 5. 启动Flask服务器
+  ```bash
+  python main.py
+  ```
 
 ### 前端设置
 
