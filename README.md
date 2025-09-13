@@ -36,6 +36,10 @@
 
 ## 安装与运行
 
+### 普通用户（推荐）
+✅ 已提供打包好的桌面版，**无需安装任何依赖**，下载后直接运行：
+👉 [立即下载最新版本](https://github.com/lanternx/animal_lab/releases/tag/V1)
+
 ### 前提条件
 - Python 3.8+
 - Node.js 14+
