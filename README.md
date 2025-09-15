@@ -1,123 +1,170 @@
-# 动物房管理系统 (Animal Facility Management System)
+# 动物房管理系统
 
-一个基于 Vue.js 构建的现代化实验室动物房信息管理系统。该系统专注于小鼠 colony 的管理，提供了从笼位视图、个体信息管理到体重监测、生存分析等一系列核心功能，旨在提升科研数据管理的效率和可靠性。
+一个基于Flask和Vue.js开发的本地实验动物管理系统，专为生物医学研究设计，提供完整的动物管理、数据分析和可视化功能，造福广大有实验动物需求的朋友。
 
-## ✨ 特性
+## 特性
 
-- **直观的笼位管理**: 提供可视化笼位视图，快速浏览和操作笼舍及小鼠信息。
-- **详细的小鼠档案**: 集中管理小鼠的基因型、出生日期、实验编号等详细信息。
-- **数据可视化分析**: 集成图表功能，用于绘制小鼠体重变化曲线和生存分析曲线。
-- **响应式设计**: 适配桌面、平板及移动设备，侧边栏可折叠以节省空间。
-- **实时状态监控**: 显示数据库连接状态和数据最后保存时间。
+- 🐭 完整的实验动物生命周期管理
+- 📊 丰富的图表和数据分析功能（体重曲线、生存曲线）
+- 🖥️ 跨平台桌面应用（基于pywebview）
+- 📱 响应式设计，支持移动端和桌面端
+- 💾 本地数据库存储，数据安全可靠
+- 🔍 强大的搜索和筛选功能
+- 📁 数据导入导出功能
 
-## 🚀 快速开始
+## 技术栈
 
-### 环境要求
+### 后端
+- Flask - Python Web框架
+- Flask-SQLAlchemy - ORM数据库管理
+- Flask-CORS - 跨域请求处理
+- Pandas - 数据处理和分析
+- Openpyxl - Excel文件操作
 
-- Node.js (推荐 LTS 版本)
-- npm 或 yarn
+### 前端
+- Vue 3 - 渐进式JavaScript框架
+- Vue Router - 路由管理
+- Vuex - 状态管理
+- Axios - HTTP客户端
+- Chart.js - 图表可视化
+- D3.js - 数据可视化
+- Material Design Icons - 图标库
 
-### 安装与运行
+### 桌面应用
+- PyWebView - 轻量级Web UI库
+- PyInstaller - 应用打包工具
 
-1. **克隆项目**
+## 安装与运行
 
-    ```bash
-    git clone <您的项目仓库地址>
-    cd al_flask
-    ```
+### 普通用户（推荐）
+✅ 已提供打包好的桌面版，**无需安装任何依赖**，下载后直接运行：
+👉 [立即下载最新版本](https://github.com/lanternx/animal_lab/releases/tag/V1)
 
-2. **安装依赖**
+### 前提条件
+- Python 3.8+
+- Node.js 14+
+- npm或yarn
 
-    ```bash
-    npm install
-    ```
+### 后端设置
 
-3. **启动开发服务器**
 
-    ```bash
-    npm run serve
-    ```
+- 1. 进入后端目录
+  ```bash
+  cd backend 
+  ```
+- 2. 创建虚拟环境
+  ```bash
+  python -m venv venv
+  ``` 
+- 3. 激活虚拟环境（Windows CMD）
+  ```bash
+  venv\Scripts\activate.bat
+  ```
+- 4. 安装依赖包
+  ```bash
+  pip install -r requirements.txt
+  ```
+- 5. 启动Flask服务器
+  ```bash
+  python app.py
+  ```
 
-    应用将在 `http://localhost:8080` 启动。
+### 前端设置
 
-4. **构建生产版本**
+1. 进入前端目录并安装依赖：
+```bash
+cd frontend
+npm install
+```
 
-    ```bash
-    npm run build
-    ```
+2. 运行开发服务器：
+```bash
+npm run serve
+```
 
-    构建后的静态文件将位于 `dist/` 目录。
+3. 构建生产版本：
+```bash
+npm run build
+```
 
-## 📁 项目结构
+### 桌面应用
 
-al_flask/
-├── public/                 # 静态资源
-├── src/
-│   ├── views/             # 路由页面组件
-│   ├── components/        # 可复用组件
-│   ├── router/            # 路由配置
-│   ├── store/             # Vuex 状态管理
-│   ├── assets/            # 图片、样式等资源
-│   └── App.vue            # 根组件
-├── package.json           # 项目配置和依赖
-└── README.md             # 项目说明
+1. 运行主程序启动桌面应用：
+```bash
+python main.py
+```
 
-## 🛠️ 技术栈
+2. 打包为可执行文件：
+```bash
+pyinstaller --onefile --windowed main.py
+```
 
-- **前端框架**: Vue.js 3
-- **构建工具**: Vue CLI
-- **路由**: Vue Router 4
-- **状态管理**: Vuex 4
-- **图表库**: Chart.js (通过 vue-chartjs 集成)
-- **图标**: Material Icons
-- **HTTP 客户端**: Axios
+## 项目结构
 
-## 📊 第三方依赖与许可
+```
+animal-lab-management/
+├── backend/           # Flask后端应用
+│   ├── main.py       # 桌面应用入口
+│   ├── app.py        # 主应用文件
+│   ├── models.py     # 数据模型
+│   └── requirements.txt
+├── frontend/         # Vue前端应用
+│   ├── public/
+│   ├── src/
+│   │   ├── components/
+│   │   ├── views/
+│   │   ├── router/
+│   │   ├── store/
+│   │   └──app.vue
+│   ├── package.json
+│   └── vue.config.js
+└── README.md
+```
 
-本项目遵循所有第三方开源库的许可协议。主要依赖及其许可如下：
+## 主要功能
 
-| 依赖名称 | 版本 | 许可 | 用途 |
-| :--- | :--- | :--- | :--- |
-| **vue** | ^3.5.19 | MIT | 核心框架 |
-| **vue-router** | ^4.5.1 | MIT | 路由管理 |
-| **vuex** | ^4.1.0 | MIT | 状态管理 |
-| **chart.js** | ^4.5.0 | MIT | 数据图表 |
-| **axios** | ^1.11.0 | MIT | HTTP 请求 |
-| **core-js** | ^3.45.1 | MIT | 浏览器兼容性 |
-| **@vue/cli-service** | ^5.0.9 | MIT | 构建与开发服务 |
-| **sass** | ^1.90.0 | MIT | CSS 预处理器 |
-| **webpack** | ^5.101.3 | MIT | 模块打包 |
-| **babel** | ^7.26.0 | MIT | JavaScript 编译器 |
-| **eslint** | ^7.32.0 | MIT | 代码检查 |
-| **prettier** | ^2.8.8 | MIT | 代码格式化 |
-| **workbox** | ^6.6.0 | MIT | PWA 支持 |
-| **@vue/compiler-sfc** | ^3.5.19 | MIT | 单文件组件编译 |
+- **笼位视图** - 可视化动物笼位安排和管理
+- **小鼠详细页** - 动物个体信息追踪
+- **小鼠列表** - 详细的动物信息管理和搜索
+- **体重曲线** - 动物体重变化追踪和分析
+- **生存曲线** - 生存率统计和可视化
+- **系统设置** - 应用程序配置和管理
 
-**完整的依赖树和详细的许可信息**请参阅项目根目录下的 `LICENSES` 文件或运行 `npm run licenses:review`。
+## 贡献指南
 
-> **重要提示**: 本项目是一个前端应用程序，通常需要与后端 API (如 Flask, Django, Express 等) 协同工作以进行数据持久化。当前版本可能配置为与本地 mock 数据或开发服务器交互。
+我们欢迎社区贡献！请阅读以下指南：
 
-## 🤝 贡献指南
-
-我们欢迎任何形式的贡献！
-
-1. Fork 本项目
-2. 创建您的特性分支 (`git checkout -b feature/AmazingFeature`)
-3. 提交您的更改 (`git commit -m 'Add some AmazingFeature'`)
+1. Fork本项目
+2. 创建特性分支 (`git checkout -b feature/AmazingFeature`)
+3. 提交更改 (`git commit -m 'Add some AmazingFeature'`)
 4. 推送到分支 (`git push origin feature/AmazingFeature`)
-5. 提交 Pull Request
+5. 开启Pull Request
 
-## 📄 许可证
+## 许可证
 
-此项目根据 **Apache License, Version 2.0 许可证** 授权 - 查看 LICENSE 文件了解详情。
+本项目采用Apache License 2.0开源许可证 - 查看 LICENSE 文件了解详情。
 
-## 🙏 致谢
+## 致谢
+- 本项目得益于以下优秀开源项目的支持：
+  - **Flask生态系统** - 提供简洁高效的Web服务支持
+  - **Vue.js框架** - 构建现代化的响应式用户界面
+  - **PyWebView团队** - 实现轻量级桌面应用封装
+  - **Material Design Icons** - 提供美观的图标资源
+  - **Chart.js & D3.js** - 强大的数据可视化能力
+  - **SQLAlchemy** - ORM数据库管理解决方案
+- 感谢所有贡献者和用户
 
-感谢所有为此项目做出贡献的开发者以及以下优秀的开源项目：
+## 支持
 
-- Vue.js 团队
-- Chart.js 团队
-- Webpack 团队
-- 以及所有本项目依赖库的维护者们。
+如果您遇到问题或有疑问，请通过以下方式联系我们：
+- 提交GitHub Issue
+- 发送邮件至项目维护团队
+
+## 版本历史
+
+- 0.1.0 - 初始版本发布
+- 详细更新日志请查看CHANGELOG.md
 
 ---
+
+**注意**: 本项目仍在积极开发中，API和功能可能会有变动。
