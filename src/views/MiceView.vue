@@ -850,7 +850,7 @@ export default {
       this.fatherSuggestions = this.mice.filter(mouse =>
       mouse.sex === 'M' &&
       mouse.id.toLowerCase().includes(query) &&
-      mouse.id !== this.editingMouse.tid
+      mouse.tid !== this.editingMouse.tid
       ).slice(0, 10);
     },
 
@@ -863,7 +863,8 @@ export default {
       const query = this.motherQuery.toLowerCase();
       this.motherSuggestions = this.mice.filter(mouse =>
       mouse.sex === 'F' &&
-      mouse.id.toLowerCase().includes(query)
+      mouse.id.toLowerCase().includes(query) &&
+      mouse.tid !== this.editingMouse.tid
       ).slice(0, 10);
     },
 
