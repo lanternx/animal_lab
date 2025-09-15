@@ -64,10 +64,6 @@
   ```bash
   pip install -r requirements.txt
   ```
-- 5. 启动Flask服务器
-  ```bash
-  python app.py
-  ```
 
 ### 前端设置
 
@@ -108,16 +104,15 @@ animal-lab-management/
 │   ├── app.py        # 主应用文件
 │   ├── models.py     # 数据模型
 │   └── requirements.txt
-├── frontend/         # Vue前端应用
-│   ├── public/
-│   ├── src/
-│   │   ├── components/
-│   │   ├── views/
-│   │   ├── router/
-│   │   ├── store/
-│   │   └──app.vue
-│   ├── package.json
-│   └── vue.config.js
+├── dist/         # Vue前端编译产物
+├── src/          # Vue前端应用
+│   ├── components/
+│   ├── views/
+│   ├── router/
+│   ├── store/
+│   └──app.vue
+├── package.json
+└── vue.config.js
 └── README.md
 ```
 
@@ -162,8 +157,8 @@ animal-lab-management/
 
 ## 版本历史
 
-- 0.1.0 - 初始版本发布
-- 详细更新日志请查看CHANGELOG.md
+- 1.1 - 改进版本发布
+- 1.0 - 初始版本发布
 
 ---
 
