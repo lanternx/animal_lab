@@ -4,13 +4,7 @@ import os
 from PyInstaller.utils.hooks import collect_data_files
 
 block_cipher = None
-# 获取当前 spec 文件所在目录的父目录
-spec_file_path = os.path.abspath(sys.argv[0])
-current_dir = os.path.dirname(spec_file_path)
-parent_dir = os.path.dirname(current_dir)
 
-# 前端 dist 目录路径
-dist_path = os.path.join(parent_dir, 'dist')
 
 # 添加应用依赖
 hiddenimports = [
@@ -30,7 +24,7 @@ hiddenimports = [
 # 包含数据文件
 datas = [
     # 包含前端静态文件
-    (dist_path, 'dist'),
+    ('dist', 'dist'),
 
     # 包含app.py和models.py
     ('app.py', '.'),
