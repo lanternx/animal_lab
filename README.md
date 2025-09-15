@@ -45,7 +45,7 @@
 - Node.js 14+
 - npm或yarn
 
-### 后端设置
+### 1 后端配置
 
 
 - 1. 进入后端目录
@@ -65,34 +65,31 @@
   pip install -r requirements.txt
   ```
 
-### 前端设置
+### 2 前端配置
 
 1. 进入前端目录并安装依赖：
 ```bash
-cd frontend
 npm install
 ```
 
-2. 运行开发服务器：
-```bash
-npm run serve
-```
-
-3. 构建生产版本：
+2. 构建生产版本：
 ```bash
 npm run build
 ```
 
-### 桌面应用
+3. 将编译后的dist文件夹移动到backend中
 
-1. 运行主程序启动桌面应用：
+### 3 开启桌面应用
+
+运行主程序启动桌面应用：
 ```bash
 python main.py
 ```
+（因为我不太会设置，所以没法利用vue实时编译的特性，main.py打开的是编译好的静态页面）
 
-2. 打包为可执行文件：
+打包为可执行文件：
 ```bash
-pyinstaller --onefile --windowed main.py
+pyinstaller pyinstaller.spec
 ```
 
 ## 项目结构
@@ -100,11 +97,12 @@ pyinstaller --onefile --windowed main.py
 ```
 animal-lab-management/
 ├── backend/           # Flask后端应用
+│   ├── dist/         # Vue前端编译产物
 │   ├── main.py       # 桌面应用入口
 │   ├── app.py        # 主应用文件
 │   ├── models.py     # 数据模型
+│   ├── pyinstaller.spec
 │   └── requirements.txt
-├── dist/         # Vue前端编译产物
 ├── src/          # Vue前端应用
 │   ├── components/
 │   ├── views/
