@@ -77,6 +77,8 @@ npm install
 npm run build
 ```
 
+3. 将编译后的dist文件夹移动到backend中
+
 ### 3 开启桌面应用
 
 运行主程序启动桌面应用：
@@ -95,12 +97,12 @@ pyinstaller pyinstaller.spec
 ```
 animal-lab-management/
 ├── backend/           # Flask后端应用
+│   ├── dist/         # Vue前端编译产物
 │   ├── main.py       # 桌面应用入口
 │   ├── app.py        # 主应用文件
 │   ├── models.py     # 数据模型
 │   ├── pyinstaller.spec
 │   └── requirements.txt
-├── dist/         # Vue前端编译产物
 ├── src/          # Vue前端应用
 │   ├── components/
 │   ├── views/
