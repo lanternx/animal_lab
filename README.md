@@ -69,7 +69,6 @@
 
 1. 进入前端目录并安装依赖：
 ```bash
-cd frontend
 npm install
 ```
 
