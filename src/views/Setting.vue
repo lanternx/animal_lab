@@ -126,6 +126,7 @@
         <button class="btn btn-primary" @click="exportData('mice')">导出小鼠表</button>
         <button class="btn btn-primary" @click="exportData('weights')">导出体重表</button>
         <button class="btn btn-primary" @click="exportData('survival')">导出生存表</button>
+        <button class="btn btn-primary" @click="exportData('records')">导出状态信息表</button>
         </div>
         
         <div v-if="exportOptionsVisible" class="export-options">
@@ -179,7 +180,7 @@
             <select v-model="importType">
             <option value="mice">小鼠信息</option>
             <option value="weights">体重数据</option>
-            <option value="pedigree">血统关系</option>
+           <!-- <option value="pedigree">血统关系</option>功能尚未实现 -->
             </select>
         </div>
         

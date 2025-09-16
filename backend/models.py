@@ -61,6 +61,14 @@ class StatusRecord(db.Model):
     record_date = db.Column(db.Date, nullable=False)
     record_livingdays = db.Column(db.Integer, nullable=False)
 
+    def to_dict(self):
+        return {
+            'record_id': self.id,
+            'mouse_id': self.mouse_id,
+            'record_date': self.record_date,
+            'status': self.status
+        }
+
 # 基因型模型
 class Genotype(db.Model):
     id = db.Column(db.Integer, primary_key=True)

@@ -684,6 +684,9 @@ def export_data(export_type):
     elif export_type == 'weights':
         query = WeightRecord.query
         filename = 'weights_export'
+    elif export_type == 'records':
+        query = StatusRecord.query
+        filename = 'records_export'
     elif export_type == 'survival':
         # 生存表需要特殊处理
         mice = Mouse.query.all()
