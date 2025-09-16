@@ -3,6 +3,10 @@
     <div class="content-header" id="contentHeader">
       <h1 class="page-title">笼位视图</h1>
       <div class="action-buttons">
+        <button class="btn btn-outline" @click="fetchCages">
+          <i class="material-icons btn-icon">refresh</i>
+          刷新数据
+        </button>
         <button class="btn btn-outline" v-if="!showTemporaryArea && temporaryMice.length === 0" @click="showTemporaryArea=true">
           <i class="material-icons btn-icon">view_sidebar</i>
           打开临时区
@@ -343,17 +347,49 @@ const sortedSections = computed({
 
 // 生命周期钩子
 onMounted(async () => {
+  console.log('DashBoard组件已挂载，开始初始化...')
+  console.log('当前URL:', window.location.href)
+  console.log('User Agent:', navigator.userAgent)
+  
   section_key.value = true
-  await fetchCages()
-  await fetchTemporaryMice()
+  
+  // 延迟1秒再开始加载，确保所有依赖都准备好
+  setTimeout(async () => {
+    console.log('开始延迟加载数据...')
+    await fetchCages()
+    await fetchTemporaryMice()
+  }, 1000)
+  
+  // 监听窗口焦点事件，当用户切换回窗口时刷新数据
+  window.addEventListener('focus', () => {
+    console.log('窗口获得焦点，刷新数据...')
+    fetchCages()
+    fetchTemporaryMice()
+  })
+  
+  console.log('DashBoard组件初始化完成')
 })
 
 // 获取所有笼位数据
 async function fetchCages() {
   try {
-    const lresponse = await axios.get('/api/locations')
+    console.log('开始获取笼位数据...')
+    
+    // 强制不使用缓存的axios配置
+    const axiosConfig = {
+      headers: {
+        'Cache-Control': 'no-cache',
+        'Pragma': 'no-cache'
+      },
+      timeout: 10000
+    }
+    
+    const lresponse = await axios.get('/api/locations', axiosConfig)
+    console.log('获取到locations数据:', lresponse.data)
     availableSections.value = lresponse.data
-    const response = await axios.get('/api/cages')
+    
+    const response = await axios.get('/api/cages', axiosConfig)
+    console.log('获取到cages数据:', response.data)
     cages.value = response.data
     
     // 设置默认选中的section为第一个
@@ -361,10 +397,16 @@ async function fetchCages() {
       activeSection.value = availableSections.value[0].identifier
       newCage.section = availableSections.value[0].identifier
       section_key.value = false
+      console.log('设置默认section为:', activeSection.value)
     }
+    console.log('笼位数据获取完成')
   } catch (error) {
     console.error('获取笼位信息失败:', error)
-    alert('无法获取笼位信息，请检查网络连接')
+    console.log('尝试重新连接...')
+    // 延迟重试
+    setTimeout(() => {
+      fetchCages()
+    }, 2000)
   }
 }
 
