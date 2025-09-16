@@ -1,11 +1,60 @@
 import webview
 import threading
+import time
+import sys
+import os
+import socket
+from contextlib import closing
 from app import app
+import logging
 
-def run_flask():
-    app.run(port=5000)
+# 配置日志记录
+logging.basicConfig(
+    level=logging.INFO,
+    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
+    handlers=[
+        logging.FileHandler("app.log"),
+        logging.StreamHandler()
+    ]
+)
+logger = logging.getLogger("Main")
 
-# 使用闭包创建保存函数
+def find_free_port(start_port=5000, max_attempts=20):
+    """查找可用端口"""
+    port = start_port
+    attempts = 0
+    while attempts < max_attempts:
+        with closing(socket.socket(socket.AF_INET, socket.SOCK_STREAM)) as sock:
+            if sock.connect_ex(('127.0.0.1', port)) != 0:
+                logger.info(f"找到可用端口: {port}")
+                return port
+        port += 1
+        attempts += 1
+    logger.error(f"在 {start_port}-{port} 范围内找不到可用端口")
+    return None
+
+def run_flask(port):
+    """运行Flask应用"""
+    try:
+        logger.info(f"启动Flask服务器，端口: {port}")
+        # 关闭调试模式，提高生产环境稳定性
+        app.run(port=port, debug=False, use_reloader=False)
+    except Exception as e:
+        logger.exception(f"Flask服务器启动失败: {str(e)}")
+
+def wait_for_server(port, timeout=30):
+    """等待服务器启动"""
+    start_time = time.time()
+    while time.time() - start_time < timeout:
+        try:
+            with socket.create_connection(('127.0.0.1', port), timeout=1):
+                logger.info(f"服务器在端口 {port} 上已启动")
+                return True
+        except (socket.timeout, ConnectionRefusedError):
+            time.sleep(0.5)
+    logger.error(f"服务器在端口 {port} 上启动超时")
+    return False
+
 def create_save_file_dialog(window):
     """创建文件保存对话框函数"""
     def save_file_dialog(data, filename):
@@ -69,21 +118,54 @@ def handle_exception(exctype, value, traceback):
 sys.excepthook = handle_exception
 
 if __name__ == '__main__':
-    t = threading.Thread(target=run_flask)
-    t.daemon = True
-    t.start()
+    logger.info("应用程序启动")
     
-    # 创建本地窗口应用
-    window = webview.create_window(
-        "小鼠管理系统", 
-        "http://localhost:5000", 
-        width=1200, 
-        height=800,
-        resizable=True
-    )
-    # 创建保存函数
-    save_file_dialog = create_save_file_dialog(window)
-
-    # 暴露API
-    window.expose(save_file_dialog)
-    webview.start()
+    # 查找可用端口
+    port = find_free_port()
+    if port is None:
+        logger.error("无法找到可用端口，退出应用")
+        sys.exit(1)
+    
+    # 启动Flask服务器线程
+    flask_thread = threading.Thread(target=run_flask, args=(port,), daemon=True)
+    flask_thread.start()
+    
+    # 等待服务器启动
+    if not wait_for_server(port):
+        logger.error("服务器启动失败，退出应用")
+        sys.exit(1)
+    
+    try:
+        # 创建本地窗口应用
+        window = webview.create_window(
+            "小鼠管理系统", 
+            f"http://127.0.0.1:{port}", 
+            width=1200, 
+            height=800,
+            resizable=True,
+            text_select=True,
+            confirm_close=True
+        )
+        
+        # 创建保存函数
+        save_file_dialog = create_save_file_dialog(window)
+        
+        # 暴露API
+        window.expose(save_file_dialog)
+        
+        # 启动webview
+        logger.info("启动Webview窗口")
+        webview.start(
+            private_mode=False,  # 禁用私有模式以允许文件访问
+            http_server=False,   # 禁用内置HTTP服务器
+        )
+    except Exception as e:
+        logger.exception(f"窗口创建失败: {str(e)}")
+        # 尝试恢复
+        try:
+            webview.start()
+        except:
+            logger.critical("无法恢复，退出应用")
+            sys.exit(1)
+    
+    logger.info("应用程序正常退出")
