@@ -5,3 +5,4 @@ pyinstaller
 pywebview
 pandas
 openpyxl
+requests

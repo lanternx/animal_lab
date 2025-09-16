@@ -8,6 +8,8 @@ from pathlib import Path
 import pandas as pd
 from datetime import datetime
 from io import BytesIO
+from sqlalchemy import text
+from sqlalchemy.orm import joinedload
 
 
 app = Flask(__name__, static_folder='dist', static_url_path='')
@@ -42,8 +44,33 @@ os.makedirs(app.config['UPLOAD_FOLDER'], exist_ok=True)
 
 db.init_app(app)
 
+# 确保数据库初始化完成
 with app.app_context():
-    db.create_all()
+    try:
+        db.create_all()
+        print("数据库初始化完成")
+        # 测试数据库连接
+        db.session.execute(text('SELECT 1'))
+        print("数据库连接测试成功")
+        
+        # 自动创建默认位置（如果不存在）
+        default_location = Location.query.filter_by(identifier="默认区域").first()
+        if not default_location:
+            from datetime import datetime
+            new_location = Location(
+                identifier="默认区域",
+                description=f"系统启动时自动创建 - {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}",
+                order=0
+            )
+            db.session.add(new_location)
+            db.session.commit()
+            print("已自动创建默认位置")
+        else:
+            print("默认位置已存在")
+            
+    except Exception as e:
+        print(f"数据库初始化失败: {str(e)}")
+        raise
 
 
 def allowed_file(filename):
@@ -110,7 +137,7 @@ def add_mouse():
         if data['birth_date']:
             mouse.birth_date = datetime.strptime(data['birth_date'], '%Y-%m-%d').date()
         mouse.live_status = 1  # 默认新添加的小鼠状态为'活'
-        mouse.cage_id = -1
+        mouse.cage_id = '-1'
         db.session.add(mouse)
         if data['father']:
             for t in data['father']:
@@ -205,7 +232,7 @@ def delete_mouse(mouse_tid):
 @app.route('/api/cages', methods=['GET'])
 def get_all_cages():
     # 使用预加载一次性获取所有笼子及其小鼠
-    cages = Cage.query.options(db.joinedload(Cage.mice)).order_by(Cage.order.asc()).all()
+    cages = Cage.query.options(joinedload(Cage.mice)).order_by(Cage.order.asc()).all()
     cage_data = []
     for cage in cages:
         mice_info = []
@@ -232,7 +259,7 @@ def get_all_cages():
 def get_undetermined_mice():
     # 查找未分配笼子的小鼠
     undetermined_mice = []
-    undetermined_mice_query = Mouse.query.filter(Mouse.cage_id == -1).all()
+    undetermined_mice_query = Mouse.query.filter(Mouse.cage_id == '-1').all()
     for mouse in undetermined_mice_query:
         if mouse.live_status == 1:
             undetermined_mice.append({
@@ -293,7 +320,7 @@ def delete_cage(cage_id):
         # 将该笼位中的所有小鼠移动到临时区
         mice = Mouse.query.filter_by(cage_id=cage_id).all()
         for mouse in mice:
-            mouse.cage_id = -1
+            mouse.cage_id = '-1'
         db.session.delete(cage)
         db.session.commit()
         return jsonify({'message': f'Cage {cage_id} deleted successfully'})
@@ -344,7 +371,7 @@ def update_cage_order():
 def get_mice_info(mouse_tid):
     content = {}
     mouse = Mouse.query.get(mouse_tid)
-    if mouse.cage_id == -1 or mouse.cage_id is None:
+    if mouse.cage_id == '-1' or mouse.cage_id is None:
         c_cage = None
     else:
         c_cage = Cage.query.get(mouse.cage_id)
@@ -665,7 +692,7 @@ def delete_location(id):
         # 将该笼位中的所有小鼠移动到临时区
         mice = Mouse.query.filter_by(cage_id=cage.id).all()
         for mouse in mice:
-            mouse.cage_id = -1
+            mouse.cage_id = '-1'
         db.session.delete(cage)
     db.session.commit()
     return '', 204
@@ -830,7 +857,7 @@ def import_mice_data(df, result, conflict_resolution):
             if 'cage_id' in df.columns and pd.notna(row['cage_id']):
                 mouse.cage_id = str(row['cage_id'])
             else:
-                mouse.cage_id = -1
+                mouse.cage_id = '-1'
             
             db.session.add(mouse)
             db.session.commit()

@@ -1,12 +1,14 @@
 # 动物房管理系统
 
-一个基于Flask和Vue.js开发的本地实验动物管理系统，专为生物医学研究设计，提供完整的动物管理、数据分析和可视化功能，造福广大有实验动物需求的朋友。
+一个基于 Flask 和 Vue.js 开发的本地实验动物管理系统，专为生物医学研究设计，提供完整的动物管理、数据分析和可视化功能，造福广大有实验动物需求的朋友。可以直接在 windows 上使用，而在 mac 上也可以根据开发教程安装。
+
+介绍和[教学视频](https://b23.tv/5fQetkk)
 
 ## 特性
 
 - 🐭 完整的实验动物生命周期管理
 - 📊 丰富的图表和数据分析功能（体重曲线、生存曲线）
-- 🖥️ 跨平台桌面应用（基于pywebview）
+- 🖥️ 跨平台桌面应用（基于 pywebview）
 - 📱 响应式设计，支持移动端和桌面端
 - 💾 本地数据库存储，数据安全可靠
 - 🔍 强大的搜索和筛选功能
@@ -15,81 +17,113 @@
 ## 技术栈
 
 ### 后端
+
 - Flask - Python Web框架
 - Flask-SQLAlchemy - ORM数据库管理
 - Flask-CORS - 跨域请求处理
 - Pandas - 数据处理和分析
-- Openpyxl - Excel文件操作
+- Openpyxl - Excel 文件操作
 
 ### 前端
-- Vue 3 - 渐进式JavaScript框架
+- Vue 3 - 渐进式 JavaScript 框架
 - Vue Router - 路由管理
 - Vuex - 状态管理
-- Axios - HTTP客户端
+- Axios - HTTP 客户端
 - Chart.js - 图表可视化
 - D3.js - 数据可视化
 - Material Design Icons - 图标库
 
 ### 桌面应用
-- PyWebView - 轻量级Web UI库
+
+- PyWebView - 轻量级 Web UI 库
 - PyInstaller - 应用打包工具
 
 ## 安装与运行
 
-### 普通用户（推荐）
+### windows 用户（推荐）
+
 ✅ 已提供打包好的桌面版，**无需安装任何依赖**，下载后直接运行：
+
 👉 [立即下载最新版本](https://github.com/lanternx/animal_lab/releases/tag/V1.1)
 
-### 前提条件
-- Python 3.8+
-- Node.js 14+
-- npm或yarn
+PS：windows 用户也可以参考 mac 用户的路径进行手动安装。
 
-### 1 后端配置
+### mac 用户
 
+1. 克隆源码：
 
-- 1. 进入后端目录
-  ```bash
-  cd backend 
-  ```
-- 2. 创建虚拟环境
-  ```bash
-  python -m venv venv
-  ``` 
-- 3. 激活虚拟环境（Windows CMD）
-  ```bash
-  venv\Scripts\activate.bat
-  ```
-- 4. 安装依赖包
-  ```bash
-  pip install -r requirements.txt
-  ```
-
-### 2 前端配置
-
-1. 进入前端目录并安装依赖：
 ```bash
+git clone https://github.com/lanternx/animal_lab.git
+```
+
+2. 进入后端目录
+
+```bash
+cd backend 
+```
+
+3. 创建虚拟环境
+
+```bash
+# 创建虚拟环境
+python3 -m venv ~/.python/sglang
+
+# 激活虚拟环境
+source ~/.python/sglang/bin/activate
+
+# 安装 uv
+pip install uv
+```
+
+注意：以后每次运行都需要激活虚拟环境，也即在命令行执行 `source ~/.python/sglang/bin/activate`。
+
+
+4. 安装依赖包
+
+```bash
+python3 -m uv pip install -r requirements.txt
+```
+
+5. 利用 npm 安装前端：
+
+```bash
+cd ..
 npm install
 ```
 
-2. 构建生产版本：
+6. 构建生产版本：
+
 ```bash
 npm run build
 ```
 
-3. 将编译后的dist文件夹移动到backend中
+7. 将编译后的 `dist` 文件夹移动到 `backend` 中：
 
-### 3 开启桌面应用
-
-运行主程序启动桌面应用：
 ```bash
-python main.py
+mv -r dist ../backend/
 ```
-（因为我不太会设置，所以没法利用vue实时编译的特性，main.py打开的是编译好的静态页面）
+
+6. 运行后端：
+
+```bash
+cd backend
+python3 main.py
+```
+
+我一般在 `localhost:5000` 上直接访问，不会使用桌面程序。也可以编译为可执行文件：
 
 打包为可执行文件：
+
 ```bash
 pyinstaller pyinstaller.spec
+```
+
+### 安装完成后的运行：
+
+```bash
+source ~/.python/sglang/bin/activate
+cd backend
+python3 main.py
 ```
 
 ## 项目结构
