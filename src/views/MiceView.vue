@@ -39,6 +39,12 @@
             <th @click="sortBy('genotype')">
               基因型 <i :class="sortIcon('genotype')"></i>
             </th>
+            <th @click="sortBy('strain')">
+              品系 <i :class="sortIcon('strain')"></i>
+            </th>
+            <th>
+              来源笼号
+            </th>
             <th @click="sortBy('sex')">
               性别 <i :class="sortIcon('sex')"></i>
             </th>
@@ -54,6 +60,12 @@
             <th @click="sortBy('live_status')">
               存活状态 <i :class="sortIcon('live_status')"></i>
             </th>
+            <th>
+              已完成测试
+            </th>
+            <th>
+              计划测试
+            </th>
           </tr>
 
           <tr class="filter-row">
@@ -66,6 +78,8 @@
                 </option>
               </select>
             </th>
+            <th><input v-model="filters.strain" @input="applyFilters" placeholder="筛选品系"></th>
+            <th><input v-model="filters.from_cage" @input="applyFilters" placeholder="来源笼号"></th>
             <th>
               <select v-model="filters.sex" @change="applyFilters">
                 <option value="">全部</option>
@@ -92,6 +106,8 @@
                 <option value=4>丢弃</option>
               </select>
             </th>
+            <th><input v-model="filters.tests_done" @input="applyFilters" placeholder="已测"></th>
+            <th><input v-model="filters.tests_planned" @input="applyFilters" placeholder="计划"></th>
           </tr>
 
         </thead>
@@ -101,6 +117,8 @@
           @contextmenu.prevent="showContextMenu($event, mouse)">
             <td>{{ mouse.id }}</td>
             <td>{{ mouse.genotype }}</td>
+            <td>{{ mouse.strain }}</td>
+            <td>{{ mouse.from_cage }}</td>
             <td>{{ mouse.sex === 'M' ? '雄性' : '雌性' }}</td>
             <td>{{ mouse.birth_date }}</td>
             <td>{{ mouse.days_old }}</td>
@@ -115,6 +133,8 @@
                 '未知状态' 
               }}
             </td>
+            <td>{{ mouse.tests_done }}</td>
+            <td>{{ mouse.tests_planned }}</td>
           </tr>
         </tbody>
       </table>
@@ -176,6 +196,23 @@
                 </option>
               </select>
             </div>
+          </div>
+
+          <div class="form-group">
+            <label>品系:</label>
+            <input type="text" v-model="newMouse.strain" placeholder="如：C57BL/6J">
+          </div>
+          <div class="form-group">
+            <label>来源笼号:</label>
+            <input type="text" v-model="newMouse.from_cage" placeholder="来源笼号">
+          </div>
+          <div class="form-group">
+            <label>已完成测试:</label>
+            <input type="text" v-model="newMouse.tests_done" placeholder="逗号分隔或自由输入">
+          </div>
+          <div class="form-group">
+            <label>计划进行测试:</label>
+            <input type="text" v-model="newMouse.tests_planned" placeholder="逗号分隔或自由输入">
           </div>
           
           <div class="form-group">
@@ -317,6 +354,23 @@
             <input type="date" v-model="editingMouse.death_date">
           </div>
 
+        <div class="form-group">
+          <label>品系:</label>
+          <input type="text" v-model="editingMouse.strain" placeholder="如：C57BL/6J">
+        </div>
+        <div class="form-group">
+          <label>来源笼号:</label>
+          <input type="text" v-model="editingMouse.from_cage" placeholder="来源笼号">
+        </div>
+        <div class="form-group">
+          <label>已完成测试:</label>
+          <input type="text" v-model="editingMouse.tests_done" placeholder="逗号分隔或自由输入">
+        </div>
+        <div class="form-group">
+          <label>计划进行测试:</label>
+          <input type="text" v-model="editingMouse.tests_planned" placeholder="逗号分隔或自由输入">
+        </div>
+
         <!-- 父本选择 -->
         <div class="form-group">
         <label>父本 ID:</label>
@@ -421,7 +475,11 @@ export default {
         weeks_old: null,
         father: [],
         mother: [],
-        live_status: null
+        live_status: null,
+        strain: '',
+        from_cage: '',
+        tests_done: '',
+        tests_planned: ''
       },
       searchTerm: '',
       editingMouse: null,
@@ -438,13 +496,17 @@ export default {
       filters: {
         id: '',
         genotype: '',
+        strain: '',
+        from_cage: '',
         sex: '',
         birth_date: '',
         days_old_min: null,
         days_old_max: null,
         weeks_old_min: null,
         weeks_old_max: null,
-        live_status: -1
+        live_status: -1,
+        tests_done: '',
+        tests_planned: ''
       },
 
       // 右键菜单状态
@@ -609,6 +671,12 @@ export default {
       if (this.filters.genotype) {
         result = result.filter(m => m.genotype === this.filters.genotype);
       }
+      if (this.filters.strain) {
+        result = result.filter(m => (m.strain || '').includes(this.filters.strain));
+      }
+      if (this.filters.from_cage) {
+        result = result.filter(m => (m.from_cage || '').includes(this.filters.from_cage));
+      }
       if (this.filters.sex) {
         result = result.filter(m => m.sex === this.filters.sex);
       }
@@ -629,6 +697,14 @@ export default {
       }
       if (this.filters.live_status >= 0) {
         result = result.filter(m => m.live_status === this.filters.live_status);
+      }
+      if (this.filters.tests_done) {
+        const val = this.filters.tests_done.toLowerCase();
+        result = result.filter(m => (m.tests_done || '').toLowerCase().includes(val));
+      }
+      if (this.filters.tests_planned) {
+        const val = this.filters.tests_planned.toLowerCase();
+        result = result.filter(m => (m.tests_planned || '').toLowerCase().includes(val));
       }
       
       // 应用排序
@@ -690,7 +766,11 @@ export default {
           weeks_old: null,
           father: [],
           mother: [],
-          live_status: null
+          live_status: null,
+          strain: '',
+          from_cage: '',
+          tests_done: '',
+          tests_planned: ''
         };
         
         this.showAddModal = false;
