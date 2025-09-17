@@ -100,7 +100,7 @@ npm run build
 7. 将编译后的 `dist` 文件夹移动到 `backend` 中：
 
 ```bash
-mv -r dist ../backend/
+mv dist backend
 ```
 
 6. 运行后端：
@@ -110,9 +110,9 @@ cd backend
 python3 main.py
 ```
 
-我一般在 `localhost:5000` 上直接访问，不会使用桌面程序。也可以编译为可执行文件：
+这样会打开一个浏览器窗口。虽然我一般在 `localhost:5000` 上直接访问，不会使用桌面程序。
 
-打包为可执行文件：
+此外也可以编译为可执行文件：
 
 ```bash
 pyinstaller pyinstaller.spec
