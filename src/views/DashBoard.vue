@@ -63,6 +63,20 @@
         >
           <div class="cage-id">{{ cage.cage_id }}</div>
           <div class="cage-location">{{ cage.location }}</div>
+          <div class="cage-meta">
+            <div class="cage-meta-row" v-if="cage.mice_birth_date">
+              <span class="meta-label">DOB:</span>
+              <span class="meta-value">{{ cage.mice_birth_date }}</span>
+            </div>
+            <div class="cage-meta-row" v-if="cage.mice_count || cage.mice_sex">
+              <span class="meta-label">数量/性别:</span>
+              <span class="meta-value">{{ cage.mice_count || 'NA' }} / {{ cage.mice_sex || 'NA' }}</span>
+            </div>
+            <div class="cage-meta-row" v-if="cage.mice_genotype">
+              <span class="meta-label">基因型:</span>
+              <span class="meta-value">{{ cage.mice_genotype }}</span>
+            </div>
+          </div>
           <div class="cage-mice-container">
             <template v-if="cage.mice && cage.mice.length > 0">
               <div 
@@ -153,6 +167,26 @@
             <option value="breeding">繁殖笼</option>
           </select>
         </div>
+        <div class="form-group">
+          <label>笼内小鼠出生日期</label>
+          <input type="date" v-model="newCage.mice_birth_date">
+        </div>
+        <div class="form-group">
+          <label>笼内小鼠数量</label>
+          <input type="number" v-model.number="newCage.mice_count" min="0">
+        </div>
+        <div class="form-group">
+          <label>笼内小鼠性别</label>
+          <select v-model="newCage.mice_sex">
+            <option value="M">雄性</option>
+            <option value="F">雌性</option>
+            <option value="Mixed">混合</option>
+          </select>
+        </div>
+        <div class="form-group">
+          <label>笼内小鼠基因型</label>
+          <input type="text" v-model="newCage.mice_genotype" placeholder="如: WT/KO/其他">
+        </div>
         <div class="dialog-buttons">
           <button class="btn btn-outline" @click="addCageDialogVisible = false">取消</button>
           <button class="btn btn-primary" @click="addNewCage">确定</button>
@@ -212,6 +246,26 @@
           <option value="normal">普通笼</option>
           <option value="breeding">繁殖笼</option>
         </select>
+      </div>
+      <div class="form-group">
+        <label>笼内小鼠出生日期</label>
+        <input type="date" v-model="editingCage.mice_birth_date">
+      </div>
+      <div class="form-group">
+        <label>笼内小鼠数量</label>
+        <input type="number" v-model.number="editingCage.mice_count" min="0">
+      </div>
+      <div class="form-group">
+        <label>笼内小鼠性别</label>
+        <select v-model="editingCage.mice_sex">
+          <option value="M">雄性</option>
+          <option value="F">雌性</option>
+          <option value="Mixed">混合</option>
+        </select>
+      </div>
+      <div class="form-group">
+        <label>笼内小鼠基因型</label>
+        <input type="text" v-model="editingCage.mice_genotype" placeholder="如: WT/KO/其他">
       </div>
       <div class="dialog-buttons">
         <button class="btn btn-outline" @click="editCageDialogVisible = false">取消</button>
@@ -299,7 +353,11 @@ const newCage = reactive({
   cage_id: '',
   location: '',
   section: '',
-  cage_type: 'normal'
+  cage_type: 'normal',
+  mice_birth_date: '',
+  mice_count: null,
+  mice_sex: '',
+  mice_genotype: ''
 })
 const cageContextMenu = reactive({
   visible: false,
@@ -313,7 +371,11 @@ const editingCage = reactive({
   cage_id: '',
   location: '',
   section: '',
-  cage_type: 'normal'
+  cage_type: 'normal',
+  mice_birth_date: '',
+  mice_count: null,
+  mice_sex: '',
+  mice_genotype: ''
 })
 const activeSection = ref('')
 const availableSections = ref([])
@@ -358,14 +420,7 @@ onMounted(async () => {
     console.log('开始延迟加载数据...')
     await fetchCages()
     await fetchTemporaryMice()
-  }, 1000)
-  
-  // 监听窗口焦点事件，当用户切换回窗口时刷新数据
-  window.addEventListener('focus', () => {
-    console.log('窗口获得焦点，刷新数据...')
-    fetchCages()
-    fetchTemporaryMice()
-  })
+  }, 100)
   
   console.log('DashBoard组件初始化完成')
 })
@@ -512,7 +567,7 @@ async function addNewCage() {
     await axios.post('/api/cages', newCage)
     await fetchCages() // 刷新笼位列表
     addCageDialogVisible.value = false
-    Object.assign(newCage, { id: '', cage_id: '', location: '', section: '', cage_type: 'normal' })
+    Object.assign(newCage, { id: '', cage_id: '', location: '', section: '', cage_type: 'normal', mice_birth_date: '', mice_count: null, mice_sex: '', mice_genotype: '' })
   } catch (error) {
     console.error('添加笼位失败:', error)
     alert('添加笼位失败，请重试')
@@ -549,7 +604,11 @@ async function updateCage() {
       cage_id: editingCage.cage_id,
       location: editingCage.location,
       section: editingCage.section,
-      cage_type: editingCage.cage_type
+      cage_type: editingCage.cage_type,
+      mice_birth_date: editingCage.mice_birth_date,
+      mice_count: editingCage.mice_count,
+      mice_sex: editingCage.mice_sex,
+      mice_genotype: editingCage.mice_genotype
     })
     // 更新本地数据
     const index = cages.value.findIndex(c => c.id === editingCage.id)
@@ -558,6 +617,10 @@ async function updateCage() {
       cages.value[index].location = editingCage.location
       cages.value[index].section = editingCage.section
       cages.value[index].cage_type = editingCage.cage_type
+      cages.value[index].mice_birth_date = editingCage.mice_birth_date
+      cages.value[index].mice_count = editingCage.mice_count
+      cages.value[index].mice_sex = editingCage.mice_sex
+      cages.value[index].mice_genotype = editingCage.mice_genotype
     }
     editCageDialogVisible.value = false
   } catch (error) {

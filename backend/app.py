@@ -1,12 +1,11 @@
 from flask import Flask, jsonify, request, send_file
 from flask_cors import CORS
-from datetime import datetime
+from datetime import datetime, date
 from models import db, Mouse, Cage, WeightRecord, StatusRecord, Pedigree, Genotype, Location
 import os
 import sys
 from pathlib import Path
 import pandas as pd
-from datetime import datetime
 from io import BytesIO
 from sqlalchemy import text
 from sqlalchemy.orm import joinedload
@@ -52,11 +51,50 @@ with app.app_context():
         # 测试数据库连接
         db.session.execute(text('SELECT 1'))
         print("数据库连接测试成功")
+        # 轻量迁移：为缺失字段添加列
+        def column_exists(table, col):
+            try:
+                res = db.session.execute(text(f"PRAGMA table_info({table})")).fetchall()
+                return any(row[1] == col for row in res)
+            except Exception:
+                return False
+
+        # Mouse 表新增列
+        mouse_new_columns = [
+            ("strain", "TEXT"),
+            ("tests_done", "TEXT"),
+            ("tests_planned", "TEXT")
+        ]
+        for col, coltype in mouse_new_columns:
+            if not column_exists('mouse', col):
+                try:
+                    db.session.execute(text(f"ALTER TABLE mouse ADD COLUMN {col} {coltype}"))
+                    db.session.commit()
+                    print(f"已添加列 mouse.{col}")
+                except Exception as e:
+                    db.session.rollback()
+                    print(f"添加列 mouse.{col} 失败: {e}")
+
+        # Cage 表新增列
+        cage_new_columns = [
+            ("mice_birth_date", "DATE"),
+            ("mice_count", "INTEGER"),
+            ("mice_sex", "TEXT"),
+            ("mice_genotype", "TEXT")
+        ]
+        for col, coltype in cage_new_columns:
+            if not column_exists('cage', col):
+                try:
+                    db.session.execute(text(f"ALTER TABLE cage ADD COLUMN {col} {coltype}"))
+                    db.session.commit()
+                    print(f"已添加列 cage.{col}")
+                except Exception as e:
+                    db.session.rollback()
+                    print(f"添加列 cage.{col} 失败: {e}")
         
         # 自动创建默认位置（如果不存在）
         default_location = Location.query.filter_by(identifier="默认区域").first()
         if not default_location:
-            from datetime import datetime
             new_location = Location(
                 identifier="默认区域",
                 description=f"系统启动时自动创建 - {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}",
@@ -112,7 +150,10 @@ def get_all_mice():
                 'cage_id': m.cage_id,
                 'live_status': m.live_status,
                 'father': father,
-                'mother': mother
+                'mother': mother,
+                'strain': m.strain,
+                'tests_done': m.tests_done,
+                'tests_planned': m.tests_planned
             }
             mice_data.append(mouse_dict)
             
@@ -138,6 +179,10 @@ def add_mouse():
             mouse.birth_date = datetime.strptime(data['birth_date'], '%Y-%m-%d').date()
         mouse.live_status = 1  # 默认新添加的小鼠状态为'活'
         mouse.cage_id = '-1'
+        # 新增字段
+        mouse.strain = data.get('strain')
+        mouse.tests_done = data.get('tests_done')
+        mouse.tests_planned = data.get('tests_planned')
         db.session.add(mouse)
         if data['father']:
             for t in data['father']:
@@ -160,7 +205,10 @@ def add_mouse():
             'sex': mouse.sex,
             'birth_date': mouse.birth_date.strftime('%Y-%m-%d') if mouse.birth_date else None,
             'live_status': mouse.live_status,
-            'cage_id': mouse.cage_id
+            'cage_id': mouse.cage_id,
+            'strain': mouse.strain,
+            'tests_done': mouse.tests_done,
+            'tests_planned': mouse.tests_planned
         }), 201
     except Exception as e:
         return jsonify({'error': str(e)}), 400
@@ -180,6 +228,13 @@ def update_mouse(mouse_tid):
             mouse.birth_date = datetime.strptime(data['birth_date'], '%Y-%m-%d').date()
         if data['death_date']:
             mouse.death_date = datetime.strptime(data['death_date'], '%Y-%m-%d').date()
+        # 新增字段
+        if 'strain' in data:
+            mouse.strain = data.get('strain')
+        if 'tests_done' in data:
+            mouse.tests_done = data.get('tests_done')
+        if 'tests_planned' in data:
+            mouse.tests_planned = data.get('tests_planned')
         Pedigree.query.filter_by(mouse_id=mouse.tid, parent_type='father').delete()
         if data['father']:
             for t in data['father']:
@@ -205,8 +260,11 @@ def update_mouse(mouse_tid):
             'genotype': mouse.genotype,
             'sex': mouse.sex,
             'birth_date': mouse.birth_date.strftime('%Y-%m-%d') if mouse.birth_date else None,
-            'father': data['father'],
-            'mother': data['mother']
+            'father': data.get('father'),
+            'mother': data.get('mother'),
+            'strain': mouse.strain,
+            'tests_done': mouse.tests_done,
+            'tests_planned': mouse.tests_planned
         })
     except Exception as e:
         return jsonify({'error': str(e)}), 400
@@ -226,6 +284,38 @@ def delete_mouse(mouse_tid):
         return jsonify({'message': 'Mouse deleted successfully'})
     except Exception as e:
         return jsonify({'error': str(e)}), 500
+
+# 批量添加小鼠
+@app.route('/api/mice/<mouse_tid>', methods=['POST'])
+def add_mice_from_template(mouse_tid):
+    data = request.json
+    try:
+        template_mouse = Mouse.query.get(mouse_tid)
+        template_mouse_parent = Pedigree.query.filter_by(mouse_id=mouse_tid).all()
+        for m in data:
+            new_mouse_data = template_mouse.to_dict()
+            # 移除不需要继承的字段（如主键、创建时间等）
+            excluded_fields = ['id', 'tid', 'sex']
+            for field in excluded_fields:
+                new_mouse_data.pop(field, None)
+            new_mouse_data['death_date'] = date.fromisoformat(new_mouse_data['death_date']) if new_mouse_data['death_date'] else None
+            new_mouse_data['birth_date'] = date.fromisoformat(new_mouse_data['birth_date']) if new_mouse_data['birth_date'] else None
+            new_mouse_data['id'] = m['id']
+            new_mouse_data['sex'] = m['sex']
+            new_mouse = Mouse(**new_mouse_data)
+            db.session.add(new_mouse)
+            db.session.flush()
+            for p in template_mouse_parent:
+                new_parent = Pedigree(
+                    mouse_id=new_mouse.tid,
+                    parent_id=p.parent_id,
+                    parent_type=p.parent_type)
+                db.session.add(new_parent)
+        db.session.commit()
+        return jsonify(), 201
+    except Exception as e:
+        return jsonify({'error': str(e)}), 400
+
 
 
 ##笼位视图
@@ -251,7 +341,11 @@ def get_all_cages():
             'section': cage.section,
             'location': cage.location,
             'cage_type': cage.cage_type,
-            'mice': mice_info
+            'mice': mice_info,
+            'mice_birth_date': cage.mice_birth_date.strftime('%Y-%m-%d') if cage.mice_birth_date else None,
+            'mice_count': cage.mice_count,
+            'mice_sex': cage.mice_sex,
+            'mice_genotype': cage.mice_genotype
         })
     return jsonify(cage_data)
 
@@ -289,7 +383,11 @@ def add_cage():
             section=data['section'],
             location=data.get('location'),
             cage_type=data.get('cage_type', 'normal'),
-            order=new_order
+            order=new_order,
+            mice_birth_date=datetime.strptime(data['mice_birth_date'], '%Y-%m-%d').date() if data.get('mice_birth_date') else None,
+            mice_count=int(data['mice_count']) if data.get('mice_count') not in (None, "") else None,
+            mice_sex=data.get('mice_sex'),
+            mice_genotype=data.get('mice_genotype')
         )
         db.session.add(cage)
         db.session.commit()
@@ -339,13 +437,25 @@ def update_cage(cage_id):
         cage.location = data.get('location')
         cage.section = data.get('section')
         cage.cage_type = data.get('cage_type')
+        if 'mice_birth_date' in data:
+            cage.mice_birth_date = datetime.strptime(data['mice_birth_date'], '%Y-%m-%d').date() if data.get('mice_birth_date') else None
+        if 'mice_count' in data:
+            cage.mice_count = int(data['mice_count']) if data.get('mice_count') not in (None, "") else None
+        if 'mice_sex' in data:
+            cage.mice_sex = data.get('mice_sex')
+        if 'mice_genotype' in data:
+            cage.mice_genotype = data.get('mice_genotype')
         db.session.commit()
         return jsonify({
             'id': cage.id,
             'cage_id': cage.cage_id,
             'section': cage.section,
             'location': cage.location,
-            'cage_type': cage.cage_type
+            'cage_type': cage.cage_type,
+            'mice_birth_date': cage.mice_birth_date.strftime('%Y-%m-%d') if cage.mice_birth_date else None,
+            'mice_count': cage.mice_count,
+            'mice_sex': cage.mice_sex,
+            'mice_genotype': cage.mice_genotype
         })
     except Exception as e:
         return jsonify({'error': str(e)}), 500

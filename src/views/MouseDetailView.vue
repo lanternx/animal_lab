@@ -115,21 +115,6 @@
         </div>
     </div>
     </div>
-
-    <div class="action-buttons">
-    <button class="btn btn-outline">
-        <i class="material-icons">edit</i>
-        编辑信息
-    </button>
-    <button class="btn btn-outline">
-        <i class="material-icons">file_download</i>
-        导出数据
-    </button>
-    <button class="btn btn-primary">
-        <i class="material-icons">timeline</i>
-        分析报告
-    </button>
-    </div>
 </div>
 </div>
 </template>
@@ -859,7 +844,7 @@ display: grid;
 grid-template-columns: 1fr 1fr;
 grid-template-rows: auto auto;
 gap: 20px;
-min-height: 500px;
+min-height: 400px;
 }
 
 .grid-item {

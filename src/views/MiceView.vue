@@ -39,6 +39,9 @@
             <th @click="sortBy('genotype')">
               基因型 <i :class="sortIcon('genotype')"></i>
             </th>
+            <th @click="sortBy('strain')">
+              品系 <i :class="sortIcon('strain')"></i>
+            </th>
             <th @click="sortBy('sex')">
               性别 <i :class="sortIcon('sex')"></i>
             </th>
@@ -66,6 +69,7 @@
                 </option>
               </select>
             </th>
+            <th><input v-model="filters.strain" @input="applyFilters" placeholder="筛选品系"></th>
             <th>
               <select v-model="filters.sex" @change="applyFilters">
                 <option value="">全部</option>
@@ -101,6 +105,7 @@
           @contextmenu.prevent="showContextMenu($event, mouse)">
             <td>{{ mouse.id }}</td>
             <td>{{ mouse.genotype }}</td>
+            <td>{{ mouse.strain }}</td>
             <td>{{ mouse.sex === 'M' ? '雄性' : '雌性' }}</td>
             <td>{{ mouse.birth_date }}</td>
             <td>{{ mouse.days_old }}</td>
@@ -131,6 +136,9 @@
           <li @click="editMouse(contextMenu.mouse)">
             <i class="material-icons">edit</i> 编辑信息
           </li>
+          <li @click="addMiceFromTemplate(contextMenu.mouse)">
+            <i class="material-icons">playlist_add</i> 以此为模板批量创建小鼠
+          </li>
           <li @click="deleteMouse(contextMenu.mouse.tid)" class="danger">
             <i class="material-icons">delete</i> 删除小鼠
           </li>
@@ -154,6 +162,7 @@
 
     <!-- 添加小鼠模态框 -->
     <div v-if="showAddModal" class="modal">
+      <div class="modal-overlay" @click.self="showAddModal = false"></div>
       <div class="modal-content">
         <div class="modal-header">
           <h3>添加新小鼠</h3>
@@ -176,6 +185,11 @@
                 </option>
               </select>
             </div>
+          </div>
+
+          <div class="form-group">
+            <label>品系:</label>
+            <input type="text" v-model="newMouse.strain" placeholder="如：C57BL/6J">
           </div>
           
           <div class="form-group">
@@ -248,6 +262,15 @@
         </div>
         <p class="info-text" v-else>未选择母本</p>
         </div>
+
+          <div class="form-group">
+            <label>已完成测试:</label>
+            <input type="text" v-model="newMouse.tests_done" placeholder="逗号分隔或自由输入">
+          </div>
+          <div class="form-group">
+            <label>计划进行测试:</label>
+            <input type="text" v-model="newMouse.tests_planned" placeholder="逗号分隔或自由输入">
+          </div>
         
         <div class="button-group">
           <button @click="addMouse" :disabled="adding" class="primary-btn">
@@ -266,6 +289,7 @@
     
     <!-- 编辑小鼠模态框 -->
     <div v-if="editingMouse" class="modal">
+      <div class="modal-overlay" @click.self="cancelEdit"></div>
       <div class="modal-content">
         <div class="modal-header">
           <h3>编辑小鼠信息</h3>
@@ -316,6 +340,11 @@
             <label>死亡日期:</label>
             <input type="date" v-model="editingMouse.death_date">
           </div>
+
+        <div class="form-group">
+          <label>品系:</label>
+          <input type="text" v-model="editingMouse.strain" placeholder="如：C57BL/6J">
+        </div>
 
         <!-- 父本选择 -->
         <div class="form-group">
@@ -378,6 +407,15 @@
         </div>
         <p class="info-text" v-else>未选择母本</p>
         </div>
+
+        <div class="form-group">
+          <label>已完成测试:</label>
+          <input type="text" v-model="editingMouse.tests_done" placeholder="逗号分隔或自由输入">
+        </div>
+        <div class="form-group">
+          <label>计划进行测试:</label>
+          <input type="text" v-model="editingMouse.tests_planned" placeholder="逗号分隔或自由输入">
+        </div>
         </div>
         
         <div class="button-group">
@@ -387,6 +425,82 @@
             <span v-else>保存</span>
           </button>
           <button @click="cancelEdit" class="cancel-btn">
+            <i class="material-icons">cancel</i>
+            取消
+          </button>
+        </div>
+      </div>
+    </div>
+
+    <!-- 批量添加小鼠模态框 -->
+    <div v-if="templateMouse" class="modal">
+      <div class="modal-overlay" @click.self="cancelTemplateEdit"></div>
+      <div class="modal-content">
+        <div class="modal-header">
+          <h3>基于模板批量创建小鼠</h3>
+          <button class="close-btn" @click="cancelTemplateEdit">
+            <i class="material-icons">close</i>
+          </button>
+        </div>
+        
+        <div class="template-info">
+          <h3><i class="material-icons">pets</i> 模板小鼠信息</h3>
+          <div class="template-details">
+            <div class="detail-item">
+              <span class="detail-label">小鼠ID</span>
+              <span class="detail-value">{{ templateMouse.id }}</span>
+            </div>
+            <div class="detail-item">
+              <span class="detail-label">基因型</span>
+              <span class="detail-value">{{ templateMouse.genotype }}</span>
+            </div>
+            <div class="detail-item">
+              <span class="detail-label">品系</span>
+              <span class="detail-value">{{ templateMouse.strain }}</span>
+            </div>
+            <div class="detail-item">
+              <span class="detail-label">性别</span>
+              <span class="detail-value">{{ templateMouse.sex }}</span>
+            </div>
+            <div class="detail-item">
+              <span class="detail-label">出生日期</span>
+              <span class="detail-value">{{ formatDate(templateMouse.birth_date) }}</span>
+            </div>
+            <div class="detail-item">
+              <span class="detail-label">存活状态</span>
+              <span class="detail-value">{{ templateMouse.live_status }}</span>
+            </div>
+            <div class="detail-item">
+              <span class="detail-label">父本</span>
+              <span class="detail-value" v-for="(father) in editFather" :key="father.tid">{{ father.id }} </span>
+            </div>
+            <div class="detail-item">
+              <span class="detail-label">母本</span>
+              <span class="detail-value" v-for="(mother) in editMother" :key="mother.tid">{{ mother.id }} </span>
+            </div>
+          </div>
+        </div>
+
+        <div class="form-group">
+          <span>创建数量：{{ newMice.length }}</span>
+          <button @click="addInputField">添加</button>
+        </div>
+        <div v-for="(m, index) in newMice" :key="index" class="input-row">
+          <input v-model="m.id" placeholder="ID">
+          <select v-model="m.sex">
+            <option value="M">雄性</option>
+            <option value="F">雌性</option>
+          </select>
+          <button type="button" class="remove-btn" @click="removeField(index)">移除</button>
+        </div>
+
+        <div class="button-group">
+          <button @click="saveTemplateMice" :disabled="saving" class="primary-btn">
+            <i class="material-icons">save</i>
+            <span v-if="saving">保存中...</span>
+            <span v-else>保存</span>
+          </button>
+          <button @click="cancelTemplateEdit" class="cancel-btn">
             <i class="material-icons">cancel</i>
             取消
           </button>
@@ -421,7 +535,10 @@ export default {
         weeks_old: null,
         father: [],
         mother: [],
-        live_status: null
+        live_status: null,
+        strain: '',
+        tests_done: '',
+        tests_planned: ''
       },
       searchTerm: '',
       editingMouse: null,
@@ -432,12 +549,16 @@ export default {
       showMouseDetail: false,
       selectedMouseId: null,
 
+      templateMouse: null,
+      newMice:[],
+
       // 排序和筛选状态
       sortField: 'id',
       sortDirection: 'asc',
       filters: {
         id: '',
         genotype: '',
+        strain: '',
         sex: '',
         birth_date: '',
         days_old_min: null,
@@ -609,6 +730,9 @@ export default {
       if (this.filters.genotype) {
         result = result.filter(m => m.genotype === this.filters.genotype);
       }
+      if (this.filters.strain) {
+        result = result.filter(m => (m.strain || '').includes(this.filters.strain));
+      }
       if (this.filters.sex) {
         result = result.filter(m => m.sex === this.filters.sex);
       }
@@ -690,7 +814,10 @@ export default {
           weeks_old: null,
           father: [],
           mother: [],
-          live_status: null
+          live_status: null,
+          strain: '',
+          tests_done: '',
+          tests_planned: ''
         };
         
         this.showAddModal = false;
@@ -787,6 +914,82 @@ export default {
       } finally {
         this.saving = false;
       }
+    },
+
+    // 批量添加小鼠
+    addMiceFromTemplate(mouse) {
+      this.templateMouse = { ...mouse };
+      // 查找并设置已选的父本母本
+      if (mouse.father.length > 0) {
+        const father = mouse.father.map(tid => this.mice.find(m => m.tid === tid)).filter(Boolean);
+        this.editFather.push(...father);
+      }
+      if (mouse.mother.length > 0) {
+        const mother = mouse.mother.map(tid => this.mice.find(m => m.tid === tid)).filter(Boolean);
+        this.editMother.push(...mother);
+      }
+    },
+    
+    // 取消批量添加
+    cancelTemplateEdit() {
+      this.templateMouse = null;
+      this.editFather = [];
+      this.editMother = [];
+      this.newMice = [];
+    },
+    
+    // 保存批量添加小鼠
+    async saveTemplateMice() {
+      // 检查是否存在ID为空的小鼠
+      const hasEmptyId = this.newMice.some(mouse => {
+        // 检查id属性是否存在或为空字符串
+        return mouse.id === null || mouse.id === undefined || mouse.id === '';
+      });
+
+      if (hasEmptyId) {
+        // 存在空ID的情况
+        toast.error("存在ID为空的小鼠");
+        // 这里可以添加处理逻辑，比如显示错误提示
+        return
+      }
+      try {
+        const api = this.createAxiosInstance();
+        await api.post(`/mice/${this.templateMouse.tid}`, this.newMice);
+        
+        toast.success(`添加${this.newMice.length}只小鼠！`);
+        
+        // 更新本地数据
+        await this.loadMice();
+        
+        this.templateMouse = null;
+        this.editFather = [];
+        this.editMother = [];
+        this.newMice = [];
+      } catch (error) {
+        console.error('更新小鼠失败:', error);
+        
+        if (error.response) {
+          if (error.response.status === 404) {
+            toast.error('未找到该小鼠记录');
+          } else if (error.response.status === 400) {
+            toast.error(`请求格式错误: ${error.response.data.error || '请检查输入数据'}`);
+          } else {
+            toast.error(`更新失败: ${error.response.data.error || '服务器错误'}`);
+          }
+        } else {
+          toast.error(`更新失败: ${error.message || '网络错误'}`);
+        }
+      } finally {
+        this.saving = false;
+      }
+    },
+
+    addInputField(){
+      this.newMice.push({ id: '', sex: this.templateMouse.sex });
+    },
+
+    removeField(index) {
+      this.newMice.splice(index, 1);
     },
     
     // 打开小鼠详情
@@ -1095,11 +1298,17 @@ export default {
   left: 0;
   right: 0;
   bottom: 0;
-  background: rgba(0, 0, 0, 0.5);
   display: flex;
   align-items: center;
   justify-content: center;
   z-index: 1000;
+}
+
+.modal-overlay {
+  position: absolute;
+  width: 100%;
+  height: 100%;
+  background: rgba(0, 0, 0, 0.5);
   backdrop-filter: blur(3px);
 }
 
@@ -1111,6 +1320,8 @@ export default {
   max-height: 90vh;
   overflow-y: auto;
   box-shadow: 0 10px 25px rgba(0, 0, 0, 0.2);
+  position: relative;
+  z-index: 10;
 }
 
 .modal-header {
@@ -1435,4 +1646,83 @@ export default {
   font-size: 0.9rem;
   margin: 5px 0 0;
 }
+
+.template-info {
+  background: #f8fafc;
+  padding: 16px;
+  border-radius: 8px;
+  margin-bottom: 20px;
+  border-left: 4px solid #4a9bff;
+}
+
+.template-info h3 {
+  font-size: 1.1rem;
+  color: #4a5568;
+  margin-bottom: 12px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.template-details {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(120px, 1fr));
+  gap: 12px 15px;
+}
+
+.detail-item {
+  display: flex;
+  flex-direction: column;
+}
+
+.detail-label {
+  font-size: 0.85rem;
+  color: #718096;
+  margin-bottom: 3px;
+}
+
+.detail-value {
+  font-weight: 500;
+  font-size: 0.95rem;
+  color: #2d3748;
+}
+
+.form-group button {
+  background: #4a9bff;
+  color: white;
+  border: none;
+  padding: 8px 16px;
+  border-radius: 6px;
+  cursor: pointer;
+  font-size: 0.9rem;
+  transition: background 0.2s;
+}
+
+.form-group button:hover {
+  background: #3a8bef;
+}
+
+.input-row {
+  display: flex;
+  gap: 12px;
+  margin-bottom: 12px;
+  align-items: center;
+}
+
+.input-row input {
+  flex: 1;
+  padding: 10px 14px;
+  border: 1px solid #cbd5e0;
+  border-radius: 6px;
+  font-size: 1rem;
+}
+
+.input-row select {
+  width: 120px;
+  padding: 10px;
+  border: 1px solid #cbd5e0;
+  border-radius: 6px;
+  background: white;
+}
+
 </style>
