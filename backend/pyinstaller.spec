@@ -59,7 +59,7 @@ exe = EXE(
     a.zipfiles,
     a.datas,
     [],
-    name='动物房管理 V1.1.1',  # 输出可执行文件名称
+    name='动物房管理 V1.2',  # 输出可执行文件名称
     debug=False,
     bootloader_ignore_signals=False,
     strip=False,

@@ -183,14 +183,14 @@
               <nav v-if="filteredMice.length > pageSize">
                 <ul class="pagination justify-content-center">
                   <li class="page-item" :class="{disabled: currentPage === 1}">
-                    <a class="page-link" href="#" @click.prevent="currentPage--">上一页</a>
+                    <a class="page-link" href="#" @click.prevent="currentPage > 1 && currentPage--">上一页</a>
                   </li>
                   <li class="page-item" v-for="page in totalPages" :key="page" 
                       :class="{active: currentPage === page}">
                     <a class="page-link" href="#" @click.prevent="currentPage = page">{{ page }}</a>
                   </li>
                   <li class="page-item" :class="{disabled: currentPage === totalPages}">
-                    <a class="page-link" href="#" @click.prevent="currentPage++">下一页</a>
+                    <a class="page-link" href="#" @click.prevent="currentPage < totalPages && currentPage++">下一页</a>
                   </li>
                 </ul>
               </nav>
@@ -364,7 +364,8 @@ export default {
               i += deathsAtTime.length - 1;
             };
           } else{
-            toast.error("所选组别无小鼠！")
+            toast.error("所选组别无小鼠！");
+            return;
           }
         });
         const maximumDays = Math.max(...groups.value.map(g => g.maxDays));
@@ -574,7 +575,7 @@ const renderChart = () => {
 };
     
     // 过滤并分页显示的小鼠数据
-    const filteredMice = computed(() => survivalData.value);
+    const filteredMice = computed(() => survivalData.value.filter(m => m.groupIndex >= 0));
     const totalPages = computed(() => Math.ceil(filteredMice.value.length / pageSize));
     const displayedMice = computed(() => {
       const start = (currentPage.value - 1) * pageSize;
@@ -989,5 +990,98 @@ const renderChart = () => {
 .option-item.selected {
     background-color: #3498db;
     color: white;
+}
+
+/* 分页容器样式 */
+.pagination {
+    margin: 1.5rem 0;
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+}
+
+/* 分页项基础样式 */
+.page-item {
+    display: inline-block;
+    margin: 0 4px;
+    border-radius: 6px;
+    transition: all 0.3s ease;
+    box-shadow: 0 2px 5px rgba(0, 0, 0, 0.1);
+}
+
+.page-item:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 4px 8px rgba(0, 0, 0, 0.15);
+}
+
+/* 分页链接样式 */
+.page-link {
+    display: block;
+    min-width: 42px;
+    height: 42px;
+    line-height: 42px;
+    padding: 0 12px;
+    text-align: center;
+    text-decoration: none;
+    font-weight: 500;
+    font-size: 1rem;
+    color: #4a5568;
+    background: linear-gradient(135deg, #f8f9fa 0%, #e9ecef 100%);
+    border: 1px solid #dee2e6;
+    border-radius: 6px;
+    transition: all 0.25s ease;
+    cursor: pointer;
+}
+
+.page-link:hover {
+    color: #2d3748;
+    background: linear-gradient(135deg, #e9ecef 0%, #dee2e6 100%);
+    border-color: #c4c9d0;
+}
+
+/* 活动状态分页项 */
+.page-item.active .page-link {
+    color: white;
+    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+    border-color: #667eea;
+    box-shadow: 0 4px 10px rgba(102, 126, 234, 0.3);
+}
+
+.page-item.active .page-link:hover {
+    background: linear-gradient(135deg, #5a67d8 0%, #6b46c1 100%);
+}
+
+/* 禁用状态分页项 */
+.page-item.disabled .page-link {
+    color: #a0aec0;
+    background: linear-gradient(135deg, #f8f9fa 0%, #edf2f7 100%);
+    border-color: #e2e8f0;
+    cursor: not-allowed;
+    opacity: 0.7;
+    pointer-events: none;
+}
+
+.page-item.disabled:hover {
+    transform: none;
+    box-shadow: 0 2px 5px rgba(0, 0, 0, 0.1);
+}
+
+/* 响应式设计 */
+@media (max-width: 576px) {
+    .page-link {
+        min-width: 36px;
+        height: 36px;
+        line-height: 36px;
+        padding: 0 8px;
+        font-size: 0.9rem;
+    }
+    
+    .page-item {
+        margin: 0 2px;
+    }
+}
+
+/* 焦点状态（可访问性） */
+.page-link:focus {
+    outline: none;
+    box-shadow: 0 0 0 3px rgba(102, 126, 234, 0.25);
 }
 </style>

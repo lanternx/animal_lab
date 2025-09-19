@@ -130,7 +130,7 @@
         </div>
         
         <div v-if="exportOptionsVisible" class="export-options">
-        <div class="form-group">
+        <div v-if="currentExportType !== 'survival'" class="form-group">
             <label>时间范围</label>
             <div class="date-range">
             <input type="date" v-model="exportStartDate">

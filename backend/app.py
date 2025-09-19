@@ -93,8 +93,7 @@ with app.app_context():
                     print(f"添加列 cage.{col} 失败: {e}")
         
         # 自动创建默认位置（如果不存在）
-        default_location = Location.query.filter_by(identifier="默认区域").first()
-        if not default_location:
+        if not db.session.query(Location).first():
             new_location = Location(
                 identifier="默认区域",
                 description=f"系统启动时自动创建 - {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}",
@@ -827,14 +826,27 @@ def export_data(export_type):
     elif export_type == 'survival':
         # 生存表需要特殊处理
         mice = Mouse.query.all()
-        data = [{
-            'mouse_id': m.id,
-            'genotype': m.genotype,
-            'birth_date': m.birth_date,
-            'death_date': m.death_date,
-            'live_status': m.live_status,
-            'survival_days': (m.death_date - m.birth_date).days if m.death_date else None
-        } for m in mice]
+        now = datetime.now().date()
+        data = []
+        for m in mice:
+            if m.live_status == 0:
+                data.append({
+                    'mouse_id': m.id,
+                    'genotype': m.genotype,
+                    'birth_date': m.birth_date,
+                    'death_date': m.death_date,
+                    'live_status': m.live_status,
+                    'survival_days': (m.death_date - m.birth_date).days if m.death_date else None
+                })
+            elif m.live_status == 1:
+                data.append({
+                    'mouse_id': m.id,
+                    'genotype': m.genotype,
+                    'birth_date': m.birth_date,
+                    'death_date': m.death_date,
+                    'live_status': m.live_status,
+                    'survival_days': (m.death_date - m.birth_date).days if m.death_date else (now - m.birth_date).days
+                })
         df = pd.DataFrame(data)
         return create_export_file(df, export_format, filename='survival_export')
     else:
