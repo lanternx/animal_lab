@@ -19,6 +19,88 @@ logging.basicConfig(
 )
 logger = logging.getLogger("Main")
 
+# 获取屏幕尺寸（使用 tkinter，Python 标准库）
+import tkinter as tk
+root = tk.Tk()
+screen_width = root.winfo_screenwidth()
+screen_height = root.winfo_screenheight()
+root.destroy()
+
+# 计算居中位置
+loading_window_width, loading_window_height = 400, 300
+loading_window_x = (screen_width - loading_window_width) // 2
+loading_window_y = (screen_height - loading_window_height) // 2
+
+# 创建一个简单的加载动画HTML
+LOADING_HTML = """
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="UTF-8">
+    <style>
+        body {
+            margin: 0;
+            padding: 0;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            height: 100vh;
+            background-color: #f5f5f5;
+            font-family: Arial, sans-serif;
+        }
+        .loading-container {
+            text-align: center;
+        }
+        .spinner {
+            border: 5px solid #f3f3f3;
+            border-top: 5px solid #3498db;
+            border-radius: 50%;
+            width: 50px;
+            height: 50px;
+            animation: spin 1s linear infinite;
+            margin: 0 auto 20px;
+        }
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+        .loading-text {
+            color: #333;
+            font-size: 18px;
+        }
+        .progress-bar {
+            width: 300px;
+            height: 10px;
+            background-color: #e0e0e0;
+            border-radius: 5px;
+            margin: 20px auto;
+            overflow: hidden;
+        }
+        .progress {
+            height: 100%;
+            width: 0%;
+            background-color: #3498db;
+            border-radius: 5px;
+            animation: progress-animation 3s ease-in-out;
+        }
+        @keyframes progress-animation {
+            0% { width: 0%; }
+            100% { width: 100%; }
+        }
+    </style>
+</head>
+<body>
+    <div class="loading-container">
+        <div class="spinner"></div>
+        <div class="loading-text">小鼠管理系统启动中...</div>
+        <div class="progress-bar">
+            <div class="progress"></div>
+        </div>
+    </div>
+</body>
+</html>
+"""
+
 def find_free_port(start_port=5000, max_attempts=20):
     """查找可用端口"""
     port = start_port
@@ -38,7 +120,7 @@ def run_flask(port):
     try:
         logger.info(f"启动Flask服务器，端口: {port}")
         # 关闭调试模式，提高生产环境稳定性
-        app.run(host='127.0.0.1', port=port, debug=False, use_reloader=False)
+        app.run(host='localhost', port=port, debug=False, use_reloader=False)
     except Exception as e:
         logger.exception(f"Flask服务器启动失败: {str(e)}")
 
@@ -120,39 +202,86 @@ sys.excepthook = handle_exception
 if __name__ == '__main__':
     logger.info("应用程序启动")
     
-    # 查找可用端口
-    port = find_free_port()
-    if port is None:
-        logger.error("无法找到可用端口，退出应用")
-        sys.exit(1)
+    # 创建加载窗口
+    loading_window = webview.create_window(
+        "小鼠管理系统 - 启动中", 
+        html=LOADING_HTML,
+        width=loading_window_width, 
+        height=loading_window_height,
+        resizable=False,
+        frameless=True,
+        easy_drag=False,
+        x=loading_window_x,
+        y=loading_window_y
+    )
     
-    # 启动Flask服务器线程
-    flask_thread = threading.Thread(target=run_flask, args=(port,), daemon=True)
-    flask_thread.start()
+    # 设置定时器，5秒后自动关闭加载窗口（无论初始化是否完成）
+    def close_loading_window():
+        try:
+            loading_window.destroy()
+        except:
+            pass
     
-    # 等待服务器启动
-    if not wait_for_server(port):
-        logger.error("服务器启动失败，退出应用")
-        sys.exit(1)
+    # 启动定时器
+    close_timer = threading.Timer(5.0, close_loading_window)
+    close_timer.start()
     
-    try:
-        # 创建本地窗口应用
-        window = webview.create_window(
+    # 在后台线程中执行初始化工作
+    def initialize_app():
+        # 查找可用端口
+        port = find_free_port()
+        if port is None:
+            logger.error("无法找到可用端口，退出应用")
+            # 在界面上显示错误信息
+            def show_error():
+                loading_window.evaluate_js('document.body.innerHTML = "<div style=\\"text-align: center; padding: 20px;\\"><h3>启动失败</h3><p>找不到可用端口</p></div>";')
+                time.sleep(3)
+                loading_window.destroy()
+            webview.schedule_update(show_error)
+            return
+
+        # 启动Flask服务器线程
+        flask_thread = threading.Thread(target=run_flask, args=(port,), daemon=True)
+        flask_thread.start()
+
+        # 等待服务器启动
+        if not wait_for_server(port):
+            logger.error("服务器启动失败，退出应用")
+            # 在界面上显示错误信息
+            def show_error():
+                loading_window.evaluate_js('document.body.innerHTML = "<div style=\\"text-align: center; padding: 20px;\\"><h3>启动失败</h3><p>服务器启动超时</p></div>";')
+                time.sleep(3)
+                loading_window.destroy()
+            webview.schedule_update(show_error)
+            return
+        
+        # 创建主窗口
+        main_window = webview.create_window(
             "小鼠管理系统", 
-            f"http://127.0.0.1:{port}", 
+            f"http://127.0.0.1:{port}",
             width=1200, 
             height=800,
             resizable=True,
             text_select=True,
-            confirm_close=True
+            confirm_close=True,
+            frameless=False
         )
         
-        # 创建保存函数
-        save_file_dialog = create_save_file_dialog(window)
+        # 创建保存函数并暴露API
+        save_file_dialog = create_save_file_dialog(main_window)
+        main_window.expose(save_file_dialog)
         
-        # 暴露API
-        window.expose(save_file_dialog)
+        # 取消定时器（如果初始化成功）
+        close_timer.cancel()
         
+        # 关闭加载窗口
+        loading_window.destroy()
+    
+    # 在单独的线程中执行初始化
+    init_thread = threading.Thread(target=initialize_app)
+    init_thread.start()
+    
+    try:
         # 启动webview
         logger.info("启动Webview窗口")
         webview.start(
@@ -161,11 +290,5 @@ if __name__ == '__main__':
         )
     except Exception as e:
         logger.exception(f"窗口创建失败: {str(e)}")
-        # 尝试恢复
-        try:
-            webview.start()
-        except:
-            logger.critical("无法恢复，退出应用")
-            sys.exit(1)
-    
+
     logger.info("应用程序正常退出")
