@@ -10,6 +10,45 @@ from io import BytesIO
 from sqlalchemy import text
 from sqlalchemy.orm import joinedload
 
+import socket
+
+# 首先应用猴子补丁 - 必须在创建 Flask 应用之前
+def apply_socket_patch():
+    """应用安全的 socket 函数补丁"""
+    # 保存原始函数
+    _original_getfqdn = socket.getfqdn
+    _original_gethostname = socket.gethostname
+    
+    def safe_gethostname():
+        try:
+            name = _original_gethostname()
+            if isinstance(name, bytes):
+                # 尝试常见编码
+                for encoding in ['utf-8', 'gbk', 'latin-1']:
+                    try:
+                        return name.decode(encoding)
+                    except UnicodeDecodeError:
+                        continue
+                # 所有编码失败则替换无效字节
+                return name.decode('utf-8', errors='replace')
+            return name
+        except Exception:
+            return 'localhost'
+    
+    def safe_getfqdn(name=''):
+        try:
+            # 使用我们安全的主机名函数
+            hostname = safe_gethostname()
+            return f"{hostname}.local" if hostname else "localhost"
+        except Exception:
+            return "localhost"
+    
+    # 应用补丁
+    socket.gethostname = safe_gethostname
+    socket.getfqdn = safe_getfqdn
+
+# 应用补丁
+apply_socket_patch()
 
 app = Flask(__name__, static_folder='dist', static_url_path='')
 CORS(app)  # 允许跨域请求

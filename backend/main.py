@@ -1,3 +1,4 @@
+from app import app
 import webview
 import threading
 import time
@@ -5,7 +6,6 @@ import sys
 import os
 import socket
 from contextlib import closing
-from app import app
 import logging
 
 # 配置日志记录
@@ -107,7 +107,7 @@ def find_free_port(start_port=5000, max_attempts=20):
     attempts = 0
     while attempts < max_attempts:
         with closing(socket.socket(socket.AF_INET, socket.SOCK_STREAM)) as sock:
-            if sock.connect_ex(('127.0.0.1', port)) != 0:
+            if sock.connect_ex(('localhost', port)) != 0:
                 logger.info(f"找到可用端口: {port}")
                 return port
         port += 1
@@ -129,7 +129,7 @@ def wait_for_server(port, timeout=30):
     start_time = time.time()
     while time.time() - start_time < timeout:
         try:
-            with socket.create_connection(('127.0.0.1', port), timeout=1):
+            with socket.create_connection(('localhost', port), timeout=1):
                 logger.info(f"服务器在端口 {port} 上已启动")
                 return True
         except (socket.timeout, ConnectionRefusedError):
@@ -258,7 +258,7 @@ if __name__ == '__main__':
         # 创建主窗口
         main_window = webview.create_window(
             "小鼠管理系统", 
-            f"http://127.0.0.1:{port}",
+            f"http://localhost:{port}",
             width=1200, 
             height=800,
             resizable=True,
