@@ -985,13 +985,17 @@ def import_mice_data(df, result, conflict_resolution):
         return
     for index, row in df.iterrows():
         try:
-            existing = Mouse.query.filter_by(id=row['id']).filter_by(birth_date=datetime.strptime(str(row['birth_date'].date()), '%Y-%m-%d').date()).first()
+            # 转换出生日期格式
+            birth_date = datetime.strptime(str(row['birth_date'].date()), '%Y-%m-%d').date()
+            
+            existing = Mouse.query.filter_by(id=row['id']).filter_by(birth_date=birth_date).first()
             if existing:
                 if conflict_resolution == 'skip':
                     result['skippedCount'] += 1
                     continue
                 elif conflict_resolution == 'overwrite':
-                    db.session.delete(existing)
+                    update_existing_mouse(existing, row, result)
+                    continue
             # 处理基因型
             genotype = str(row['genotype']).strip() if pd.notna(row['genotype']) else None
 
@@ -1006,7 +1010,7 @@ def import_mice_data(df, result, conflict_resolution):
                     id=row['id'],
                     genotype=genotype,
                     sex=str(row['sex']).upper()[0],  # 只取第一个字母
-                    birth_date=datetime.strptime(str(row['birth_date'].date()), '%Y-%m-%d').date(),
+                    birth_date=birth_date,
                     live_status=int(row.get('live_status', 1))
                 )
             else:
@@ -1030,6 +1034,37 @@ def import_mice_data(df, result, conflict_resolution):
                 'message': f'导入失败: {str(e)}'
             })
 
+def update_existing_mouse(existing, row, result):
+    """更新现有小鼠记录"""
+    try:
+        # 更新基本字段
+        existing.genotype = str(row['genotype']).strip() if pd.notna(row['genotype']) else None
+        existing.sex = str(row['sex']).upper()[0]
+        existing.live_status = int(row.get('live_status', 1))
+        
+        # 处理可选字段
+        if 'death_date' in row and pd.notna(row['death_date']):
+            existing.death_date = datetime.strptime(str(row['death_date'].date()), '%Y-%m-%d').date()
+        
+        if 'cage_id' in row and pd.notna(row['cage_id']):
+            existing.cage_id = str(row['cage_id'])
+        
+        # 更新基因型关联
+        if existing.genotype:
+            existing_genotype = Genotype.query.filter_by(name=existing.genotype).first()
+            if not existing_genotype:
+                db.session.add(Genotype(name=existing.genotype))
+        
+        db.session.commit()
+        result['successCount'] += 1
+        return True
+    except Exception as e:
+        result['errors'].append({
+            'row': index + 2,
+            'message': f'更新失败: {str(e)}'
+        })
+        return False
+    
 def import_weights_data(df, result, conflict_resolution):
     """导入体重数据"""
     required_columns = ['id', 'birth_date', 'weight', 'record_date']
