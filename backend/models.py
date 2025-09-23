@@ -108,3 +108,123 @@ class Location(db.Model):
             'identifier': self.identifier,
             'description': self.description
         }
+    
+# 实验类型表
+class ExperimentType(db.Model):
+    __tablename__ = 'experiment_type'
+    
+    id = db.Column(db.Integer, primary_key=True)
+    name = db.Column(db.String(100), nullable=False)  # 实验类型名称
+    description = db.Column(db.Text)  # 实验类型描述
+    
+    # 与字段定义的关系
+    field_definitions = db.relationship('FieldDefinition', backref='experiment_type', lazy=True)
+    
+    def to_dict(self):
+        # 获取按display_order排序的字段定义
+        sorted_fields = sorted(
+            [fd.to_dict() for fd in self.field_definitions],
+            key=lambda x: x['display_order']
+        )
+        return {
+            'id': self.id,
+            'name': self.name,
+            'description': self.description, 
+            'fields': sorted_fields
+        }
+
+# 字段定义表
+class FieldDefinition(db.Model):
+    __tablename__ = 'field_definition'
+    
+    id = db.Column(db.Integer, primary_key=True)
+    experiment_type_id = db.Column(db.Integer, db.ForeignKey('experiment_type.id'), nullable=False)
+    field_name = db.Column(db.String(100), nullable=False)  # 字段名称
+    data_type = db.Column(db.String(20), nullable=False)  # 数据类型: INTEGER, REAL, TEXT, BOOLEAN, DATE
+    unit = db.Column(db.String(20))  # 单位
+    is_required = db.Column(db.Boolean, default=False)  # 是否为必填字段
+    display_order = db.Column(db.Integer, default=0)  # 显示顺序
+    
+    def to_dict(self):
+        return {
+            'id': self.id,
+            'experiment_type_id': self.experiment_type_id,
+            'field_name': self.field_name,
+            'data_type': self.data_type,
+            'unit': self.unit,
+            'is_required': self.is_required,
+            'display_order': self.display_order
+        }
+
+# 实验记录表
+class Experiment(db.Model):
+    __tablename__ = 'experiment'
+    
+    id = db.Column(db.Integer, primary_key=True)
+    mouse_id = db.Column(db.Integer, db.ForeignKey('mouse.tid'), nullable=False)
+    experiment_type_id = db.Column(db.Integer, db.ForeignKey('experiment_type.id'), nullable=False)
+    researcher = db.Column(db.String(50))  # 实验人员
+    date = db.Column(db.Date, nullable=False)
+    notes = db.Column(db.Text)  # 备注
+    
+    # 与小鼠的关系
+    mouse = db.relationship('Mouse', backref=db.backref('experiments', lazy=True))
+    
+    # 与实验类型的关系
+    experiment_type = db.relationship('ExperimentType', backref=db.backref('experiments', lazy=True))
+    
+    # 与实验数据值的关系
+    values = db.relationship('ExperimentValue', backref='experiment', lazy=True, cascade='all, delete-orphan')
+    
+    def to_dict(self):
+        return {
+            'id': self.id,
+            'mouse_id': self.mouse_id,
+            'experiment_type_id': self.experiment_type_id,
+            'researcher': self.researcher,
+            'date': self.date.isoformat() if self.date else None,
+            'notes': self.notes,
+            'values': [value.to_dict() for value in self.values]
+        }
+
+# 实验数据值表 (EAV模式)
+class ExperimentValue(db.Model):
+    __tablename__ = 'experiment_value'
+    
+    id = db.Column(db.Integer, primary_key=True)
+    experiment_id = db.Column(db.Integer, db.ForeignKey('experiment.id'), nullable=False)
+    field_definition_id = db.Column(db.Integer, db.ForeignKey('field_definition.id'), nullable=False)
+    
+    # 根据不同数据类型存储的值
+    value_int = db.Column(db.Integer)
+    value_real = db.Column(db.Float)
+    value_text = db.Column(db.Text)
+    value_bool = db.Column(db.Boolean)
+    value_date = db.Column(db.Date)
+    
+    # 与字段定义的关系
+    field_definition = db.relationship('FieldDefinition', backref=db.backref('values', lazy=True))
+    
+    def to_dict(self):
+        # 根据字段定义的数据类型返回相应的值
+        value = None
+        if self.field_definition.data_type == 'INTEGER':
+            value = self.value_int
+        elif self.field_definition.data_type == 'REAL':
+            value = self.value_real
+        elif self.field_definition.data_type == 'TEXT':
+            value = self.value_text
+        elif self.field_definition.data_type == 'BOOLEAN':
+            value = self.value_bool
+        elif self.field_definition.data_type == 'DATE':
+            value = self.value_date.isoformat() if self.value_date else None
+        
+        return {
+            'id': self.id,
+            'experiment_id': self.experiment_id,
+            'field_definition_id': self.field_definition_id,
+            'field_name': self.field_definition.field_name,
+            'data_type': self.field_definition.data_type,
+            'unit': self.field_definition.unit,
+            'value': value
+        }

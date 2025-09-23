@@ -1,7 +1,7 @@
 from flask import Flask, jsonify, request, send_file
 from flask_cors import CORS
 from datetime import datetime, date
-from models import db, Mouse, Cage, WeightRecord, StatusRecord, Pedigree, Genotype, Location
+from models import db, Mouse, Cage, WeightRecord, StatusRecord, Pedigree, Genotype, Location, ExperimentType, FieldDefinition, Experiment
 import os
 import sys
 from pathlib import Path
@@ -1362,6 +1362,167 @@ def delete_weight_record(id):
         db.session.rollback()
         app.logger.error(f"删除体重记录失败: {str(e)}")
         return jsonify({'error': '删除记录失败'}), 500
+    
+# 实验类型相关API
+@app.route('/api/experiment-types', methods=['GET'])
+def get_experiment_types():
+    try:
+        experiment_types = ExperimentType.query.all()
+        return jsonify([et.to_dict() for et in experiment_types])
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
+@app.route('/api/experiment-types', methods=['POST'])
+def create_experiment_type():
+    try:
+        data = request.get_json()
+        
+        # 检查是否已存在同名实验类型
+        existing = ExperimentType.query.filter_by(name=data['name']).first()
+        if existing:
+            return jsonify({'error': '已存在同名实验类型'}), 400
+        
+        # 创建实验类型
+        experiment_type = ExperimentType(
+            name=data['name'],
+            description=data.get('description', '')
+        )
+        db.session.add(experiment_type)
+        db.session.flush()  # 获取ID但不提交
+        
+        # 创建字段定义
+        for field_data in data.get('fields', []):
+            field = FieldDefinition(
+                experiment_type_id=experiment_type.id,
+                field_name=field_data['field_name'],
+                data_type=field_data['data_type'],
+                unit=field_data.get('unit', ''),
+                is_required=field_data.get('is_required', False),
+                display_order=field_data.get('display_order', 0)
+            )
+            db.session.add(field)
+        
+        db.session.commit()
+        return jsonify(experiment_type.to_dict())
+    except Exception as e:
+        db.session.rollback()
+        return jsonify({'error': str(e)}), 500
+
+@app.route('/api/experiment-types/<int:id>', methods=['PUT'])
+def update_experiment_type(id):
+    try:
+        data = request.get_json()
+        experiment_type = ExperimentType.query.get_or_404(id)
+        
+        # 检查是否已存在同名实验类型（排除自己）
+        existing = ExperimentType.query.filter(
+            ExperimentType.name == data['name'],
+            ExperimentType.id != id
+        ).first()
+        if existing:
+            return jsonify({'error': '已存在同名实验类型'}), 400
+        
+        # 更新实验类型基本信息
+        experiment_type.name = data['name']
+        experiment_type.description = data.get('description', '')
+        
+        # 更新字段定义
+        field_ids = []
+        for field_data in data.get('fields', []):
+            if 'id' in field_data:
+                # 更新现有字段
+                field = FieldDefinition.query.get(field_data['id'])
+                if field:
+                    field.field_name = field_data['field_name']
+                    field.data_type = field_data['data_type']
+                    field.unit = field_data.get('unit', '')
+                    field.is_required = field_data.get('is_required', False)
+                    field.display_order = field_data.get('display_order', 0)
+                    field_ids.append(field.id)
+            else:
+                # 添加新字段
+                field = FieldDefinition(
+                    experiment_type_id=id,
+                    field_name=field_data['field_name'],
+                    data_type=field_data['data_type'],
+                    unit=field_data.get('unit', ''),
+                    is_required=field_data.get('is_required', False),
+                    display_order=field_data.get('display_order', 0)
+                )
+                db.session.add(field)
+                db.session.flush()
+                field_ids.append(field.id)
+        
+        # 删除不存在的字段
+        FieldDefinition.query.filter(
+            FieldDefinition.experiment_type_id == id,
+            ~FieldDefinition.id.in_(field_ids)
+        ).delete(synchronize_session=False)
+        
+        db.session.commit()
+        return jsonify(experiment_type.to_dict())
+    except Exception as e:
+        db.session.rollback()
+        return jsonify({'error': str(e)}), 500
+
+@app.route('/api/experiment-types/<int:id>', methods=['DELETE'])
+def delete_experiment_type(id):
+    try:
+        experiment_type = ExperimentType.query.get_or_404(id)
+        
+        # 检查是否有实验记录使用此类型
+        experiment_count = Experiment.query.filter_by(experiment_type_id=id).count()
+        if experiment_count > 0:
+            return jsonify({'error': '无法删除：已有实验记录使用此类型'}), 400
+        
+        # 删除字段定义
+        FieldDefinition.query.filter_by(experiment_type_id=id).delete()
+        
+        # 删除实验类型
+        db.session.delete(experiment_type)
+        db.session.commit()
+        
+        return jsonify({'message': '删除成功'})
+    except Exception as e:
+        db.session.rollback()
+        return jsonify({'error': str(e)}), 500
+
+# 预设实验类型
+@app.route('/api/experiment-types/presets', methods=['GET'])
+def get_experiment_presets():
+    presets = {
+        "xenograft": {
+            "name": "异种移植肿瘤测量",
+            "description": "裸鼠肿瘤生长测量实验",
+            "fields": [
+                {"field_name": "肿瘤长径", "data_type": "REAL", "unit": "mm", "is_required": True, "display_order": 1},
+                {"field_name": "肿瘤短径", "data_type": "REAL", "unit": "mm", "is_required": True, "display_order": 2},
+                {"field_name": "肿瘤体积", "data_type": "REAL", "unit": "mm³", "is_required": False, "display_order": 3},
+                {"field_name": "照片路径", "data_type": "TEXT", "is_required": False, "display_order": 4}
+            ]
+        },
+        "rotarod": {
+            "name": "转棒实验",
+            "description": "小鼠运动协调能力测试",
+            "fields": [
+                {"field_name": "潜伏期", "data_type": "REAL", "unit": "s", "is_required": True, "display_order": 1},
+                {"field_name": "跌落速度", "data_type": "REAL", "unit": "rpm", "is_required": True, "display_order": 2},
+                {"field_name": "跌落次数", "data_type": "INTEGER", "unit": "次", "is_required": False, "display_order": 3},
+                {"field_name": "最大速度", "data_type": "REAL", "unit": "rpm", "is_required": False, "display_order": 4}
+            ]
+        },
+        "open_field": {
+            "name": "旷场实验",
+            "description": "小鼠焦虑和探索行为测试",
+            "fields": [
+                {"field_name": "总活动距离", "data_type": "REAL", "unit": "cm", "is_required": True, "display_order": 1},
+                {"field_name": "中央区域时间", "data_type": "REAL", "unit": "s", "is_required": True, "display_order": 2},
+                {"field_name": "站立次数", "data_type": "INTEGER", "unit": "次", "is_required": True, "display_order": 3},
+                {"field_name": "粪便粒数", "data_type": "INTEGER", "unit": "粒", "is_required": False, "display_order": 4}
+            ]
+        }
+    }
+    return jsonify(presets)
 
 if __name__ == '__main__':
     with app.app_context():

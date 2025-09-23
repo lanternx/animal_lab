@@ -154,7 +154,7 @@
     </div>
     </div>
     
-    <!-- 导入小鼠 -->
+    <!-- 导入设置 -->
     <div v-if="activeTab === 'import'" class="form-container">
     <h2 class="section-title">导入数据</h2>
     <p class="section-description">从Excel文件导入小鼠数据</p>
@@ -395,7 +395,145 @@
         </div>
     </div>
     </div>
-    
+
+    <!-- 实验类型设置 -->
+    <div v-if="activeTab === 'experiment'" class="form-container">
+        <h2 class="section-title">实验类型设置</h2>
+        
+        <div class="form-section">
+            <h3>可选择预设实验类型</h3>
+            <div class="preset-selector">
+            <label>选择预设：</label>
+            <select v-model="selectedPreset" @change="applyPreset">
+                <option value="">-- 请选择预设 --</option>
+                <option v-for="(preset, key) in experimentPresets" :key="key" :value="key">
+                {{ preset.name }}
+                </option>
+            </select>
+            <span class="preset-description" v-if="selectedPreset">
+                {{ experimentPresets[selectedPreset].description }}
+            </span>
+            </div>
+        </div>
+        
+        <div class="form-section">
+        <h3>{{ editingExperimentType.id ? '编辑实验类型' : '新增实验类型' }}</h3>
+        <form @submit.prevent="saveExperimentType" class="form-group-row">
+            <div class="form-group">
+            <label>实验类型名称 *</label>
+            <input type="text" v-model="editingExperimentType.name" placeholder="例如: 肿瘤测量" required>
+            </div>
+            
+            <div class="form-group">
+            <label>描述</label>
+            <input type="text" v-model="editingExperimentType.description" placeholder="例如: 测量裸鼠肿瘤尺寸">
+            </div>
+            
+            <div class="form-group">
+            <button type="submit" class="btn btn-primary">
+                {{ editingExperimentType.id ? '更新' : '添加' }}
+            </button>
+            <button v-if="editingExperimentType.id" type="button" class="btn btn-outline" @click="cancelEdit">
+                取消
+            </button>
+            <button type="button" class="btn btn-outline" @click="resetForm">
+                重置表单
+            </button>
+            </div>
+        </form>
+        
+        <div class="fields-section">
+            <h4>字段定义</h4>
+            <div class="table-container">
+            <table class="settings-table">
+                <thead>
+                <tr>
+                    <th>字段名称</th>
+                    <th>数据类型</th>
+                    <th>单位</th>
+                    <th>必填</th>
+                    <th>操作</th>
+                </tr>
+                </thead>
+                <tbody>
+                <tr v-for="(field, index) in editingExperimentType.fields" :key="index">
+                    <td>
+                    <input type="text" v-model="field.field_name" placeholder="字段名称" required>
+                    </td>
+                    <td>
+                    <select v-model="field.data_type" required>
+                        <option value="INTEGER">整数</option>
+                        <option value="REAL">小数</option>
+                        <option value="TEXT">文本</option>
+                        <option value="BOOLEAN">布尔值</option>
+                        <option value="DATE">日期</option>
+                    </select>
+                    </td>
+                    <td>
+                    <input type="text" v-model="field.unit" placeholder="单位">
+                    </td>
+                    <td>
+                    <input type="checkbox" v-model="field.is_required">
+                    </td>
+                    <td class="action-cell">
+                        <button class="btn-danger" @click="removeField(index)">
+                        <i class="material-icons">delete</i>
+                        </button>
+                        <button class="action-btn btn-outline" @click="moveFieldUp(index)" :disabled="index === 0">
+                        <i class="material-icons">arrow_upward</i>
+                        </button>
+                        <button class="action-btn btn-outline" @click="moveFieldDown(index)" :disabled="index === editingExperimentType.fields.length - 1">
+                        <i class="material-icons">arrow_downward</i>
+                        </button>
+                    </td>
+                </tr>
+                </tbody>
+            </table>
+            </div>
+            
+            <div class="field-actions">
+            <button class="btn btn-outline" @click="addField">
+                <i class="material-icons">add</i> 添加字段
+            </button>
+            </div>
+        </div>
+        </div>
+        
+        <div class="form-section">
+        <h3>实验类型列表</h3>
+        <div class="table-container">
+            <table class="settings-table">
+            <thead>
+                <tr>
+                <th>实验类型名称</th>
+                <th>描述</th>
+                <th>字段数量</th>
+                <th>操作</th>
+                </tr>
+            </thead>
+            <tbody>
+                <tr v-for="experimentType in experimentTypes" :key="experimentType.id">
+                <td>{{ experimentType.name }}</td>
+                <td>{{ experimentType.description }}</td>
+                <td>{{ experimentType.fields ? experimentType.fields.length : 0 }}</td>
+                <td class="action-cell">
+                    <button class="action-btn" @click="editExperimentType(experimentType)">
+                        编辑
+                    </button>
+                    <button class="btn-danger" @click="deleteExperimentType(experimentType.id)">
+                        删除
+                    </button>
+                    <button class="action-btn btn-outline" @click="duplicateExperimentType(experimentType)">
+                        复制
+                    </button>
+                </td>
+                </tr>
+            </tbody>
+            </table>
+        </div>
+        </div>
+    </div>
+
     <!-- 编辑基因型对话框 -->
     <div v-if="editGenotypeDialogVisible" class="dialog-overlay">
     <div class="dialog-container">
@@ -480,6 +618,7 @@ data() {
     tabs: [
         { id: 'genotype', title: '基因型设置' },
         { id: 'location', title: '位置设置' },
+        { id: 'experiment', title: '实验类型设置' },
         { id: 'export', title: '导出设置' },
         { id: 'import', title: '导入数据' }
     ],
@@ -524,13 +663,26 @@ data() {
         successCount: 0,
         skippedCount: 0,
         errors: []
-    }
+    },
+
+    // 实验类型相关数据
+    experimentTypes: [],
+    experimentPresets: {},
+    editingExperimentType: {
+        id: null,
+        name: '',
+        description: '',
+        fields: []
+    },
+    selectedPreset: ''
+
     };
 },
 mounted() {
     this.fetchGenotypes();
     this.fetchLocations();
-    
+    this.fetchExperimentTypes();
+    this.fetchExperimentPresets();
 },
 methods: {
     fetchGenotypes() {
@@ -757,6 +909,228 @@ methods: {
             alert(`导入失败: ${error.response?.data?.error || '服务器错误'}`);
             this.isImporting = false;
         });
+    },
+
+    // 实验类型相关方法
+    fetchExperimentTypes() {
+        axios.get('/api/experiment-types')
+        .then(response => {
+            this.experimentTypes = response.data;
+        })
+        .catch(error => {
+            console.error('获取实验类型列表失败:', error);
+            alert('获取实验类型列表失败');
+        });
+    },
+
+    fetchExperimentPresets() {
+        axios.get('/api/experiment-types/presets')
+        .then(response => {
+            this.experimentPresets = response.data;
+        })
+        .catch(error => {
+            console.error('获取实验预设失败:', error);
+        });
+    },
+
+    loadPreset(presetKey) {
+        const preset = this.experimentPresets[presetKey];
+        if (preset) {
+        this.editingExperimentType = {
+            id: null,
+            name: preset.name,
+            description: preset.description,
+            fields: JSON.parse(JSON.stringify(preset.fields))
+        };
+        }
+    },
+
+    addField() {
+        this.editingExperimentType.fields.push({
+        field_name: '',
+        data_type: 'TEXT',
+        unit: '',
+        is_required: false,
+        display_order: this.editingExperimentType.fields.length
+        });
+    },
+
+    removeField(index) {
+        this.editingExperimentType.fields.splice(index, 1);
+    },
+
+    saveExperimentType() {
+        if (!this.editingExperimentType.name) {
+        alert('请填写实验类型名称');
+        return;
+        }
+        
+        if (this.editingExperimentType.fields.length === 0) {
+        alert('请至少添加一个字段');
+        return;
+        }
+        
+        this.updateFieldOrders();
+        // 验证字段
+        for (let i = 0; i < this.editingExperimentType.fields.length; i++) {
+        const field = this.editingExperimentType.fields[i];
+        if (!field.field_name) {
+            alert(`第${i + 1}个字段缺少名称`);
+            return;
+        }
+        if (!field.data_type) {
+            alert(`字段"${field.field_name}"缺少数据类型`);
+            return;
+        }
+        }
+        
+        const url = this.editingExperimentType.id 
+        ? `/api/experiment-types/${this.editingExperimentType.id}`
+        : '/api/experiment-types';
+        
+        const method = this.editingExperimentType.id ? 'put' : 'post';
+        
+        const dataToSend = {
+            ...this.editingExperimentType,
+            fields: this.editingExperimentType.fields.map((field, index) => ({
+            ...field,
+            display_order: field.display_order !== undefined ? field.display_order : index
+            }))
+        };
+        
+        axios[method](url, dataToSend)
+            .then(response => {
+                alert('保存成功');
+                this.cancelEdit();
+                this.fetchExperimentTypes();
+            })
+            .catch(error => {
+                console.error('保存实验类型失败:', error);
+                alert(error.response?.data?.error || '保存实验类型失败');
+            });
+    },
+
+    editExperimentType(experimentType) {
+        // 深拷贝实验类型，字段已经按display_order排序
+        const copy = JSON.parse(JSON.stringify(experimentType));
+        copy.id = experimentType.id;
+        copy.name = experimentType.name;
+        copy.description = experimentType.description;
+        
+        this.editingExperimentType = copy;
+        this.selectedPreset = '';
+        
+        // 滚动到表单顶部
+        this.$nextTick(() => {
+            const formElement = this.$el.querySelector('.form-section');
+            if (formElement) {
+            formElement.scrollIntoView({ behavior: 'smooth' });
+            }
+        });
+    },
+
+    cancelEdit() {
+        this.editingExperimentType = {
+        id: null,
+        name: '',
+        description: '',
+        fields: []
+        };
+    },
+
+    deleteExperimentType(id) {
+        if (!confirm('确定要删除这个实验类型吗？')) return;
+        
+        axios.delete(`/api/experiment-types/${id}`)
+        .then(response => {
+            alert('删除成功');
+            this.fetchExperimentTypes();
+        })
+        .catch(error => {
+            console.error('删除实验类型失败:', error);
+            alert(error.response?.data?.error || '删除实验类型失败');
+        });
+    },
+
+    applyPreset() {
+    if (this.selectedPreset && this.experimentPresets[this.selectedPreset]) {
+        const preset = this.experimentPresets[this.selectedPreset];
+        
+        // 保留当前已编辑的内容，只添加预设的字段
+        const currentFields = this.editingExperimentType.fields || [];
+        const presetFields = JSON.parse(JSON.stringify(preset.fields));
+        
+        // 设置显示顺序，确保新字段排在现有字段后面
+        const maxOrder = currentFields.length > 0 ? 
+        Math.max(...currentFields.map(f => f.display_order)) : -1;
+        
+        presetFields.forEach((field, index) => {
+        field.display_order = maxOrder + index + 1;
+        });
+        
+        // 合并字段
+        this.editingExperimentType.fields = [...currentFields, ...presetFields];
+        
+        // 如果名称和描述为空，则使用预设的值
+        if (!this.editingExperimentType.name) {
+        this.editingExperimentType.name = preset.name;
+        }
+        if (!this.editingExperimentType.description) {
+        this.editingExperimentType.description = preset.description;
+        }
+    }
+    },
+
+    resetForm() {
+    this.editingExperimentType = {
+        id: null,
+        name: '',
+        description: '',
+        fields: []
+    };
+    this.selectedPreset = '';
+    },
+
+    moveFieldUp(index) {
+    if (index > 0) {
+        const fields = this.editingExperimentType.fields;
+        [fields[index], fields[index - 1]] = [fields[index - 1], fields[index]];
+        // 更新显示顺序
+        this.updateFieldOrders();
+    }
+    },
+
+    moveFieldDown(index) {
+    if (index < this.editingExperimentType.fields.length - 1) {
+        const fields = this.editingExperimentType.fields;
+        [fields[index], fields[index + 1]] = [fields[index + 1], fields[index]];
+        // 更新显示顺序
+        this.updateFieldOrders();
+    }
+    },
+
+    updateFieldOrders() {
+    this.editingExperimentType.fields.forEach((field, index) => {
+        field.display_order = index;
+    });
+    },
+
+    duplicateExperimentType(experimentType) {
+        // 深拷贝实验类型
+        const copy = JSON.parse(JSON.stringify(experimentType));
+        copy.id = null;
+        copy.name = copy.name + ' (副本)';
+        
+        this.editingExperimentType = copy;
+        this.selectedPreset = '';
+        
+        // 滚动到表单顶部
+        this.$nextTick(() => {
+            const formElement = this.$el.querySelector('.form-section');
+            if (formElement) {
+            formElement.scrollIntoView({ behavior: 'smooth' });
+            }
+        });
     }
 }
 };
@@ -965,6 +1339,7 @@ border-radius: 4px;
 cursor: pointer;
 font-size: 13px;
 transition: all 0.2s;
+margin-left: 8px;
 }
 
 .action-btn:hover {
@@ -1174,5 +1549,65 @@ margin-bottom: 10px;
     font-family: monospace;
     font-size: 14px;
     color: #4a6fa5;
+}
+
+.preset-selector {
+display: flex;
+align-items: center;
+gap: 10px;
+margin-bottom: 15px;
+flex-wrap: wrap;
+}
+
+.preset-selector select {
+width: 200px;
+padding: 8px;
+border: 1px solid #ddd;
+border-radius: 4px;
+}
+
+.preset-description {
+color: #666;
+font-style: italic;
+}
+
+.fields-section {
+margin-top: 20px;
+padding: 15px;
+border: 1px solid #e0e0e0;
+border-radius: 5px;
+background-color: #f9f9f9;
+}
+
+.fields-section h4 {
+margin-top: 0;
+margin-bottom: 15px;
+color: #333;
+}
+
+.field-actions {
+margin-top: 15px;
+}
+
+.settings-table input[type="text"],
+.settings-table input[type="number"],
+.settings-table select {
+width: 100%;
+padding: 5px;
+border: 1px solid #ddd;
+border-radius: 3px;
+}
+
+.settings-table input[type="checkbox"] {
+transform: scale(1.2);
+}
+
+.btn-outline:disabled {
+opacity: 0.5;
+cursor: not-allowed;
+}
+
+.btn-outline:disabled:hover {
+background-color: transparent;
 }
 </style>
