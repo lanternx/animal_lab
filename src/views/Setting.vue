@@ -57,7 +57,7 @@
                 <td>{{ genotype.description }}</td>
                 <td class="action-cell">
                 <button class="action-btn" @click="editGenotype(genotype)">编辑</button>
-                <button class="btn-danger" @click="deleteGenotype(genotype.id)">删除</button>
+                <button class="action-btn btn-danger" @click="deleteGenotype(genotype.id)">删除</button>
                 </td>
             </tr>
             </tbody>
@@ -106,7 +106,7 @@
                 <td>{{ location.description }}</td>
                 <td class="action-cell">
                 <button class="action-btn" @click="editLocation(location)">编辑</button>
-                <button class="btn-danger" @click="deleteLocation(location.id)">删除</button>
+                <button class="action-btn btn-danger" @click="deleteLocation(location.id)">删除</button>
                 </td>
             </tr>
             </tbody>
@@ -476,7 +476,7 @@
                     <input type="checkbox" v-model="field.is_required">
                     </td>
                     <td class="action-cell">
-                        <button class="btn-danger" @click="removeField(index)">
+                        <button class="action-btn btn-danger" @click="removeField(index)">
                         <i class="material-icons">delete</i>
                         </button>
                         <button class="action-btn btn-outline" @click="moveFieldUp(index)" :disabled="index === 0">
@@ -512,22 +512,67 @@
                 </tr>
             </thead>
             <tbody>
-                <tr v-for="experimentType in experimentTypes" :key="experimentType.id">
-                <td>{{ experimentType.name }}</td>
-                <td>{{ experimentType.description }}</td>
-                <td>{{ experimentType.fields ? experimentType.fields.length : 0 }}</td>
-                <td class="action-cell">
-                    <button class="action-btn" @click="editExperimentType(experimentType)">
-                        编辑
-                    </button>
-                    <button class="btn-danger" @click="deleteExperimentType(experimentType.id)">
-                        删除
-                    </button>
-                    <button class="action-btn btn-outline" @click="duplicateExperimentType(experimentType)">
-                        复制
-                    </button>
-                </td>
+            <template v-for="experimentType in experimentTypes" :key="experimentType.id">
+                <tr>
+                    <td>{{ experimentType.name }}</td>
+                    <td>{{ experimentType.description }}</td>
+                    <td>{{ experimentType.fields ? experimentType.fields.length : 0 }}</td>
+                    <td class="action-cell">
+                        <button class="action-btn" @click="editExperimentType(experimentType)">
+                            编辑
+                        </button>
+                        <button class="action-btn btn-danger" @click="deleteExperimentType(experimentType.id)">
+                            删除
+                        </button>
+                        <button class="action-btn btn-outline" @click="duplicateExperimentType(experimentType)">
+                            复制
+                        </button>
+                        <button class="action-btn btn-info" @click="toggleDetails(experimentType.id)">
+                            {{ expandedExperimentType === experimentType.id ? '收起' : '详情' }}
+                        </button>
+                    </td>
                 </tr>
+                <!-- 详情展开行 -->
+                <tr v-if="expandedExperimentType === experimentType.id" class="detail-row" :key="'detail-'+experimentType.id">
+                    <td colspan="4">
+                        <div class="detail-content">
+                            <div class="detail-header">
+                                <h3 class="detail-title">{{ experimentType.name }} - 详情</h3>
+                                <button class="btn btn-outline" @click="expandedExperimentType = null">
+                                    <i class="material-icons">close</i> 收起
+                                </button>
+                            </div>
+                            
+                            <div class="detail-section">
+                                <h4>描述</h4>
+                                <p>{{ experimentType.description || '暂无描述' }}</p>
+                            </div>
+                            
+                            <div class="detail-section">
+                                <h4>字段定义</h4>
+                                <div v-if="experimentType.fields && experimentType.fields.length > 0" class="field-list">
+                                    <div v-for="(field, index) in experimentType.fields" :key="index" class="field-item">
+                                        <div class="field-name">{{ field.field_name }}</div>
+                                        <div class="field-props">
+                                            <span>{{ field.data_type }}</span>
+                                            <span v-if="field.unit">{{ field.unit }}</span>
+                                            <span v-else>无单位</span>
+                                        </div>
+                                        <div class="field-props">
+                                            <span v-if="field.is_required" class="required-badge">必填</span>
+                                            <span v-else>可选</span>
+                                        </div>
+                                    </div>
+                                </div>
+                                <div v-else class="no-fields">
+                                    <i class="material-icons">inbox</i>
+                                    <p>此实验类型尚未定义任何字段</p>
+                                </div>
+                            </div>
+                        </div>
+                    </td>
+                </tr>
+                </template>
             </tbody>
             </table>
         </div>
@@ -674,8 +719,10 @@ data() {
         description: '',
         fields: []
     },
-    selectedPreset: ''
+    selectedPreset: '',
 
+    // 详情展开状态
+    expandedExperimentType: null
     };
 },
 mounted() {
@@ -1131,6 +1178,14 @@ methods: {
             formElement.scrollIntoView({ behavior: 'smooth' });
             }
         });
+    },
+
+    toggleDetails(id) {
+        if (this.expandedExperimentType === id) {
+            this.expandedExperimentType = null;
+        } else {
+            this.expandedExperimentType = id;
+        }
     }
 }
 };
@@ -1283,22 +1338,6 @@ color: var(--primary);
 background-color: rgba(25, 118, 210, 0.1);
 }
 
-.btn-danger {
-padding: 6px 12px;
-background-color: #e53935;
-border: 1px solid #ddd;
-border-radius: 4px;
-cursor: pointer;
-font-size: 13px;
-transition: all 0.2s;
-color: white;
-margin-left: 8px;
-}
-
-.btn-danger:hover {
-background-color: #c62828;
-}
-
 .table-container {
 overflow-x: auto;
 }
@@ -1339,7 +1378,7 @@ border-radius: 4px;
 cursor: pointer;
 font-size: 13px;
 transition: all 0.2s;
-margin-left: 8px;
+margin-right: 8px;
 }
 
 .action-btn:hover {
@@ -1609,5 +1648,103 @@ cursor: not-allowed;
 
 .btn-outline:disabled:hover {
 background-color: transparent;
+}
+
+/* 详情展开区域样式 */
+.detail-row {
+    background-color: #f9fafb;
+}
+
+.detail-content {
+    padding: 20px;
+    border-top: 1px solid #e0e0e0;
+}
+
+.detail-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 15px;
+}
+
+.detail-title {
+    font-size: 1.1rem;
+    color: #2c3e50;
+    font-weight: 500;
+}
+
+.detail-section {
+    margin-bottom: 20px;
+}
+
+.detail-section h4 {
+    font-size: 1rem;
+    color: #2c3e50;
+    margin-bottom: 10px;
+    padding-bottom: 5px;
+    border-bottom: 1px solid #eee;
+}
+
+.field-list {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(250px, 1fr));
+    gap: 15px;
+}
+
+.field-item {
+    background: white;
+    padding: 15px;
+    border-radius: 6px;
+    border: 1px solid #eef2f7;
+    box-shadow: 0 2px 5px rgba(0,0,0,0.05);
+}
+
+.field-name {
+    font-weight: 600;
+    color: #2c3e50;
+    margin-bottom: 5px;
+}
+
+.field-props {
+    display: flex;
+    justify-content: space-between;
+    color: #666;
+    font-size: 0.9rem;
+}
+
+.required-badge {
+    background-color: #ffecb3;
+    color: #7d6608;
+    padding: 2px 8px;
+    border-radius: 10px;
+    font-size: 0.8rem;
+}
+
+.no-fields {
+    grid-column: 1 / -1;
+    text-align: center;
+    padding: 20px;
+    color: #7f8c8d;
+    background: #f9fafb;
+    border-radius: 6px;
+    border: 1px dashed #ddd;
+}
+
+.btn-info {
+    background-color: #17a2b8;
+    color: white;
+}
+
+.btn-info:hover {
+    background-color: #138496;
+}
+
+.btn-danger {
+background-color: #e53935;
+color: white;
+}
+
+.btn-danger:hover {
+background-color: #c62828;
 }
 </style>
