@@ -32,6 +32,11 @@ const routes = [
   component: () => import('../views/WeightView.vue')
 },
   {
+  path: '/experiments/:experimentId',
+  name: 'Experiments',
+  component: () => import('../views/ExperimentDisplay.vue')
+},
+  {
   path: '/weight',
   name: 'BodyWeight',
   component: () => import('../views/BodyWeight.vue')

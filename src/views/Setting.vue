@@ -452,6 +452,7 @@
                     <th>数据类型</th>
                     <th>单位</th>
                     <th>必填</th>
+                    <th>可视化</th>
                     <th>操作</th>
                 </tr>
                 </thead>
@@ -474,6 +475,13 @@
                     </td>
                     <td>
                     <input type="checkbox" v-model="field.is_required">
+                    </td>
+                    <td>
+                    <select v-model="field.visualize_type" required>
+                        <option value="x">作为横坐标</option>
+                        <option value="y">作为纵坐标</option>
+                        <option value="column">作为柱状图</option>
+                    </select>
                     </td>
                     <td class="action-cell">
                         <button class="action-btn btn-danger" @click="removeField(index)">
@@ -561,6 +569,8 @@
                                         <div class="field-props">
                                             <span v-if="field.is_required" class="required-badge">必填</span>
                                             <span v-else>可选</span>
+                                            <span v-if="field.visualize_type" class="visualized-badge">可视化 {{ field.visualize_type }}</span>
+                                            <span v-else class="not-visualized-badge">不可视化</span>
                                         </div>
                                     </div>
                                 </div>
@@ -998,6 +1008,7 @@ methods: {
         data_type: 'TEXT',
         unit: '',
         is_required: false,
+        visualize_type: null,
         display_order: this.editingExperimentType.fields.length
         });
     },
@@ -1050,6 +1061,7 @@ methods: {
                 alert('保存成功');
                 this.cancelEdit();
                 this.fetchExperimentTypes();
+                window.experimentTypesUpdated = true
             })
             .catch(error => {
                 console.error('保存实验类型失败:', error);
@@ -1746,5 +1758,24 @@ color: white;
 
 .btn-danger:hover {
 background-color: #c62828;
+}
+
+/* 可视化徽章样式 */
+.visualized-badge {
+    background-color: #d4edda;
+    color: #155724;
+    padding: 2px 8px;
+    border-radius: 10px;
+    font-size: 0.8rem;
+    margin-left: 8px;
+}
+
+.not-visualized-badge {
+    background-color: #f8d7da;
+    color: #721c24;
+    padding: 2px 8px;
+    border-radius: 10px;
+    font-size: 0.8rem;
+    margin-left: 8px;
 }
 </style>

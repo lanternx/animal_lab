@@ -63,6 +63,26 @@
       </router-link>
         </div>
         
+        <div class="nav-section" v-if="experiments.length>0">
+          <div class="nav-title" v-if="!sidebarCollapsed">实验记录</div>
+          <div v-for="(expr, index) in experiments" :key="index">
+            <router-link 
+              :to="{ name: 'Experiments', params: { experimentId: expr.id } }" 
+              custom v-slot="{ navigate, isActive }"
+            >
+              <div 
+                class="nav-item" 
+                :class="{ 'active': isActive }"
+                @click="navigate"
+              >
+                <div class="number-badge">{{ index+1 }}</div>
+                <span v-if="!sidebarCollapsed">{{ expr.name }}</span>
+                <div class="tooltip" v-if="sidebarCollapsed">{{ expr.name }}</div>
+              </div>
+            </router-link>
+          </div>
+        </div>
+
         <div class="nav-section">
           <div class="nav-title" v-if="!sidebarCollapsed">数据分析</div>
           <router-link 
@@ -110,7 +130,6 @@
             </div>
         </router-link>
         </div>
-
         
         <!-- 折叠按钮（在侧边栏底部） -->
         <div class="collapse-btn" @click="toggleSidebar">
@@ -123,7 +142,7 @@
       <main>
         <router-view></router-view>
       </main>
-              <!-- 页脚 -->
+  <!-- 页脚 -->
   <footer>
       <div class="status-indicators">
           <div class="status-item">
@@ -145,11 +164,14 @@
 </template>
 
 <script>
+import axios from 'axios';
+
 export default {
   name: 'AppLayout',
   data() {
     return {
       sidebarCollapsed: true,
+      experiments:[]
     };
   },
   methods: {
@@ -160,9 +182,21 @@ export default {
     },
     setActiveView(view) {
       this.activeView = view;
+    },
+    // 实验类型相关方法
+    fetchExperiments() {
+        axios.get('/api/experiment-types')
+        .then(response => {
+            this.experiments = response.data;
+        })
+        .catch(error => {
+            console.error('获取实验类型列表失败:', error);
+            alert('获取实验类型列表失败');
+        });
     }
   },
   mounted() {
+    this.fetchExperiments();
     // 从localStorage加载侧边栏状态
     const savedState = localStorage.getItem('sidebarCollapsed');
     if (savedState !== null) {
@@ -171,6 +205,13 @@ export default {
     
     // 初始设置活动视图
     this.setActiveView('cage');
+    // 定期检查更新
+    this.updateInterval = setInterval(() => {
+      if (window.experimentTypesUpdated) {
+        window.experimentTypesUpdated = false
+        this.fetchExperiments()
+      }
+    }, 1000)
   }
 };
 </script>
@@ -334,5 +375,32 @@ export default {
 
 [data-dblclick-hint]:hover:after {
   opacity: 1;
+}
+
+.number-badge {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  border-radius: 50%;
+  background: linear-gradient(135deg, #2c6fbb, #3a8ee0);
+  color: white;
+  font-weight: 600;
+  margin-right: 12px;
+  box-shadow: 0 4px 6px rgba(44, 111, 187, 0.2);
+  transition: all 0.3s ease;
+  flex-shrink: 0;
+}
+
+.nav-item:hover .number-badge {
+  transform: scale(1.1);
+  box-shadow: 0 6px 10px rgba(44, 111, 187, 0.3);
+}
+
+.sidebar.collapsed .number-badge {
+  margin-right: 0;
+  margin-left: auto;
+  margin-right: auto;
 }
 </style>

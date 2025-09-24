@@ -1,7 +1,7 @@
 from flask import Flask, jsonify, request, send_file
 from flask_cors import CORS
 from datetime import datetime, date
-from models import db, Mouse, Cage, WeightRecord, StatusRecord, Pedigree, Genotype, Location, ExperimentType, FieldDefinition, Experiment
+from models import db, Mouse, Cage, WeightRecord, StatusRecord, Pedigree, Genotype, Location, ExperimentType, FieldDefinition, Experiment, ExperimentClass, ExperimentValue
 import os
 import sys
 from pathlib import Path
@@ -318,6 +318,7 @@ def delete_mouse(mouse_tid):
         Pedigree.query.filter_by(mouse_id=mouse_tid).delete()
         Pedigree.query.filter_by(parent_id=mouse_tid).delete()
         WeightRecord.query.filter_by(mouse_id=mouse_tid).delete()
+        ExperimentClass.query.filter_by(mouse_id=mouse_tid).delete()
         db.session.commit()
         return jsonify({'message': 'Mouse deleted successfully'})
     except Exception as e:
@@ -1363,9 +1364,13 @@ def delete_weight_record(id):
         app.logger.error(f"删除体重记录失败: {str(e)}")
         return jsonify({'error': '删除记录失败'}), 500
     
+
+
+
 # 实验类型相关API
 @app.route('/api/experiment-types', methods=['GET'])
 def get_experiment_types():
+    '''获取所有实验信息'''
     try:
         experiment_types = ExperimentType.query.all()
         return jsonify([et.to_dict() for et in experiment_types])
@@ -1398,6 +1403,7 @@ def create_experiment_type():
                 data_type=field_data['data_type'],
                 unit=field_data.get('unit', ''),
                 is_required=field_data.get('is_required', False),
+                visualize_type=field_data.get('visualize_type', None),
                 display_order=field_data.get('display_order', 0)
             )
             db.session.add(field)
@@ -1437,6 +1443,7 @@ def update_experiment_type(id):
                     field.data_type = field_data['data_type']
                     field.unit = field_data.get('unit', '')
                     field.is_required = field_data.get('is_required', False)
+                    field.visualize_type = field_data.get('visualize_type', None)
                     field.display_order = field_data.get('display_order', 0)
                     field_ids.append(field.id)
             else:
@@ -1447,6 +1454,7 @@ def update_experiment_type(id):
                     data_type=field_data['data_type'],
                     unit=field_data.get('unit', ''),
                     is_required=field_data.get('is_required', False),
+                    visualize_type = field_data.get('visualize_type', None),
                     display_order=field_data.get('display_order', 0)
                 )
                 db.session.add(field)
@@ -1523,6 +1531,183 @@ def get_experiment_presets():
         }
     }
     return jsonify(presets)
+
+
+#实验视图
+@app.route('/api/experiment/<int:experiment_id>', methods=['GET'])
+def get_experiment(experiment_id):
+    try:
+        expr_info = ExperimentType.query.get_or_404(experiment_id)
+        return jsonify(expr_info.to_dict())
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+    
+@app.route('/api/experiment/<int:experiment_id>/data', methods=['GET'])
+def get_experiment_data(experiment_id):
+    """获取实验数据，以字段为列的形式返回"""
+    try:
+        # 获取实验记录
+        experiments = Experiment.query.filter_by(experiment_type_id=experiment_id).all()
+        results = []
+        for expr in experiments:
+            # 获取所有相关值
+            values = ExperimentValue.query.filter_by(experiment_id=expr.id).all()
+            # 构建结果字典
+            result = {
+                'id': expr.id,
+                'mouse_id': expr.mouse_id,
+                'experiment_type_id': expr.experiment_type_id,
+                'researcher': expr.researcher,
+                'date': expr.date.isoformat() if expr.date else None,
+                'notes': expr.notes
+            }
+            # 添加字段值
+            for value in values:
+                field_name = value.field_definition.field_name
+                # 根据数据类型获取值
+                if value.field_definition.data_type == 'INTEGER':
+                    result[field_name] = value.value_int
+                elif value.field_definition.data_type == 'REAL':
+                    result[field_name] = value.value_real
+                elif value.field_definition.data_type == 'TEXT':
+                    result[field_name] = value.value_text
+                elif value.field_definition.data_type == 'BOOLEAN':
+                    result[field_name] = value.value_bool
+                elif value.field_definition.data_type == 'DATE':
+                    result[field_name] = value.value_date.isoformat() if value.value_date else None
+            results.append(result)
+        return jsonify(results)
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+    
+@app.route('/api/experiment/<int:experiment_id>/candidate_mice', methods=['GET'])
+def get_candidate_mice(experiment_id):
+    """获取候选池小鼠 - 基于tests_done字段筛选"""
+    try:
+        # 获取实验信息
+        experiment = ExperimentType.query.get_or_404(experiment_id)
+        
+        query = Mouse.query.filter_by(live_status=1).filter(Mouse.tests_done.contains([experiment.id]))  # 只选择存活的小鼠
+        
+        candidate_mice = query.all()
+        
+        # 排除已经在分组中的小鼠
+        existing_mice_ids = [ec.mouse_id for ec in 
+                            ExperimentClass.query.filter_by(experiment_id=experiment_id).all()]
+        
+        candidate_mice = [mouse for mouse in candidate_mice if mouse.tid not in existing_mice_ids]
+        
+        return jsonify([mouse.to_dict() for mouse in candidate_mice])
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
+@app.route('/api/experiment/<int:experiment_id>/groups', methods=['GET'])
+def get_experiment_groups(experiment_id):
+    """获取实验的所有分组"""
+    try:
+        # 验证实验是否存在
+        Experiment.query.get_or_404(experiment_id)
+        
+        # 获取所有分组
+        groups = {}
+        experiment_classes = ExperimentClass.query.filter_by(experiment_id=experiment_id).options(
+            joinedload(ExperimentClass.mouse)
+        ).all()
+        
+        for ec in experiment_classes:
+            if ec.class_id not in groups:
+                groups[ec.class_id] = []
+            groups[ec.class_id].append(ec.to_dict())
+        
+        return jsonify(groups)
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
+@app.route('/api/experiment/<int:experiment_id>/class_chage', methods=['POST'])
+def add_mouse_to_group(experiment_id):
+    """改变小鼠分组"""
+    try:
+        data = request.get_json()
+        mouse_id = data.get('mouse_id')
+        from_class_id = data.get('class_id')
+        to_class_id = data.get('class_new_id')
+        
+        if not mouse_id or not to_class_id:
+            return jsonify({'error': 'mouse_id和class_id是必需的'}), 400
+        
+        # 验证实验和小鼠是否存在
+        Experiment.query.get_or_404(experiment_id)
+        Mouse.query.get_or_404(mouse_id)
+
+        if from_class_id:
+            # 检查小鼠是否已在分组中
+            existing = ExperimentClass.query.filter_by(
+                experiment_id=experiment_id, 
+                mouse_id=mouse_id,
+                class_id=from_class_id
+            ).first()
+            
+            if not existing:
+                return jsonify({'error': '该小鼠不在分组中'}), 400
+            
+            existing.class_id = to_class_id
+
+        else:
+            # 创建新的分组记录
+            experiment_class = ExperimentClass(
+                mouse_id=mouse_id,
+                experiment_id=experiment_id,
+                class_id=to_class_id
+            )
+        
+            db.session.add(experiment_class)
+        db.session.commit()
+        
+        return jsonify({'message': '小鼠已成功添加到分组', 'id': experiment_class.id})
+    except Exception as e:
+        db.session.rollback()
+        return jsonify({'error': str(e)}), 500
+
+@app.route('/api/experiment/<int:experiment_id>/groups/<int:class_id>', methods=['DELETE'])
+def delete_group(experiment_id, class_id):
+    """删除整个分组"""
+    try:
+        # 查找并删除该分组的所有记录
+        experiment_classes = ExperimentClass.query.filter_by(
+            experiment_id=experiment_id,
+            class_id=class_id
+        ).all()
+        
+        for ec in experiment_classes:
+            db.session.delete(ec)
+        
+        db.session.commit()
+        
+        return jsonify({'message': f'分组 {class_id} 已删除', 'deleted_count': len(experiment_classes)})
+    except Exception as e:
+        db.session.rollback()
+        return jsonify({'error': str(e)}), 500
+
+@app.route('/api/experiment/<int:experiment_id>/groups/clear', methods=['DELETE'])
+def clear_all_groups(experiment_id):
+    """清除实验的所有分组"""
+    try:
+        # 查找并删除该实验的所有分组记录
+        experiment_classes = ExperimentClass.query.filter_by(
+            experiment_id=experiment_id
+        ).all()
+        
+        for ec in experiment_classes:
+            db.session.delete(ec)
+        
+        db.session.commit()
+        
+        return jsonify({'message': '所有分组已清除', 'deleted_count': len(experiment_classes)})
+    except Exception as e:
+        db.session.rollback()
+        return jsonify({'error': str(e)}), 500
+    
+
 
 if __name__ == '__main__':
     with app.app_context():

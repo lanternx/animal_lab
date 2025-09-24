@@ -11,10 +11,9 @@ class Mouse(db.Model):
     birth_date = db.Column(db.Date)
     death_date = db.Column(db.Date)
     cage_id = db.Column(db.String(20), db.ForeignKey('cage.id'))
-    # 新增字段：品系、已完成测试、计划测试
     strain = db.Column(db.String(50))
-    tests_done = db.Column(db.String(200))
-    tests_planned = db.Column(db.String(200))
+    tests_done = db.Column(db.JSON)
+    tests_planned = db.Column(db.JSON)
     def to_dict(self):
         return {
             'tid': self.tid,
@@ -116,6 +115,7 @@ class ExperimentType(db.Model):
     id = db.Column(db.Integer, primary_key=True)
     name = db.Column(db.String(100), nullable=False)  # 实验类型名称
     description = db.Column(db.Text)  # 实验类型描述
+    is_show = db.Column(db.Boolean, default=False)
     
     # 与字段定义的关系
     field_definitions = db.relationship('FieldDefinition', backref='experiment_type', lazy=True)
@@ -143,6 +143,7 @@ class FieldDefinition(db.Model):
     data_type = db.Column(db.String(20), nullable=False)  # 数据类型: INTEGER, REAL, TEXT, BOOLEAN, DATE
     unit = db.Column(db.String(20))  # 单位
     is_required = db.Column(db.Boolean, default=False)  # 是否为必填字段
+    visualize_type = db.Column(db.String(20))  # 可视化中的类型：x, y, column
     display_order = db.Column(db.Integer, default=0)  # 显示顺序
     
     def to_dict(self):
@@ -153,6 +154,7 @@ class FieldDefinition(db.Model):
             'data_type': self.data_type,
             'unit': self.unit,
             'is_required': self.is_required,
+            'visualize_type': self.visualize_type,
             'display_order': self.display_order
         }
 
@@ -204,27 +206,23 @@ class ExperimentValue(db.Model):
     
     # 与字段定义的关系
     field_definition = db.relationship('FieldDefinition', backref=db.backref('values', lazy=True))
+
+#实验分组表
+class ExperimentClass(db.Model):
+    id = db.Column(db.Integer, primary_key=True)
+    moues_id = db.Column(db.Integer, db.ForeignKey('mouse.tid'), nullable=False)
+    experiment_id = db.Column(db.Integer, db.ForeignKey('experiment.id'), nullable=False)
+    class_id = db.Column(db.Integer, nullable=False)
+
+        # 关系
+    mouse = db.relationship('Mouse', backref=db.backref('experiment_classes', lazy=True))
+    experiment = db.relationship('Experiment', backref=db.backref('experiment_classes', lazy=True))
     
     def to_dict(self):
-        # 根据字段定义的数据类型返回相应的值
-        value = None
-        if self.field_definition.data_type == 'INTEGER':
-            value = self.value_int
-        elif self.field_definition.data_type == 'REAL':
-            value = self.value_real
-        elif self.field_definition.data_type == 'TEXT':
-            value = self.value_text
-        elif self.field_definition.data_type == 'BOOLEAN':
-            value = self.value_bool
-        elif self.field_definition.data_type == 'DATE':
-            value = self.value_date.isoformat() if self.value_date else None
-        
         return {
             'id': self.id,
+            'mouse_id': self.mouse_id,
             'experiment_id': self.experiment_id,
-            'field_definition_id': self.field_definition_id,
-            'field_name': self.field_definition.field_name,
-            'data_type': self.field_definition.data_type,
-            'unit': self.field_definition.unit,
-            'value': value
+            'class_id': self.class_id,
+            'mouse_info': self.mouse.to_dict() if self.mouse else None
         }
