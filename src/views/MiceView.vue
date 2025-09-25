@@ -4,7 +4,7 @@
     <div class="section">
       <div class="header-with-button">
         <h2>小鼠管理</h2>
-        <button @click="showAddModal = true" class="add-button">
+        <button @click="openModal('add')" class="add-button">
           <i class="material-icons">add</i>
           添加新小鼠
         </button>
@@ -133,10 +133,10 @@
           <li @click="openMouseDetail(contextMenu.mouse.tid)">
             <i class="material-icons">visibility</i> 查看详情
           </li>
-          <li @click="editMouse(contextMenu.mouse)">
+          <li @click="openModal('edit', contextMenu.mouse)">
             <i class="material-icons">edit</i> 编辑信息
           </li>
-          <li @click="addMiceFromTemplate(contextMenu.mouse)">
+          <li @click="openModal('template', contextMenu.mouse)">
             <i class="material-icons">playlist_add</i> 以此为模板批量创建小鼠
           </li>
           <li @click="deleteMouse(contextMenu.mouse.tid)" class="danger">
@@ -149,7 +149,7 @@
       <div v-if="filteredMice.length === 0 && !loading" class="empty-state">
         <i class="material-icons">pets</i>
         <p>没有找到小鼠记录</p>
-        <button @click="showAddModal = true">添加新小鼠</button>
+        <button @click="openModal('add')">添加新小鼠</button>
       </div>
     </div>
     
@@ -160,26 +160,32 @@
       @close="showMouseDetail = false" 
     />
 
-    <!-- 添加小鼠模态框 -->
-    <div v-if="showAddModal" class="modal">
-      <div class="modal-overlay" @click.self="showAddModal = false"></div>
+    <!-- 统一的小鼠编辑/添加模态框 -->
+    <div v-if="showModal" class="modal">
+      <div class="modal-overlay" @click.self="closeModal"></div>
       <div class="modal-content">
         <div class="modal-header">
-          <h3>添加新小鼠</h3>
-          <button class="close-btn" @click="showAddModal = false">
+          <h3>{{ modalTitle }}</h3>
+          <button class="close-btn" @click="closeModal">
             <i class="material-icons">close</i>
           </button>
         </div>
-          <div class="form-body">
-          <div class="form-group">
+        <div class="form-body">
+          <!-- 小鼠ID字段（仅在添加模式显示） -->
+          <div class="form-group" v-if="modalMode === 'add'">
             <label>小鼠 ID:</label>
-            <input type="text" v-model="newMouse.id">
+            <input type="text" v-model="formData.id">
           </div>
+          <!-- 显示小鼠ID（仅在编辑模式显示） -->
+          <div class="form-group" v-if="modalMode === 'edit'">
+            <label>小鼠 ID:</label>
+            <span>{{ formData.id }}</span>
+          </div>          
           <!-- 基因型选择 -->
           <div class="form-group">
             <label>基因型:</label>
             <div class="genotype-select-container">
-              <select v-model="newMouse.genotype">
+              <select v-model="formData.genotype">
                 <option v-for="genotype in genotypes" :key="genotype.id" :value="genotype.name">
                   {{ genotype.name }}
                 </option>
@@ -189,146 +195,26 @@
 
           <div class="form-group">
             <label>品系:</label>
-            <input type="text" v-model="newMouse.strain" placeholder="如：C57BL/6J">
+            <input type="text" v-model="formData.strain" placeholder="如：C57BL/6J">
           </div>
           
           <div class="form-group">
             <label>性别:</label>
-            <select v-model="newMouse.sex">
+            <select v-model="formData.sex">
               <option value="M">雄性</option>
               <option value="F">雌性</option>
             </select>
           </div>
-          <div class="form-group">
-            <label>出生日期:</label>
-            <input type="date" v-model="newMouse.birth_date">
-          </div>
-        <!-- 父本选择 -->
-        <div class="form-group">
-        <label>父本 ID:</label>
-        <div class="autocomplete">
-        <input
-          type="text"
-          v-model="fatherQuery"
-          @input="searchFathers"
-          placeholder="输入父本ID搜索..."
-          @focus="showFatherSuggestions = true"
-          @blur="onBlur"
-        />
-        <ul v-if="showFatherSuggestions && fatherSuggestions.length" class="suggestions">
-        <li
-          v-for="mouse in fatherSuggestions"
-          :key="mouse.tid"
-          @click="selectFather(mouse)"
-          >
-        {{ mouse.id }} ({{ formatDate(mouse.birth_date) }}) - {{ mouse.genotype }}
-        </li>
-        </ul>
-        </div>
-        <div class="selected-parents" v-if="selectedFathers.length">
-          <div class="selected-parent" v-for="(father, index) in selectedFathers" :key="father.tid">
-            <span>{{ father.id }} ({{ formatDate(father.birth_date) }}) - {{ mouse.genotype }}</span>
-            <button type="button" class="remove-btn" @click="removeFather(index)">移除</button>
-          </div>
-        </div>
-        <p class="info-text" v-else>未选择父本</p>
-        </div>
-        <!-- 母本选择 -->
-        <div class="form-group">
-        <label>母本 ID:</label>
-        <div class="autocomplete">
-        <input
-          v-model="motherQuery"
-          @input="searchMothers"
-          placeholder="输入母本ID搜索..."
-          @focus="showMotherSuggestions = true"
-          @blur="onBlur"
-          >
-        <ul v-if="showMotherSuggestions && motherSuggestions.length" class="suggestions">
-        <li
-          v-for="mouse in motherSuggestions"
-          :key="mouse.tid"
-          @click="selectMother(mouse)"
-          >
-        {{ mouse.id }} ({{ formatDate(mouse.birth_date) }}) - {{ mouse.genotype }}
-        </li>
-        </ul>
-        </div>
-        <div class="selected-parents" v-if="selectedMothers.length">
-          <div class="selected-parent" v-for="(mother, index) in selectedMothers" :key="mother.tid">
-            <span>{{ mother.id }} ({{ formatDate(mother.birth_date) }}) - {{ mouse.genotype }}</span>
-            <button type="button" class="remove-btn" @click="removeMother(index)">移除</button>
-          </div>
-        </div>
-        <p class="info-text" v-else>未选择母本</p>
-        </div>
 
           <div class="form-group">
-            <label>已完成测试:</label>
-            <input type="text" v-model="newMouse.tests_done" placeholder="逗号分隔或自由输入">
-          </div>
-          <div class="form-group">
-            <label>计划进行测试:</label>
-            <input type="text" v-model="newMouse.tests_planned" placeholder="逗号分隔或自由输入">
-          </div>
-        
-        <div class="button-group">
-          <button @click="addMouse" :disabled="adding" class="primary-btn">
-            <i class="material-icons">add</i>
-            <span v-if="adding">添加中...</span>
-            <span v-else>添加</span>
-          </button>
-          <button @click="showAddModal = false" class="cancel-btn">
-            <i class="material-icons">cancel</i>
-            取消
-          </button>
-        </div>
-        </div>
-      </div>
-    </div>
-    
-    <!-- 编辑小鼠模态框 -->
-    <div v-if="editingMouse" class="modal">
-      <div class="modal-overlay" @click.self="cancelEdit"></div>
-      <div class="modal-content">
-        <div class="modal-header">
-          <h3>编辑小鼠信息</h3>
-          <button class="close-btn" @click="cancelEdit">
-            <i class="material-icons">close</i>
-          </button>
-        </div>
-        
-        <div class="form-body">
-          <div class="form-group">
-            <label>小鼠 ID:</label>
-            <span>{{ editingMouse.id }}</span>
-          </div>
-          <!-- 基因型选择 -->
-          <div class="form-group">
-            <label>基因型:</label>
-            <div class="genotype-select-container">
-              <select v-model="editingMouse.genotype">
-                <option v-for="genotype in genotypes" :key="genotype.id" :value="genotype.name">
-                  {{ genotype.name }}
-                </option>
-              </select>
-            </div>
-          </div>
-          
-          <div class="form-group">
-            <label>性别:</label>
-            <select v-model="editingMouse.sex">
-              <option value="M">雄性</option>
-              <option value="F">雌性</option>
-            </select>
-          </div>
-          <div class="form-group">
             <label>出生日期:</label>
-            <input type="date" v-model="editingMouse.birth_date">
+            <input type="date" v-model="formData.birth_date">
           </div>
-          <div class="form-group">
+
+          <!-- 生存状态（仅在编辑模式显示） -->
+          <div class="form-group" v-if="modalMode === 'edit'">
             <label>生存状态:</label>
-            <select v-model.number="editingMouse.live_status">
+            <select v-model.number="formData.live_status">
               <option value=1>存活</option>
               <option value=0>死亡</option>
               <option value=2>解剖</option>
@@ -336,113 +222,174 @@
               <option value=4>丢弃</option>
             </select>
           </div>
-          <div class="form-group" v-if="editingMouse.live_status != 1">
+          <!-- 死亡日期（仅在编辑且非存活状态显示） -->
+          <div class="form-group" v-if="modalMode === 'edit' && formData.live_status != 1">
             <label>死亡日期:</label>
-            <input type="date" v-model="editingMouse.death_date">
+            <input type="date" v-model="formData.death_date">
+          </div>        
+
+          <!-- 父本选择 -->
+          <div class="form-group">
+            <label>父本 ID:</label>
+            <div class="autocomplete">
+              <input
+                type="text"
+                v-model="fatherQuery"
+                @input="searchParents('father')"
+                placeholder="输入父本ID搜索..."
+                @focus="showFatherSuggestions = true"
+                @blur="onBlur"
+              />
+              <ul v-if="showFatherSuggestions && fatherSuggestions.length" class="suggestions">
+                <li
+                  v-for="mouse in fatherSuggestions"
+                  :key="mouse.tid"
+                  @click="selectParent('father', mouse)"
+                >
+                  {{ mouse.id }} ({{ formatDate(mouse.birth_date) }}) - {{ mouse.genotype }}
+                </li>
+              </ul>
+            </div>
+            <div class="selected-parents" v-if="selectedFathers.length">
+              <div class="selected-parent" v-for="(father, index) in selectedFathers" :key="father.tid">
+                <span>{{ father.id }} ({{ formatDate(father.birth_date) }}) - {{ father.genotype }}</span>
+                <button type="button" class="remove-btn" @click="removeParent('father', index)">移除</button>
+              </div>
+            </div>
+            <p class="info-text" v-else>未选择父本</p>
           </div>
 
-        <div class="form-group">
-          <label>品系:</label>
-          <input type="text" v-model="editingMouse.strain" placeholder="如：C57BL/6J">
-        </div>
-
-        <!-- 父本选择 -->
-        <div class="form-group">
-        <label>父本 ID:</label>
-        <div class="autocomplete">
-        <input
-          type="text"
-          v-model="fatherQuery"
-          @input="searchFathers"
-          placeholder="输入父本ID搜索..."
-          @focus="showFatherSuggestions = true"
-          @blur="onBlur"
-        />
-        <ul v-if="showFatherSuggestions && fatherSuggestions.length" class="suggestions">
-        <li
-          v-for="mouse in fatherSuggestions"
-          :key="mouse.tid"
-          @click="selectEditFather(mouse)"
-          >
-        {{ mouse.id }} ({{ formatDate(mouse.birth_date) }}) - {{ mouse.genotype }}
-        </li>
-        </ul>
-        </div>
-        <div class="selected-parents" v-if="editFather.length">
-          <div class="selected-parent" v-for="(father, index) in editFather" :key="father.tid">
-            <span>{{ father.id }} ({{ formatDate(father.birth_date) }})</span>
-            <button type="button" class="remove-btn" @click="removeEditFather(index)">移除</button>
+          <!-- 母本选择 -->
+          <div class="form-group">
+            <label>母本 ID:</label>
+            <div class="autocomplete">
+              <input
+                type="text"
+                v-model="motherQuery"
+                @input="searchParents('mother')"
+                placeholder="输入母本ID搜索..."
+                @focus="showMotherSuggestions = true"
+                @blur="onBlur"
+              />
+              <ul v-if="showMotherSuggestions && motherSuggestions.length" class="suggestions">
+                <li
+                  v-for="mouse in motherSuggestions"
+                  :key="mouse.tid"
+                  @click="selectParent('mother', mouse)"
+                >
+                  {{ mouse.id }} ({{ formatDate(mouse.birth_date) }}) - {{ mouse.genotype }}
+                </li>
+              </ul>
+            </div>
+            <div class="selected-parents" v-if="selectedMothers.length">
+              <div class="selected-parent" v-for="(mother, index) in selectedMothers" :key="mother.tid">
+                <span>{{ mother.id }} ({{ formatDate(mother.birth_date) }}) - {{ mother.genotype }}</span>
+                <button type="button" class="remove-btn" @click="removeParent('mother', index)">移除</button>
+              </div>
+            </div>
+            <p class="info-text" v-else>未选择母本</p>
           </div>
-        </div>
-        <p class="info-text" v-else>未选择父本</p>
-        </div>
 
-        <!-- 母本选择 -->
-        <div class="form-group">
-        <label>母本 ID:</label>
-        <div class="autocomplete">
-        <input
-          type="text"
-          v-model="motherQuery"
-          @input="searchMothers"
-          placeholder="输入母本ID搜索..."
-          @focus="showMotherSuggestions = true"
-          @blur="onBlur"
-        />
-        <ul v-if="showMotherSuggestions && motherSuggestions.length" class="suggestions">
-        <li
-          v-for="mouse in motherSuggestions"
-          :key="mouse.tid"
-          @click="selectEditMother(mouse)"
-          >
-        {{ mouse.id }} ({{ formatDate(mouse.birth_date) }}) - {{ mouse.genotype }}
-        </li>
-        </ul>
-        </div>
-        <div class="selected-parents" v-if="editMother.length">
-          <div class="selected-parent" v-for="(mother, index) in editMother" :key="mother.tid">
-            <span>{{ mother.id }} ({{ formatDate(mother.birth_date) }})</span>
-            <button type="button" class="remove-btn" @click="removeEditMother(index)">移除</button>
-          </div>
-        </div>
-        <p class="info-text" v-else>未选择母本</p>
-        </div>
-
-        <div class="form-group">
+        <!-- 已完成测试 -->
+        <div class="form-group"  v-if="modalMode === 'edit'">
           <label>已完成测试:</label>
-          <input type="text" v-model="editingMouse.tests_done" placeholder="逗号分隔或自由输入">
+          <div class="tags-input-container">
+            <!-- 下拉选择框 -->
+            <div class="custom-select" :class="{ 'is-open': showTestsDoneDropdown }">
+              <div class="select-header" @click="toggleTestsDoneDropdown">
+                <div class="select-content">
+                <!-- 显示已选标签 -->
+                <div class="selected-tags">
+                  <span v-for="(experiment, index) in selectedTestsDone" :key="experiment.id" class="tag">
+                    {{ experiment.name }}
+                    <span class="tag-remove" @click="removeTest('done', index)">×</span>
+                  </span>
+                </div>
+                <span class="placeholder" v-if="selectedTestsDone.length === 0">选择已完成测试...</span>
+                </div>
+                <div class="select-arrow">▼</div>
+              </div>
+              
+              <div class="select-options" v-if="showTestsDoneDropdown">
+                <div 
+                  v-for="experiment in availableTestsDone" 
+                  :key="experiment.id" 
+                  class="select-option"
+                  @click="selectTest('done', experiment)"
+                >
+                  {{ experiment.name }}
+                </div>
+                <div v-if="availableTestsDone.length === 0" class="select-option disabled">
+                  没有可选的测试
+                </div>
+              </div>
+            </div>
+          </div>
         </div>
+        
+        <!-- 计划进行测试 -->
         <div class="form-group">
           <label>计划进行测试:</label>
-          <input type="text" v-model="editingMouse.tests_planned" placeholder="逗号分隔或自由输入">
-        </div>
+          <div class="tags-input-container">
+            <!-- 下拉选择框 -->
+            <div class="custom-select" :class="{ 'is-open': showTestsPlanDropdown }">
+              <div class="select-header" @click="toggleTestsPlanDropdown">
+                <div class="select-content">
+                <!-- 显示已选标签 -->
+                <div class="selected-tags">
+                  <span v-for="(experiment, index) in selectedTestsPlanned" :key="experiment.id" class="tag">
+                    {{ experiment.name }}
+                    <span class="tag-remove" @click="removeTest('plan', index)">×</span>
+                  </span>
+                </div>
+                <span class="placeholder" v-if="selectedTestsPlanned.length === 0">选择计划测试...</span>                
+                </div>
+                <div class="select-arrow">▼</div>
+              </div>
+              
+              <div class="select-options" v-if="showTestsPlanDropdown">
+                <div 
+                  v-for="experiment in availableTestsPlan" 
+                  :key="experiment.id" 
+                  class="select-option"
+                  @click="selectTest('plan', experiment)"
+                >
+                  {{ experiment.name }}
+                </div>
+                <div v-if="availableTestsPlan.length === 0" class="select-option disabled">
+                  没有可选的测试
+                </div>
+              </div>
+            </div>
+          </div>
         </div>
         
         <div class="button-group">
           <button @click="saveMouse" :disabled="saving" class="primary-btn">
-            <i class="material-icons">save</i>
-            <span v-if="saving">保存中...</span>
-            <span v-else>保存</span>
+            <i class="material-icons">{{ modalMode === 'add' ? 'add' : 'save' }}</i>
+            <span v-if="saving">{{ modalMode === 'add' ? '添加中...' : '保存中...' }}</span>
+            <span v-else>{{ modalMode === 'add' ? '添加' : '保存' }}</span>
           </button>
-          <button @click="cancelEdit" class="cancel-btn">
+          <button @click="closeModal" class="cancel-btn">
             <i class="material-icons">cancel</i>
             取消
           </button>
+        </div>
         </div>
       </div>
     </div>
 
     <!-- 批量添加小鼠模态框 -->
-    <div v-if="templateMouse" class="modal">
-      <div class="modal-overlay" @click.self="cancelTemplateEdit"></div>
+    <div v-if="modalMode === 'template' && templateMouse" class="modal">
+      <div class="modal-overlay" @click.self="closeModal"></div>
       <div class="modal-content">
         <div class="modal-header">
           <h3>基于模板批量创建小鼠</h3>
-          <button class="close-btn" @click="cancelTemplateEdit">
+          <button class="close-btn" @click="closeModal">
             <i class="material-icons">close</i>
           </button>
         </div>
-        
+        <div class="form-body">
         <div class="template-info">
           <h3><i class="material-icons">pets</i> 模板小鼠信息</h3>
           <div class="template-details">
@@ -472,11 +419,19 @@
             </div>
             <div class="detail-item">
               <span class="detail-label">父本</span>
-              <span class="detail-value" v-for="(father) in editFather" :key="father.tid">{{ father.id }} </span>
+              <span class="detail-value" v-for="(father) in templateMouse.father" :key="father.tid">{{ father.id }} </span>
             </div>
             <div class="detail-item">
               <span class="detail-label">母本</span>
-              <span class="detail-value" v-for="(mother) in editMother" :key="mother.tid">{{ mother.id }} </span>
+              <span class="detail-value" v-for="(mother) in templateMouse.mother" :key="mother.tid">{{ mother.id }} </span>
+            </div>
+            <div class="detail-item">
+              <span class="detail-label">已完成测试</span>
+              <span class="detail-value" v-for="(test_done) in templateMouse.tests_done" :key="tests_done">{{ experiments.find(e => e.id === test_done).name }} </span>
+            </div>
+            <div class="detail-item">
+              <span class="detail-label">计划测试</span>
+              <span class="detail-value" v-for="(test_planned) in templateMouse.tests_planned" :key="tests_planned">{{ experiments.find(e => e.id === test_planned).name }} </span>
             </div>
           </div>
         </div>
@@ -500,637 +455,623 @@
             <span v-if="saving">保存中...</span>
             <span v-else>保存</span>
           </button>
-          <button @click="cancelTemplateEdit" class="cancel-btn">
+          <button @click="closeModal" class="cancel-btn">
             <i class="material-icons">cancel</i>
             取消
           </button>
+        </div>
         </div>
       </div>
     </div>
   </div>
 </template>
 
-<script>
-import axios from 'axios';
-import { toast } from 'vue3-toastify';
-import 'vue3-toastify/dist/index.css';
-import MouseDetailModal from './MouseDetailView.vue';
+<script setup>
+import { ref, reactive, computed, onMounted, watch } from 'vue'
+import axios from 'axios'
+import { toast } from 'vue3-toastify'
+import 'vue3-toastify/dist/index.css'
+import MouseDetailModal from './MouseDetailView.vue'
 
-export default {
-  name: 'MiceView',
-  components: {
-    MouseDetailModal
-  },
-  data() {
-    return {
-      mice: [],
-      filteredMice: [],
-      newMouse: {
-        id: '',
-        genotype: '',
-        sex: 'M',
-        birth_date: '',
-        death_date: '',
-        days_old: null,
-        weeks_old: null,
-        father: [],
-        mother: [],
-        live_status: null,
-        strain: '',
-        tests_done: '',
-        tests_planned: ''
-      },
-      searchTerm: '',
-      editingMouse: null,
-      showAddModal: false,
-      loading: false,
-      adding: false,
-      saving: false,
-      showMouseDetail: false,
-      selectedMouseId: null,
+// 响应式数据
+const mice = ref([])
+const filteredMice = ref([])
+const searchTerm = ref('')
+const loading = ref(false)
+const saving = ref(false)
+const showMouseDetail = ref(false)
+const selectedMouseId = ref(null)
+const contextMenu = reactive({
+  visible: false,
+  x: 0,
+  y: 0,
+  mouse: null
+})
 
-      templateMouse: null,
-      newMice:[],
+// 模态框相关
+const showModal = ref(false)
+const modalMode = ref('') // 'add', 'edit', 'template'
+const templateMouse = ref(null)
+const newMice = ref([])
 
-      // 排序和筛选状态
-      sortField: 'id',
-      sortDirection: 'asc',
-      filters: {
-        id: '',
-        genotype: '',
-        strain: '',
-        sex: '',
-        birth_date: '',
-        days_old_min: null,
-        days_old_max: null,
-        weeks_old_min: null,
-        weeks_old_max: null,
-        live_status: -1
-      },
+// 表单数据
+const formData = reactive({
+  id: '',
+  genotype: '',
+  sex: 'M',
+  birth_date: '',
+  death_date: '',
+  days_old: null,
+  weeks_old: null,
+  father: [],
+  mother: [],
+  live_status: null,
+  strain: '',
+  tests_done: [],
+  tests_planned: []
+})
 
-      // 右键菜单状态
-      contextMenu: {
-        visible: false,
-        x: 0,
-        y: 0,
-        mouse: null
-      },
-      // 添加模态框的父本母本相关状态
-      fatherQuery: '',
-      motherQuery: '',
-      showFatherSuggestions: false,
-      showMotherSuggestions: false,
-      fatherSuggestions: [],
-      motherSuggestions: [],
-      selectedFathers: [],
-      selectedMothers: [],
+// 筛选和排序
+const sortField = ref('id')
+const sortDirection = ref('asc')
+const filters = reactive({
+  id: '',
+  genotype: '',
+  strain: '',
+  sex: '',
+  birth_date: '',
+  days_old_min: null,
+  days_old_max: null,
+  weeks_old_min: null,
+  weeks_old_max: null,
+  live_status: -1
+})
 
-      editFather: [],
-      editMother: [],
+// 父本母本选择
+const fatherQuery = ref('')
+const motherQuery = ref('')
+const showFatherSuggestions = ref(false)
+const showMotherSuggestions = ref(false)
+const fatherSuggestions = ref([])
+const motherSuggestions = ref([])
+const selectedFathers = ref([])
+const selectedMothers = ref([])
 
-      // 基因型相关状态
-      genotypes: []
-    };
-  },
-  async mounted() {
-    await this.loadMice();
-    await this.loadGenotypes();
-    document.addEventListener('click', this.closeContextMenu);
-  },
-  beforeUnmount() {
-    document.removeEventListener('click', this.closeContextMenu);
-  },
-  watch: {
-    searchTerm(newVal) {
-      this.filterMice(newVal);
+// 控制下拉框显示
+const showTestsDoneDropdown = ref(false)
+const showTestsPlanDropdown = ref(false)
+
+const selectedTestsDone = ref([])
+const selectedTestsPlanned = ref([])
+
+// 计算可用的测试（过滤掉已选的计划测试和已完成测试）
+const availableTestsPlan = computed(() => {
+  return experiments.value.filter(exp => 
+    !selectedTestsPlanned.value.some(selected => selected.id === exp.id) &&
+    !selectedTestsDone.value.some(selected => selected.id === exp.id)
+  )
+})
+
+// 计算可用的完成测试（过滤掉已选的）
+const availableTestsDone = computed(() => {
+  return selectedTestsPlanned.value.filter(exp => 
+    !selectedTestsDone.value.some(selected => selected.id === exp.id)
+  )
+})
+
+// 数据列表
+const genotypes = ref([])
+const experiments = ref([])
+
+// 计算属性
+const modalTitle = computed(() => {
+  switch (modalMode.value) {
+    case 'add': return '添加新小鼠'
+    case 'edit': return '编辑小鼠信息'
+    case 'template': return '基于模板批量创建小鼠'
+    default: return ''
+  }
+})
+
+// 方法
+const createAxiosInstance = () => {
+  return axios.create({
+    baseURL: '/api',
+    timeout: 10000,
+    headers: {
+      'Content-Type': 'application/json',
+      'X-Requested-With': 'XMLHttpRequest'
     }
-  },
-  methods: {
-    // 创建配置好的 Axios 实例
-    createAxiosInstance() {
-      return axios.create({
-        baseURL: '/api',
-        timeout: 10000,
-        headers: {
-          'Content-Type': 'application/json',
-          'X-Requested-With': 'XMLHttpRequest'
-        }
-      });
-    },
-    
-    calculateAge(birthDate, CalDate) {
-      if (!birthDate || !CalDate) return { days: null, weeks: null };
+  })
+}
 
-      const cal = new Date(CalDate);
-      const birth = new Date(birthDate);
-      const diffTime = Math.abs(cal - birth);
-      const daysOld = Math.floor(diffTime / (1000 * 60 * 60 * 24));
-      const weeksOld = Math.floor(daysOld / 7);
-      
-      return { days: daysOld, weeks: weeksOld };
-    },
+const calculateAge = (birthDate, calDate) => {
+  if (!birthDate || !calDate) return { days: null, weeks: null }
 
-    // 加载小鼠列表
-    async loadMice() {
-      this.loading = true;
-      try {
-        const api = this.createAxiosInstance();
-        const response = await api.get('/mice');
-        this.mice = response.data.map(mouse => {
-          let days = null;
-          let weeks = null;
-          if(mouse.birth_date) {
-            if(mouse.live_status !== 1 && mouse.death_date) {
-              ({ days, weeks } = this.calculateAge(mouse.birth_date, mouse.death_date));
-            } else {
-              ({ days, weeks } = this.calculateAge(mouse.birth_date, new Date()));
-            }
-          }
-          return {
-            ...mouse,
-            days_old: days,
-            weeks_old: weeks
-          };
-        });
-        this.applyFilters();
-        toast.success('小鼠数据加载成功');
-      } catch (error) {
-        console.error('加载小鼠失败:', error);
-        toast.error(`加载小鼠数据失败: ${error.message || '请检查网络连接'}`);
-      } finally {
-        this.loading = false;
-      }
-    },
+  const cal = new Date(calDate)
+  const birth = new Date(birthDate)
+  const diffTime = Math.abs(cal - birth)
+  const daysOld = Math.floor(diffTime / (1000 * 60 * 60 * 24))
+  const weeksOld = Math.floor(daysOld / 7)
+  
+  return { days: daysOld, weeks: weeksOld }
+}
 
-    // 加载基因型列表
-    async loadGenotypes() {
-      try {
-        const api = this.createAxiosInstance();
-        const response = await api.get('/genotypes');
-        this.genotypes = response.data;
-      } catch (error) {
-        console.error('加载基因型失败:', error);
-        toast.error(`加载基因型失败: ${error.message || '请检查网络连接'}`);
-      }
-    },
-    
-    // 排序方法
-    sortBy(field) {
-      if (this.sortField === field) {
-        this.sortDirection = this.sortDirection === 'asc' ? 'desc' : 'asc';
-      } else {
-        this.sortField = field;
-        this.sortDirection = 'asc';
-      }
-      this.applyFilters();
-    },
-    
-    // 重置搜索
-    resetSearch() {
-      this.searchTerm = '';
-      this.filters = {
-        id: '',
-        genotype: '',
-        sex: '',
-        birth_date: '',
-        days_old_min: null,
-        days_old_max: null,
-        weeks_old_min: null,
-        weeks_old_max: null,
-        live_status: -1
-      };
-      this.applyFilters();
-    },
-
-    // 获取排序图标
-    sortIcon(field) {
-      if (this.sortField !== field) return 'material-icons inactive-icon';
-      return this.sortDirection === 'asc' 
-        ? 'material-icons' 
-        : 'material-icons rotated-icon';
-    },
-
-    // 应用筛选和排序
-    applyFilters() {
-      let result = [...this.mice];
-      
-      // 应用文本筛选
-      if (this.searchTerm) {
-        const lowerTerm = this.searchTerm.toLowerCase();
-        result = result.filter(mouse => 
-          (mouse.id && String(mouse.id).toLowerCase().includes(lowerTerm)) || 
-          (mouse.genotype && mouse.genotype.toLowerCase().includes(lowerTerm))
-        );
-      }
-      
-      // 应用列筛选
-      if (this.filters.id) {
-        result = result.filter(m => m.id.includes(this.filters.id));
-      }
-      if (this.filters.genotype) {
-        result = result.filter(m => m.genotype === this.filters.genotype);
-      }
-      if (this.filters.strain) {
-        result = result.filter(m => (m.strain || '').includes(this.filters.strain));
-      }
-      if (this.filters.sex) {
-        result = result.filter(m => m.sex === this.filters.sex);
-      }
-      if (this.filters.birth_date) {
-        result = result.filter(m => m.birth_date === this.filters.birth_date);
-      }
-      if (this.filters.days_old_min) {
-        result = result.filter(m => m.days_old >= this.filters.days_old_min);
-      }
-      if (this.filters.days_old_max) {
-        result = result.filter(m => m.days_old <= this.filters.days_old_max);
-      }
-      if (this.filters.weeks_old_min) {
-        result = result.filter(m => m.weeks_old >= this.filters.weeks_old_min);
-      }
-      if (this.filters.weeks_old_max) {
-        result = result.filter(m => m.weeks_old <= this.filters.weeks_old_max);
-      }
-      if (this.filters.live_status >= 0) {
-        result = result.filter(m => m.live_status === this.filters.live_status);
-      }
-      
-      // 应用排序
-      result.sort((a, b) => {
-        let modifier = this.sortDirection === 'asc' ? 1 : -1;
-        
-        // 处理日期排序
-        if (this.sortField === 'birth_date') {
-          const dateA = a.birth_date ? new Date(a.birth_date) : 0;
-          const dateB = b.birth_date ? new Date(b.birth_date) : 0;
-          return (dateA - dateB) * modifier;
-        }
-        
-        // 处理数字排序
-        if (['days_old', 'weeks_old'].includes(this.sortField)) {
-          return ((a[this.sortField] || 0) - (b[this.sortField] || 0)) * modifier;
-        }
-        
-        // 默认排序
-        if (a[this.sortField] < b[this.sortField]) return -1 * modifier;
-        if (a[this.sortField] > b[this.sortField]) return 1 * modifier;
-        return 0;
-      });
-      
-      this.filteredMice = result;
-    },
-
-    // 验证小鼠数据
-    validateMouse(mouse) {
-      if (!mouse.id) {
-        toast.warning('小鼠编号不能为空');
-        return false;
-      }
-      return true;
-    },
-    
-    // 添加新小鼠
-    async addMouse() {
-      if (!this.validateMouse(this.newMouse)) return;
-      this.newMouse.father = this.selectedFathers.map(t => t.tid);
-      this.newMouse.mother = this.selectedMothers.map(t => t.tid);
-      this.adding = true;
-      try {
-        const api = this.createAxiosInstance();
-        const response = await api.post('/mice', this.newMouse);
-        
-        toast.success(`小鼠 ${response.data.id} 添加成功！`);
-        await this.loadMice();
-        this.filterMice(this.searchTerm);
-        
-        // 重置表单
-        this.newMouse = {
-          id: '',
-          genotype: '',
-          sex: 'M',
-          birth_date: '',
-          death_date: '',
-          days_old: null,
-          weeks_old: null,
-          father: [],
-          mother: [],
-          live_status: null,
-          strain: '',
-          tests_done: '',
-          tests_planned: ''
-        };
-        
-        this.showAddModal = false;
-      } catch (error) {
-        console.error('添加小鼠失败:', error);
-        
-        // 更详细的错误处理
-        if (error.response) {
-          if (error.response.status === 400) {
-            toast.error(`请求格式错误: ${error.response.data.error || '请检查输入数据'}`);
-          } else if (error.response.status === 500) {
-            toast.error('服务器内部错误，请稍后再试');
-          } else {
-            toast.error(`添加失败: ${error.response.data.error || '未知错误'}`);
-          }
+const loadMice = async () => {
+  loading.value = true
+  try {
+    const api = createAxiosInstance()
+    const response = await api.get('/mice')
+    mice.value = response.data.map(mouse => {
+      let days = null
+      let weeks = null
+      if (mouse.birth_date) {
+        if (mouse.live_status !== 1 && mouse.death_date) {
+          ({ days, weeks } = calculateAge(mouse.birth_date, mouse.death_date))
         } else {
-          toast.error(`添加失败: ${error.message || '网络错误'}`);
-        }
-      } finally {
-        this.adding = false;
-      }
-    },
-    
-    // 过滤小鼠列表
-    filterMice(term) {
-      if (!term) {
-        this.filteredMice = [...this.mice];
-        return;
-      }
-      const lowerTerm = term.toLowerCase();
-      this.filteredMice = this.mice.filter(mouse => 
-        (mouse.id && String(mouse.id).toLowerCase().includes(lowerTerm)) || 
-        (mouse.genotype && mouse.genotype.toLowerCase().includes(lowerTerm))
-      );
-    },
-
-    // 编辑小鼠
-    editMouse(mouse) {
-      this.editingMouse = { ...mouse };
-      // 查找并设置已选的父本母本
-      if (mouse.father.length > 0) {
-        const father = mouse.father.map(tid => this.mice.find(m => m.tid === tid)).filter(Boolean);
-        this.editFather.push(...father);
-      }
-      if (mouse.mother.length > 0) {
-        const mother = mouse.mother.map(tid => this.mice.find(m => m.tid === tid)).filter(Boolean);
-        this.editMother.push(...mother);
-      }
-    },
-    
-    // 取消编辑
-    cancelEdit() {
-      this.editingMouse = null;
-      this.editFather = [];
-      this.editMother = [];
-      this.fatherQuery = '';
-      this.motherQuery = '';
-    },
-    
-    // 保存小鼠修改
-    async saveMouse() {
-      if (!this.validateMouse(this.editingMouse)) return;
-      this.editingMouse.father = this.editFather.map(t => t.tid);
-      this.editingMouse.mother = this.editMother.map(t => t.tid);
-      this.saving = true;
-      try {
-        const api = this.createAxiosInstance();
-        await api.put(`/mice/${this.editingMouse.tid}`, this.editingMouse);
-        
-        toast.success(`小鼠 ${this.editingMouse.id} 信息已更新！`);
-        
-        // 更新本地数据
-        await this.loadMice();
-        
-        this.editingMouse = null;
-        this.editFather = [];
-        this.editMother = [];
-        this.fatherQuery = '';
-        this.motherQuery = '';
-      } catch (error) {
-        console.error('更新小鼠失败:', error);
-        
-        if (error.response) {
-          if (error.response.status === 404) {
-            toast.error('未找到该小鼠记录');
-          } else if (error.response.status === 400) {
-            toast.error(`请求格式错误: ${error.response.data.error || '请检查输入数据'}`);
-          } else {
-            toast.error(`更新失败: ${error.response.data.error || '服务器错误'}`);
-          }
-        } else {
-          toast.error(`更新失败: ${error.message || '网络错误'}`);
-        }
-      } finally {
-        this.saving = false;
-      }
-    },
-
-    // 批量添加小鼠
-    addMiceFromTemplate(mouse) {
-      this.templateMouse = { ...mouse };
-      // 查找并设置已选的父本母本
-      if (mouse.father.length > 0) {
-        const father = mouse.father.map(tid => this.mice.find(m => m.tid === tid)).filter(Boolean);
-        this.editFather.push(...father);
-      }
-      if (mouse.mother.length > 0) {
-        const mother = mouse.mother.map(tid => this.mice.find(m => m.tid === tid)).filter(Boolean);
-        this.editMother.push(...mother);
-      }
-    },
-    
-    // 取消批量添加
-    cancelTemplateEdit() {
-      this.templateMouse = null;
-      this.editFather = [];
-      this.editMother = [];
-      this.newMice = [];
-    },
-    
-    // 保存批量添加小鼠
-    async saveTemplateMice() {
-      // 检查是否存在ID为空的小鼠
-      const hasEmptyId = this.newMice.some(mouse => {
-        // 检查id属性是否存在或为空字符串
-        return mouse.id === null || mouse.id === undefined || mouse.id === '';
-      });
-
-      if (hasEmptyId) {
-        // 存在空ID的情况
-        toast.error("存在ID为空的小鼠");
-        // 这里可以添加处理逻辑，比如显示错误提示
-        return
-      }
-      try {
-        const api = this.createAxiosInstance();
-        await api.post(`/mice/${this.templateMouse.tid}`, this.newMice);
-        
-        toast.success(`添加${this.newMice.length}只小鼠！`);
-        
-        // 更新本地数据
-        await this.loadMice();
-        
-        this.templateMouse = null;
-        this.editFather = [];
-        this.editMother = [];
-        this.newMice = [];
-      } catch (error) {
-        console.error('更新小鼠失败:', error);
-        
-        if (error.response) {
-          if (error.response.status === 404) {
-            toast.error('未找到该小鼠记录');
-          } else if (error.response.status === 400) {
-            toast.error(`请求格式错误: ${error.response.data.error || '请检查输入数据'}`);
-          } else {
-            toast.error(`更新失败: ${error.response.data.error || '服务器错误'}`);
-          }
-        } else {
-          toast.error(`更新失败: ${error.message || '网络错误'}`);
-        }
-      } finally {
-        this.saving = false;
-      }
-    },
-
-    addInputField(){
-      this.newMice.push({ id: '', sex: this.templateMouse.sex });
-    },
-
-    removeField(index) {
-      this.newMice.splice(index, 1);
-    },
-    
-    // 打开小鼠详情
-    openMouseDetail(mouseId) {
-      this.selectedMouseId = mouseId;
-      this.showMouseDetail = true;
-      this.closeContextMenu();
-    },
-    
-    // 删除小鼠
-    async deleteMouse(mouseId) {
-      try {
-        const api = this.createAxiosInstance();
-        await api.delete(`/mice/${mouseId}`);
-        
-        toast.success(`小鼠 ${mouseId} 已删除！`);
-        
-        // 更新本地数据
-        const index = this.mice.findIndex(m => m.tid === mouseId);
-        if (index !== -1) {
-          this.mice.splice(index, 1);
-          this.filterMice(this.searchTerm);
-        }
-        this.closeContextMenu();
-      } catch (error) {
-        console.error('删除小鼠失败:', error);
-        
-        if (error.response) {
-          if (error.response.status === 404) {
-            toast.error('未找到该小鼠记录');
-          } else {
-            toast.error(`删除失败: ${error.response.data.error || '服务器错误'}`);
-          }
-        } else {
-          toast.error(`删除失败: ${error.message || '网络错误'}`);
+          ({ days, weeks } = calculateAge(mouse.birth_date, new Date()))
         }
       }
-    },
+      return {
+        ...mouse,
+        days_old: days,
+        weeks_old: weeks
+      }
+    })
+    applyFilters()
+    toast.success('小鼠数据加载成功')
+  } catch (error) {
+    console.error('加载小鼠失败:', error)
+    toast.error(`加载小鼠数据失败: ${error.message || '请检查网络连接'}`)
+  } finally {
+    loading.value = false
+  }
+}
 
-    // 右键菜单功能
-    showContextMenu(event, mouse) {
-      this.contextMenu = {
-        visible: true,
-        x: event.pageX,
-        y: event.pageY,
-        mouse: mouse
-      };
-    },
+const loadGenotypes = async () => {
+  try {
+    const api = createAxiosInstance()
+    const response = await api.get('/genotypes')
+    genotypes.value = response.data
+  } catch (error) {
+    console.error('加载基因型失败:', error)
+    toast.error(`加载基因型失败: ${error.message || '请检查网络连接'}`)
+  }
+}
+
+const loadExperiments = async () => {
+  try {
+    const api = createAxiosInstance()
+    const response = await api.get('/experiment-types')
+    experiments.value = response.data
+  } catch (error) {
+    console.error('加载实验失败:', error)
+    toast.error(`加载实验失败: ${error.message || '请检查网络连接'}`)
+  }
+}
+
+const sortBy = (field) => {
+  if (sortField.value === field) {
+    sortDirection.value = sortDirection.value === 'asc' ? 'desc' : 'asc'
+  } else {
+    sortField.value = field
+    sortDirection.value = 'asc'
+  }
+  applyFilters()
+}
+
+const resetSearch = () => {
+  searchTerm.value = ''
+  Object.assign(filters, {
+    id: '',
+    genotype: '',
+    sex: '',
+    birth_date: '',
+    days_old_min: null,
+    days_old_max: null,
+    weeks_old_min: null,
+    weeks_old_max: null,
+    live_status: -1
+  })
+  applyFilters()
+}
+
+const sortIcon = (field) => {
+  if (sortField.value !== field) return 'material-icons inactive-icon'
+  return sortDirection.value === 'asc' 
+    ? 'material-icons' 
+    : 'material-icons rotated-icon'
+}
+
+const applyFilters = () => {
+  let result = [...mice.value]
+  
+  // 应用文本筛选
+  if (searchTerm.value) {
+    const lowerTerm = searchTerm.value.toLowerCase()
+    result = result.filter(mouse => 
+      (mouse.id && String(mouse.id).toLowerCase().includes(lowerTerm)) || 
+      (mouse.genotype && mouse.genotype.toLowerCase().includes(lowerTerm))
+    )
+  }
+  
+  // 应用列筛选
+  if (filters.id) {
+    result = result.filter(m => m.id.includes(filters.id))
+  }
+  if (filters.genotype) {
+    result = result.filter(m => m.genotype === filters.genotype)
+  }
+  if (filters.strain) {
+    result = result.filter(m => (m.strain || '').includes(filters.strain))
+  }
+  if (filters.sex) {
+    result = result.filter(m => m.sex === filters.sex)
+  }
+  if (filters.birth_date) {
+    result = result.filter(m => m.birth_date === filters.birth_date)
+  }
+  if (filters.days_old_min) {
+    result = result.filter(m => m.days_old >= filters.days_old_min)
+  }
+  if (filters.days_old_max) {
+    result = result.filter(m => m.days_old <= filters.days_old_max)
+  }
+  if (filters.weeks_old_min) {
+    result = result.filter(m => m.weeks_old >= filters.weeks_old_min)
+  }
+  if (filters.weeks_old_max) {
+    result = result.filter(m => m.weeks_old <= filters.weeks_old_max)
+  }
+  if (filters.live_status >= 0) {
+    result = result.filter(m => m.live_status === filters.live_status)
+  }
+  
+  // 应用排序
+  result.sort((a, b) => {
+    let modifier = sortDirection.value === 'asc' ? 1 : -1
     
-    closeContextMenu() {
-      this.contextMenu.visible = false;
-    },
+    // 处理日期排序
+    if (sortField.value === 'birth_date') {
+      const dateA = a.birth_date ? new Date(a.birth_date) : 0
+      const dateB = b.birth_date ? new Date(b.birth_date) : 0
+      return (dateA - dateB) * modifier
+    }
+    
+    // 处理数字排序
+    if (['days_old', 'weeks_old'].includes(sortField.value)) {
+      return ((a[sortField.value] || 0) - (b[sortField.value] || 0)) * modifier
+    }
+    
+    // 默认排序
+    if (a[sortField.value] < b[sortField.value]) return -1 * modifier
+    if (a[sortField.value] > b[sortField.value]) return 1 * modifier
+    return 0
+  })
+  
+  filteredMice.value = result
+}
 
-    // 搜索父本（前端筛选）
-    searchFathers() {
-      if (this.fatherQuery.length < 1) {
-      this.fatherSuggestions = [];
-      return;
-      }
-      const query = this.fatherQuery.toLowerCase();
-      this.fatherSuggestions = this.mice.filter(mouse =>
-      mouse.sex === 'M' &&
-      mouse.id.toLowerCase().includes(query) &&
-      mouse.tid !== this.editingMouse.tid
-      ).slice(0, 10);
-    },
+const validateMouse = (mouse) => {
+  if (!mouse.id && modalMode.value === 'add') {
+    toast.warning('小鼠编号不能为空')
+    return false
+  }
+  return true
+}
 
-     // 搜索母本（前端筛选）
-    searchMothers() {
-      if (this.motherQuery.length < 1) {
-      this.motherSuggestions = [];
-      return;
-      }
-      const query = this.motherQuery.toLowerCase();
-      this.motherSuggestions = this.mice.filter(mouse =>
-      mouse.sex === 'F' &&
-      mouse.id.toLowerCase().includes(query) &&
-      mouse.tid !== this.editingMouse.tid
-      ).slice(0, 10);
-    },
-
-    // 选择父本（添加模态框）
-    selectFather(mouse) {
-      this.selectedFathers.push(mouse);
-      this.fatherQuery = '';
-      this.showFatherSuggestions = false;
-    },
-
-    selectEditFather(mouse) {
-      this.editFather.push(mouse);
-      this.fatherQuery = '';
-      this.showFatherSuggestions = false;
-    },
-
-    removeFather(index) {
-      this.selectedFathers.splice(index, 1);
-    },
-
-    removeEditFather(index) {
-      this.editFather.splice(index, 1);
-    },
-
-    // 选择母本（添加模态框）
-    selectMother(mouse) {
-      this.selectedMothers.push(mouse);
-      this.motherQuery = '';
-      this.showMotherSuggestions = false;
-    },
-
-    selectEditMother(mouse){
-      this.editMother.push(mouse);
-      this.motherQuery = '';
-      this.showMotherSuggestions = false;
-    },
-
-    removeMother(index) {
-      this.selectedMothers.splice(index, 1);
-    },
-
-    removeEditMother(index) {
-      this.editMother.splice(index, 1);
-    },
-
-    onBlur() {
-      setTimeout(() => {
-        this.showFatherSuggestions = false;
-        this.showMotherSuggestions = false;
-      }, 200);
-    },
-
-    formatDate(dateString) {
-      if (!dateString) return '';
-      const date = new Date(dateString);
-      return `${date.getFullYear()}-${(date.getMonth() + 1).toString().padStart(2, '0')}-${date.getDate().toString().padStart(2, '0')}`;
+const openModal = (mode, mouse = null) => {
+  modalMode.value = mode
+  if (mode === 'template' && mouse) {
+    templateMouse.value = { ...mouse }
+    newMice.value = [{ id: '', sex: mouse.sex }]
+    return
+  }
+  
+  showModal.value = true
+  
+  // 重置表单数据
+  Object.assign(formData, {
+    id: '',
+    genotype: '',
+    sex: 'M',
+    birth_date: '',
+    death_date: '',
+    days_old: null,
+    weeks_old: null,
+    father: [],
+    mother: [],
+    live_status: null,
+    strain: '',
+    tests_done: [],
+    tests_planned: []
+  })
+  
+  selectedFathers.value = []
+  selectedMothers.value = []
+  selectedTestsDone.value = []
+  selectedTestsPlanned.value = []
+  
+  if (mode === 'edit' && mouse) {
+    // 填充编辑数据
+    Object.assign(formData, { ...mouse })
+    
+    // 设置父本母本
+    if (mouse.father && mouse.father.length > 0) {
+      selectedFathers.value = mouse.father.map(tid => mice.value.find(m => m.tid === tid)).filter(Boolean)
+    }
+    if (mouse.mother && mouse.mother.length > 0) {
+      selectedMothers.value = mouse.mother.map(tid => mice.value.find(m => m.tid === tid)).filter(Boolean)
+    }
+    
+    // 设置测试
+    if (mouse.tests_done && mouse.tests_done.length > 0) {
+      selectedTestsDone.value = mouse.tests_done.map(id => experiments.value.find(e => e.id === id)).filter(Boolean)
+    }
+    if (mouse.tests_planned && mouse.tests_planned.length > 0) {
+      selectedTestsPlanned.value = mouse.tests_planned.map(id => experiments.value.find(e => e.id === id)).filter(Boolean)
     }
   }
-};
+}
+
+const closeModal = () => {
+  showModal.value = false
+  modalMode.value = ''
+  templateMouse.value = null
+  newMice.value = []
+}
+
+const saveMouse = async () => {
+  if (!validateMouse(formData)) return
+  
+  // 准备提交数据
+  const submitData = {
+    ...formData,
+    father: selectedFathers.value.map(t => t.tid),
+    mother: selectedMothers.value.map(t => t.tid),
+    tests_done: selectedTestsDone.value.map(e => e.id),
+    tests_planned: selectedTestsPlanned.value.map(e => e.id)
+  }
+  
+  saving.value = true
+  try {
+    const api = createAxiosInstance()
+    
+    if (modalMode.value === 'add') {
+      await api.post('/mice', submitData)
+      toast.success(`小鼠 ${submitData.id} 添加成功！`)
+    } else if (modalMode.value === 'edit') {
+      await api.put(`/mice/${formData.tid}`, submitData)
+      toast.success(`小鼠 ${formData.id} 信息已更新！`)
+    }
+    
+    await loadMice()
+    closeModal()
+  } catch (error) {
+    console.error('保存小鼠失败:', error)
+    
+    if (error.response) {
+      if (error.response.status === 400) {
+        toast.error(`请求格式错误: ${error.response.data.error || '请检查输入数据'}`)
+      } else if (error.response.status === 500) {
+        toast.error('服务器内部错误，请稍后再试')
+      } else {
+        toast.error(`保存失败: ${error.response.data.error || '未知错误'}`)
+      }
+    } else {
+      toast.error(`保存失败: ${error.message || '网络错误'}`)
+    }
+  } finally {
+    saving.value = false
+  }
+}
+
+const openMouseDetail = (mouseId) => {
+  selectedMouseId.value = mouseId
+  showMouseDetail.value = true
+  closeContextMenu()
+}
+
+const deleteMouse = async (mouseId) => {
+  try {
+    const api = createAxiosInstance()
+    await api.delete(`/mice/${mouseId}`)
+    
+    toast.success(`小鼠 ${mouseId} 已删除！`)
+    
+    // 更新本地数据
+    const index = mice.value.findIndex(m => m.tid === mouseId)
+    if (index !== -1) {
+      mice.value.splice(index, 1)
+      applyFilters()
+    }
+    closeContextMenu()
+  } catch (error) {
+    console.error('删除小鼠失败:', error)
+    
+    if (error.response) {
+      if (error.response.status === 404) {
+        toast.error('未找到该小鼠记录')
+      } else {
+        toast.error(`删除失败: ${error.response.data.error || '服务器错误'}`)
+      }
+    } else {
+      toast.error(`删除失败: ${error.message || '网络错误'}`)
+    }
+  }
+}
+
+const showContextMenu = (event, mouse) => {
+  contextMenu.visible = true
+  contextMenu.x = event.pageX
+  contextMenu.y = event.pageY
+  contextMenu.mouse = mouse
+}
+
+const closeContextMenu = () => {
+  contextMenu.visible = false
+}
+
+const searchParents = (type) => {
+  const query = type === 'father' ? fatherQuery.value : motherQuery.value
+  if (query.length < 1) {
+    if (type === 'father') fatherSuggestions.value = []
+    else motherSuggestions.value = []
+    return
+  }
+  
+  const lowerQuery = query.toLowerCase()
+  const suggestions = mice.value.filter(mouse =>
+    mouse.sex === (type === 'father' ? 'M' : 'F') &&
+    mouse.id.toLowerCase().includes(lowerQuery) &&
+    (!formData.tid || mouse.tid !== formData.tid) &&
+    (!mouse.father.includes(formData.tid) && !mouse.mother.includes(formData.tid))
+  ).slice(0, 10)
+  
+  if (type === 'father') fatherSuggestions.value = suggestions
+  else motherSuggestions.value = suggestions
+}
+
+const selectParent = (type, mouse) => {
+  if (type === 'father') {
+    selectedFathers.value.push(mouse)
+    fatherQuery.value = ''
+    showFatherSuggestions.value = false
+  } else {
+    selectedMothers.value.push(mouse)
+    motherQuery.value = ''
+    showMotherSuggestions.value = false
+  }
+}
+
+const removeParent = (type, index) => {
+  if (type === 'father') selectedFathers.value.splice(index, 1)
+  else selectedMothers.value.splice(index, 1)
+}
+
+// 切换下拉框显示
+const toggleTestsDoneDropdown = () => {
+  showTestsDoneDropdown.value = !showTestsDoneDropdown.value
+}
+const toggleTestsPlanDropdown = () => {
+  showTestsPlanDropdown.value = !showTestsPlanDropdown.value
+}
+
+
+const selectTest = (type, experiment) => {
+  if (type === 'done') {
+    selectedTestsDone.value.push(experiment)
+    const index = selectedTestsPlanned.value.findIndex(p => p.id === experiment.id)
+    if (index !== -1) {
+      selectedTestsPlanned.value.splice(index, 1)
+    }
+    showTestsDoneDropdown.value = false
+  } else {
+    selectedTestsPlanned.value.push(experiment)
+    const index = selectedTestsDone.value.findIndex(p => p.id === experiment.id)
+    if (index !== -1) {
+      selectedTestsDone.value.splice(index, 1)
+    }
+    showTestsPlanDropdown.value = false
+  }
+}
+
+// 监听selectedTestsDone的变化，确保与selectedTestsPlanned互斥
+watch(selectedTestsDone, (newTestsDone) => {
+  // 从计划测试中移除所有已完成的测试
+  selectedTestsPlanned.value = selectedTestsPlanned.value.filter(
+    plannedTest => !newTestsDone.some(doneTest => doneTest.id === plannedTest.id)
+  )
+})
+
+const removeTest = (type, index) => {
+  if (type === 'done') selectedTestsDone.value.splice(index, 1)
+  else selectedTestsPlanned.value.splice(index, 1)
+}
+
+// 点击外部关闭下拉框
+const handleClickOutside = (event) => {
+  if (!event.target.closest('.custom-select')) {
+    showTestsDoneDropdown.value = false
+    showTestsPlanDropdown.value = false
+  }
+}
+
+const onBlur = () => {
+  setTimeout(() => {
+    showFatherSuggestions.value = false
+    showMotherSuggestions.value = false
+  }, 200)
+}
+
+const formatDate = (dateString) => {
+  if (!dateString) return ''
+  const date = new Date(dateString)
+  return `${date.getFullYear()}-${(date.getMonth() + 1).toString().padStart(2, '0')}-${date.getDate().toString().padStart(2, '0')}`
+}
+
+const addInputField = () => {
+  newMice.value.push({ id: '', sex: templateMouse.value.sex })
+}
+
+const removeField = (index) => {
+  newMice.value.splice(index, 1)
+}
+
+const saveTemplateMice = async () => {
+  // 检查是否存在ID为空的小鼠
+  const hasEmptyId = newMice.value.some(mouse => {
+    return mouse.id === null || mouse.id === undefined || mouse.id === ''
+  })
+
+  if (hasEmptyId) {
+    toast.error("存在ID为空的小鼠")
+    return
+  }
+  
+  saving.value = true
+  try {
+    const api = createAxiosInstance()
+    await api.post(`/mice/${templateMouse.value.tid}`, newMice.value)
+    
+    toast.success(`添加${newMice.value.length}只小鼠！`)
+    await loadMice()
+    closeModal()
+  } catch (error) {
+    console.error('批量添加小鼠失败:', error)
+    
+    if (error.response) {
+      if (error.response.status === 404) {
+        toast.error('未找到该小鼠记录')
+      } else if (error.response.status === 400) {
+        toast.error(`请求格式错误: ${error.response.data.error || '请检查输入数据'}`)
+      } else {
+        toast.error(`添加失败: ${error.response.data.error || '服务器错误'}`)
+      }
+    } else {
+      toast.error(`添加失败: ${error.message || '网络错误'}`)
+    }
+  } finally {
+    saving.value = false
+  }
+}
+
+// 监听器
+watch(searchTerm, (newVal) => {
+  if (!newVal) applyFilters()
+})
+
+// 生命周期
+onMounted(async () => {
+  await loadMice()
+  await loadGenotypes()
+  await loadExperiments()
+  document.addEventListener('click', closeContextMenu)
+  document.addEventListener('click', handleClickOutside)
+})
 </script>
 
 <style scoped>
-
 .section {
   margin-bottom: 30px;
   padding: 25px;
@@ -1318,18 +1259,25 @@ export default {
   width: 90%;
   max-width: 600px;
   max-height: 90vh;
-  overflow-y: auto;
   box-shadow: 0 10px 25px rgba(0, 0, 0, 0.2);
   position: relative;
   z-index: 10;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden; 
 }
 
 .modal-header {
   display: flex;
   justify-content: space-between;
   align-items: center;
+  flex-shrink: 0; /* 防止头部被压缩 */
   padding: 20px;
-  border-bottom: 1px solid #eaeaea;
+  border-bottom: 1px solid #eaeaea; /* 可选：添加分隔线 */
+  background: white; /* 确保背景色一致 */
+  position: sticky; /* 粘性定位 */
+  top: 0; /* 粘在顶部 */
+  z-index: 11;
 }
 
 .modal-header h3 {
@@ -1357,7 +1305,9 @@ export default {
 }
 
 .form-body {
+  overflow-y: auto;
   padding: 20px;
+  flex-grow: 1;
 }
 
 .form-group {
@@ -1725,4 +1675,112 @@ export default {
   background: white;
 }
 
+.tags-input-container {
+  border: 1px solid #e2e8f0;
+  border-radius: 6px;
+  padding: 8px;
+  background: white;
+  min-height: 42px;
+}
+
+.select-content {
+  flex-grow: 1;
+  margin-right: 8px;
+  overflow-x: auto​;
+}
+
+.selected-tags {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-bottom: 8px;
+}
+
+.tag {
+  display: inline-flex;
+  align-items: center;
+  background-color: #e6f7ff;
+  border: 1px solid #91d5ff;
+  border-radius: 4px;
+  padding: 2px 8px;
+  font-size: 14px;
+  color: #1890ff;
+}
+
+.tag-remove {
+  margin-left: 6px;
+  cursor: pointer;
+  font-weight: bold;
+  color: #1890ff;
+}
+
+.tag-remove:hover {
+  color: #ff4d4f;
+}
+
+.custom-select {
+  position: relative;
+}
+
+.select-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 8px 12px;
+  border: 1px solid #e2e8f0;
+  border-radius: 4px;
+  cursor: pointer;
+  background: white;
+  min-height: 42px;
+}
+
+.select-header:hover {
+  border-color: #c0c4cc;
+}
+
+.placeholder {
+  color: #c0c4cc;
+}
+
+.select-arrow {
+  transition: transform 0.3s;
+  flex-shrink: 0;
+}
+
+.is-open .select-arrow {
+  transform: rotate(180deg);
+}
+
+.select-options {
+  position: absolute;
+  top: 100%;
+  left: 0;
+  right: 0;
+  background: white;
+  border: 1px solid #e2e8f0;
+  border-top: none;
+  border-radius: 0 0 4px 4px;
+  max-height: 200px;
+  overflow-y: auto;
+  z-index: 10;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+}
+
+.select-option {
+  padding: 8px 12px;
+  cursor: pointer;
+}
+
+.select-option:hover {
+  background-color: #f5f7fa;
+}
+
+.select-option.disabled {
+  color: #c0c4cc;
+  cursor: not-allowed;
+}
+
+.select-option.disabled:hover {
+  background-color: transparent;
+}
 </style>

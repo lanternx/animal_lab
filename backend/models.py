@@ -14,8 +14,8 @@ class Mouse(db.Model):
     death_date = db.Column(db.Date)
     cage_id = db.Column(db.String(20), db.ForeignKey('cage.id'))
     strain = db.Column(db.String(50))
-    tests_done = db.Column(db.JSON)
-    tests_planned = db.Column(db.JSON)
+    tests_done = db.Column(db.JSON)     #储存实验id的列表
+    tests_planned = db.Column(db.JSON)  #储存实验id的列表
 
     # 关系
     cage = db.relationship('Cage', backref=db.backref('mice', lazy=True))
