@@ -1606,7 +1606,7 @@ def get_experiment_groups(experiment_id):
     """获取实验的所有分组"""
     try:
         # 验证实验是否存在
-        Experiment.query.get_or_404(experiment_id)
+        ExperimentType.query.get_or_404(experiment_id)
         
         # 获取所有分组
         groups = {}
@@ -1623,7 +1623,7 @@ def get_experiment_groups(experiment_id):
     except Exception as e:
         return jsonify({'error': str(e)}), 500
 
-@app.route('/api/experiment/<int:experiment_id>/class_chage', methods=['POST'])
+@app.route('/api/experiment/<int:experiment_id>/class_change', methods=['POST'])
 def add_mouse_to_group(experiment_id):
     """改变小鼠分组"""
     try:
@@ -1632,8 +1632,8 @@ def add_mouse_to_group(experiment_id):
         from_class_id = data.get('class_id')
         to_class_id = data.get('class_new_id')
         
-        if not mouse_id or not to_class_id:
-            return jsonify({'error': 'mouse_id和class_id是必需的'}), 400
+        if not mouse_id or (from_class_id and to_class_id):
+            return jsonify({'error': 'mouse_id是必需的'}), 400
         
         # 验证实验和小鼠是否存在
         Experiment.query.get_or_404(experiment_id)
@@ -1650,8 +1650,10 @@ def add_mouse_to_group(experiment_id):
             if not existing:
                 return jsonify({'error': '该小鼠不在分组中'}), 400
             
-            existing.class_id = to_class_id
-
+            if to_class_id:
+                existing.class_id = to_class_id
+            else:
+                db.session.delete(existing)
         else:
             # 创建新的分组记录
             experiment_class = ExperimentClass(
@@ -1659,7 +1661,6 @@ def add_mouse_to_group(experiment_id):
                 experiment_id=experiment_id,
                 class_id=to_class_id
             )
-        
             db.session.add(experiment_class)
         db.session.commit()
         
@@ -1707,6 +1708,90 @@ def clear_all_groups(experiment_id):
         db.session.rollback()
         return jsonify({'error': str(e)}), 500
     
+@app.route('/api/experiments', methods=['POST'])
+def input_experiment_records():
+    """录入实验数据"""
+    try:
+        data = request.get_json()
+        experiment_type_id = data.get('experiment_type_id')
+        records = data.get('records', [])
+        
+        if not experiment_type_id:
+            return jsonify({'error': 'experiment_type_id是必需的'}), 400
+        
+        # 验证实验类型存在
+        experiment_type = ExperimentType.query.get_or_404(experiment_type_id)
+        
+        # 获取字段定义
+        field_definitions = {fd.id: fd for fd in experiment_type.field_definitions}
+        
+        # 处理每条记录
+        for record_data in records:
+            mouse_id = record_data.get('mouse_id')
+            researcher = record_data.get('researcher', '')
+            date_str = record_data.get('date')
+            notes = record_data.get('notes', '')
+            values = record_data.get('values', {})
+            
+            if not mouse_id:
+                return jsonify({'error': '每条记录必须包含mouse_id'}), 400
+            
+            # 验证小鼠存在
+            Mouse.query.get_or_404(mouse_id)
+            
+            # 解析日期
+            try:
+                date = datetime.strptime(date_str, '%Y-%m-%d').date() if date_str else datetime.now().date()
+            except ValueError:
+                return jsonify({'error': f'日期格式无效: {date_str}'}), 400
+            
+            # 创建实验记录
+            experiment = Experiment(
+                mouse_id=mouse_id,
+                experiment_type_id=experiment_type_id,
+                researcher=researcher,
+                date=date,
+                notes=notes
+            )
+            db.session.add(experiment)
+            db.session.flush()  # 获取experiment.id
+            
+            # 处理字段值
+            for field_def_id, value in values.items():
+                field_def_id = int(field_def_id)
+                if field_def_id not in field_definitions:
+                    continue
+                
+                field_def = field_definitions[field_def_id]
+                
+                # 创建实验值记录
+                exp_value = ExperimentValue(
+                    experiment_id=experiment.id,
+                    field_definition_id=field_def_id
+                )
+                
+                # 根据数据类型设置值
+                if field_def.data_type == 'INTEGER':
+                    exp_value.value_int = int(value) if value is not None else None
+                elif field_def.data_type == 'REAL':
+                    exp_value.value_real = float(value) if value is not None else None
+                elif field_def.data_type == 'TEXT':
+                    exp_value.value_text = str(value) if value is not None else None
+                elif field_def.data_type == 'BOOLEAN':
+                    exp_value.value_bool = bool(value) if value is not None else None
+                elif field_def.data_type == 'DATE':
+                    try:
+                        exp_value.value_date = datetime.strptime(value, '%Y-%m-%d').date() if value else None
+                    except ValueError:
+                        exp_value.value_date = None
+                
+                db.session.add(exp_value)
+        
+        db.session.commit()
+        return jsonify({'message': '实验记录保存成功', 'count': len(records)})
+    except Exception as e:
+        db.session.rollback()
+        return jsonify({'error': str(e)}), 500
 
 
 if __name__ == '__main__':

@@ -1104,6 +1104,7 @@ methods: {
         .then(response => {
             alert('删除成功');
             this.fetchExperimentTypes();
+            window.experimentTypesUpdated = true;
         })
         .catch(error => {
             console.error('删除实验类型失败:', error);

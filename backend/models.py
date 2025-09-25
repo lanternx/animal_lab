@@ -3,6 +3,8 @@ from flask_sqlalchemy import SQLAlchemy
 db = SQLAlchemy()
 
 class Mouse(db.Model):
+    __tablename__ = 'mouse'
+
     tid = db.Column(db.Integer, primary_key=True)
     id = db.Column(db.String(10), nullable=False)
     genotype = db.Column(db.String(50))
@@ -14,6 +16,10 @@ class Mouse(db.Model):
     strain = db.Column(db.String(50))
     tests_done = db.Column(db.JSON)
     tests_planned = db.Column(db.JSON)
+
+    # 关系
+    cage = db.relationship('Cage', backref=db.backref('mice', lazy=True))
+    
     def to_dict(self):
         return {
             'tid': self.tid,
@@ -30,12 +36,21 @@ class Mouse(db.Model):
         }
 
 class Pedigree(db.Model):
+    __tablename__ = 'pedigree'
+
     id = db.Column(db.Integer, primary_key=True)
     mouse_id = db.Column(db.Integer, db.ForeignKey('mouse.tid'))
     parent_id = db.Column(db.Integer, db.ForeignKey('mouse.tid'))
     parent_type = db.Column(db.String(10))  # 'father' or 'mother'
 
+    # 关系
+    mouse = db.relationship('Mouse', foreign_keys=[mouse_id], backref=db.backref('pedigree_records', lazy=True))
+    parent = db.relationship('Mouse', foreign_keys=[parent_id], backref=db.backref('offspring', lazy=True))
+
+
 class Cage(db.Model):
+    __tablename__ = 'cage'
+    
     id = db.Column(db.String(20), primary_key=True)
     section = db.Column(db.String(50), db.ForeignKey('location.identifier'), nullable=False)
     cage_id = db.Column(db.String(10), nullable=False) #这个就是笼位卡上显示的编号
@@ -47,10 +62,10 @@ class Cage(db.Model):
     mice_count = db.Column(db.Integer)
     mice_sex = db.Column(db.String(10))  # 'M'/'F'/'Mixed'
     mice_genotype = db.Column(db.String(50))
-    # 保持与Mouse的关系定义
-    mice = db.relationship('Mouse', backref='cage', lazy=True)
     
 class WeightRecord(db.Model):
+    __tablename__ = 'weight_record'
+    
     id = db.Column(db.Integer, primary_key=True)
     mouse_id = db.Column(db.Integer, db.ForeignKey('mouse.tid'), nullable=False)
     weight = db.Column(db.Float, nullable=False)
@@ -220,9 +235,8 @@ class ExperimentClass(db.Model):
     
     def to_dict(self):
         return {
-            'id': self.id,
+            'class_id': self.class_id,
             'mouse_id': self.mouse_id,
             'experiment_id': self.experiment_id,
-            'class_id': self.class_id,
             'mouse_info': self.mouse.to_dict() if self.mouse else None
         }
