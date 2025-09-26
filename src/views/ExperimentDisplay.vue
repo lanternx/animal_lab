@@ -684,7 +684,7 @@ async function saveGroupName(oldGroupId) {
             groupedMice[newGroupId] = groupedMice[oldGroupId];
             delete groupedMice[oldGroupId];
             
-            const index = availableGroups.indexOf(oldGroupId);
+            const index = availableGroups.value.indexOf(oldGroupId);
             if (index !== -1) {
                 availableGroups.value.splice(index, 1, newGroupId);
             }

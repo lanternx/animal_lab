@@ -2,9 +2,11 @@
 node_modules
 /dist
 
-backend
-/dist
-/build
+backend/**
+!backend/app.py
+!backend/main.py
+!backend/models.py
+!backend/build.py
 
 public
 
