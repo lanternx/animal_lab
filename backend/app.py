@@ -194,7 +194,7 @@ def get_all_mice():
                 'tests_planned': m.tests_planned
             }
             mice_data.append(mouse_dict)
-            
+
         mice_data.sort(key=lambda x: x['tid'], reverse=True)
         return jsonify(mice_data)
     except Exception as e:
@@ -356,6 +356,30 @@ def add_mice_from_template(mouse_tid):
     except Exception as e:
         return jsonify({'error': str(e)}), 400
 
+# 批量修改实验小鼠
+@app.route('/api/mice/experiments', methods=['PUT'])
+def batch_experiments_change():
+    try:
+        data = request.json
+        mice_ids = data.get("miceIds", [])
+        test_ids = data.get("testIds", [])
+        operation = data.get("batchTest", "")
+        if operation == "完成实验":
+            for mtid in mice_ids:
+                m = Mouse.query.get(mtid)
+                if not m:
+                    continue
+                m.tests_done = test_ids
+        elif operation == "计划实验":
+            for mtid in mice_ids:
+                m = Mouse.query.get(mtid)
+                if not m:
+                    continue
+                m.tests_planned = test_ids
+        db.session.commit()
+        return jsonify(), 201
+    except Exception as e:
+        return jsonify({'error': str(e)}), 400
 
 
 ##笼位视图

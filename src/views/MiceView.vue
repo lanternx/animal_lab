@@ -28,6 +28,41 @@
         <div class="loading-spinner"></div>
         <span>加载中...</span>
       </div>
+
+      <!-- 选择信息栏 -->
+      <div class="selection-info" v-if="selectedMice.length > 0">
+          <span>已选择 {{ selectedMice.length }} 只小鼠</span>
+            <!-- 下拉选择框 -->
+            <div class="custom-select" :class="{ 'is-open': showTestsDoneDropdown }">
+              <div class="select-header" @click="toggleTestsDoneDropdown">
+                <div class="select-content">
+                <!-- 显示已选标签 -->
+                <div class="selected-tags">
+                  <span v-for="(experiment, index) in batchSelectedTests" :key="experiment.id" class="tag">
+                    {{ experiment.name }}
+                    <span class="tag-remove" @click="removeTest('batch', index)">×</span>
+                  </span>
+                </div>
+                <span class="placeholder" v-if="batchSelectedTests.length === 0">选择测试...</span>
+                </div>
+                <div class="select-arrow">▼</div>
+              </div>
+              
+              <div class="select-options" v-if="showTestsDoneDropdown">
+                <div 
+                  v-for="experiment in experiments" 
+                  :key="experiment.id" 
+                  class="select-option"
+                  @click="selectTest('batch', experiment)"
+                >
+                  {{ experiment.name }}
+                </div>
+              </div>
+            </div>
+          <button @click="batchAddExperiment('计划实验')">批量计划实验</button>
+          <button @click="batchAddExperiment('完成实验')">批量完成实验</button>
+          <button @click="clearSelection" style="background-color: #95a5a6;">取消选择</button>
+      </div>
       
       <!-- 小鼠列表表格 -->
       <table class="mouse-table">
@@ -100,9 +135,14 @@
 
         </thead>
         <tbody>
-          <tr v-for="mouse in filteredMice" :key="mouse.tid"
+          <tr v-for="(mouse, index) in filteredMice" :key="mouse.tid"
+          @click="selectMice(mouse, $event, index)"
           @dblclick="openMouseDetail(mouse.tid)"
-          @contextmenu.prevent="showContextMenu($event, mouse)">
+          @contextmenu.prevent="showContextMenu($event, mouse)"
+          :class="{
+              'selected': isSelected(mouse.tid),
+              'selected-multiple': selectedMice.length > 1 && isSelected(mouse.tid)
+          }">
             <td>{{ mouse.id }}</td>
             <td>{{ mouse.genotype }}</td>
             <td>{{ mouse.strain }}</td>
@@ -489,6 +529,11 @@ const contextMenu = reactive({
   y: 0,
   mouse: null
 })
+const selectedMice = ref([])
+const lastSelectedIndex = ref(-1)
+const ctrlKeyPressed = ref(false)
+const shiftKeyPressed = ref(false)
+const batchSelectedTests = ref([])
 
 // 模态框相关
 const showModal = ref(false)
@@ -514,7 +559,7 @@ const formData = reactive({
 })
 
 // 筛选和排序
-const sortField = ref('id')
+const sortField = ref(null)
 const sortDirection = ref('asc')
 const filters = reactive({
   id: '',
@@ -545,6 +590,23 @@ const showTestsPlanDropdown = ref(false)
 
 const selectedTestsDone = ref([])
 const selectedTestsPlanned = ref([])
+
+// 监听键盘事件
+document.addEventListener('keydown', (e) => {
+  if (e.key === 'Control') {
+    ctrlKeyPressed.value = true
+  } else if (e.key === 'Shift') {
+    shiftKeyPressed.value = true;
+  }
+})
+
+document.addEventListener('keyup', (e) => {
+  if (e.key === 'Control') {
+    ctrlKeyPressed.value = false
+  } else if (e.key === 'Shift') {
+    shiftKeyPressed.value = false;
+  }
+})
 
 // 计算可用的测试（过滤掉已选的计划测试和已完成测试）
 const availableTestsPlan = computed(() => {
@@ -749,8 +811,74 @@ const applyFilters = () => {
     if (a[sortField.value] > b[sortField.value]) return 1 * modifier
     return 0
   })
-  
   filteredMice.value = result
+}
+
+const selectMice = (mouse) => {
+    if (ctrlKeyPressed.value) {
+      // Ctrl+点击：切换选中状态
+      toggleMouseSelection(mouse.tid);
+      lastSelectedIndex.value = index;
+  } else if (shiftKeyPressed.value && lastSelectedIndex.value !== -1) {
+      // Shift+点击：选择范围
+      selectRange(lastSelectedIndex.value, index);
+  } else {
+      // 普通点击：选中当前，取消其他
+      selectedMice = [mouse.tid];
+      lastSelectedIndex.value = index;
+  }
+}
+
+// 切换小鼠选中状态
+const toggleMouseSelection = (tid) => {
+    const index = selectedMice.value.indexOf(tid);
+    if (index === -1) {
+        selectedMice.value.push(tid);
+    } else {
+        selectedMice.value.splice(index, 1);
+    }
+}
+
+// 选择范围
+const selectRange = (startIndex, endIndex) => {
+    const start = Math.min(startIndex, endIndex);
+    const end = Math.max(startIndex, endIndex);
+    
+    const rangeTids = filteredMice.value
+        .slice(start, end + 1)
+        .map(mouse => mouse.tid);
+    
+    // 添加范围内的所有小鼠
+    selectedMice.value = [...new Set([...selectedMice.value, ...rangeTids])];
+}
+
+// 检查是否选中
+const isSelected = (tid) => {
+    return selectedMice.value.includes(tid);
+}
+
+// 清除选择
+const clearSelection = () => {
+    selectedMice.value = [];
+    lastSelectedIndex.value = -1;
+    batchSelectedTests.value = [];
+    loadMice()
+}
+
+const batchAddExperiment = async (batchTest) => {
+  try {
+    const api = createAxiosInstance()
+    await api.put('/mice/experiments', {
+      batchTest: batchTest,
+      miceIds: selectedMice.value,
+      testIds: batchSelectedTests.value.map(e => e.id)
+    })
+    toast.success("批量修改" + batchTest +"成功")
+  } catch (error) {
+    console.error('批量修改实验小鼠失败:', error)
+  } finally {
+    clearSelection()
+  }
 }
 
 const validateMouse = (mouse) => {
@@ -878,11 +1006,10 @@ const deleteMouse = async (mouseId) => {
     const api = createAxiosInstance()
     await api.delete(`/mice/${mouseId}`)
     
-    toast.success(`小鼠 ${mouseId} 已删除！`)
-    
     // 更新本地数据
     const index = mice.value.findIndex(m => m.tid === mouseId)
     if (index !== -1) {
+      toast.success(`小鼠 ${mice.value[index].id} 已删除！`)
       mice.value.splice(index, 1)
       applyFilters()
     }
@@ -967,13 +1094,21 @@ const selectTest = (type, experiment) => {
       selectedTestsPlanned.value.splice(index, 1)
     }
     showTestsDoneDropdown.value = false
-  } else {
+  } else if (type === 'plan') {
     selectedTestsPlanned.value.push(experiment)
     const index = selectedTestsDone.value.findIndex(p => p.id === experiment.id)
     if (index !== -1) {
       selectedTestsDone.value.splice(index, 1)
     }
     showTestsPlanDropdown.value = false
+  } else if (type === 'batch') {
+    const index = batchSelectedTests.value.findIndex(p => p.id === experiment.id)
+    if (index !== -1) {
+      toast.info("请勿选择重复实验")
+      return
+    }
+    batchSelectedTests.value.push(experiment)
+    showTestsDoneDropdown.value = false
   }
 }
 
@@ -986,8 +1121,9 @@ watch(selectedTestsDone, (newTestsDone) => {
 })
 
 const removeTest = (type, index) => {
-  if (type === 'done') selectedTestsDone.value.splice(index, 1)
-  else selectedTestsPlanned.value.splice(index, 1)
+  if (type === 'done') {selectedTestsDone.value.splice(index, 1)}
+  else if (type === 'plan') {selectedTestsPlanned.value.splice(index, 1)}
+  else if (type === 'batch') {batchSelectedTests.value.splice(index, 1)}
 }
 
 // 点击外部关闭下拉框
@@ -1231,6 +1367,13 @@ onMounted(async () => {
 
 .mouse-table tr:hover {
   background-color: #f1f5ff !important;
+}
+
+.mouse-table tbody tr.selected {
+    background-color: #d4e6f1;
+}
+.mouse-table tbody tr.selected-multiple {
+    background-color: #d1ecf1;
 }
 
 /* 模态框样式 */
@@ -1783,5 +1926,24 @@ onMounted(async () => {
 
 .select-option.disabled:hover {
   background-color: transparent;
+}
+
+.selection-info {
+    margin: 10px 0;
+    padding: 10px;
+    background-color: #e8f4fc;
+    border-radius: 4px;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+}
+.selection-info button {
+    padding: 5px 10px;
+    background-color: #3498db;
+    color: white;
+    border: none;
+    border-radius: 4px;
+    cursor: pointer;
+    margin-left: 10px; 
 }
 </style>
