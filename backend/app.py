@@ -195,6 +195,7 @@ def get_all_mice():
             }
             mice_data.append(mouse_dict)
             
+        mice_data.sort(key=lambda x: x['tid'], reverse=True)
         return jsonify(mice_data)
     except Exception as e:
         app.logger.error(f"获取小鼠列表失败: {str(e)}")
@@ -1668,6 +1669,11 @@ def add_mouse_to_group(experiment_id):
     except Exception as e:
         db.session.rollback()
         return jsonify({'error': str(e)}), 500
+    
+@app.route('/api/experiment/<int:experiment_id>/groups', methods=['POST'])
+def add_group(experiment_id):
+    """增加分组"""
+    pass
 
 @app.route('/api/experiment/<int:experiment_id>/groups/<int:class_id>', methods=['DELETE'])
 def delete_group(experiment_id, class_id):

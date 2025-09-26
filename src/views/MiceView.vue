@@ -438,7 +438,9 @@
 
         <div class="form-group">
           <span>创建数量：{{ newMice.length }}</span>
-          <button @click="addInputField">添加</button>
+          <button @click="addInputField" >
+            <i class="material-icons">add</i>
+          </button>
         </div>
         <div v-for="(m, index) in newMice" :key="index" class="input-row">
           <input v-model="m.id" placeholder="ID">
@@ -524,7 +526,7 @@ const filters = reactive({
   days_old_max: null,
   weeks_old_min: null,
   weeks_old_max: null,
-  live_status: -1
+  live_status: 1
 })
 
 // 父本母本选择
@@ -619,7 +621,6 @@ const loadMice = async () => {
       }
     })
     applyFilters()
-    toast.success('小鼠数据加载成功')
   } catch (error) {
     console.error('加载小鼠失败:', error)
     toast.error(`加载小鼠数据失败: ${error.message || '请检查网络连接'}`)
