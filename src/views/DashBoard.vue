@@ -15,7 +15,7 @@
           <i class="material-icons btn-icon">picture_as_pdf</i>
           当前位置导出pdf
         </button>
-        <button class="btn btn-primary" @click="addCageDialog">
+        <button class="btn btn-primary" @click="openCageModal">
           <i class="material-icons btn-icon">add</i>
           添加笼位
         </button>
@@ -139,61 +139,6 @@
       </div>
     </div>
     
-    <!-- 添加笼位对话框 -->
-    <div v-if="addCageDialogVisible" class="dialog-overlay">
-      <div class="modal-backdrop" @click="addCageDialogVisible = false"></div>
-      <div class="dialog-container">
-        <h2>添加新笼位</h2>
-        <div class="form-group">
-          <label>笼位ID</label>
-          <input type="text" v-model="newCage.cage_id" placeholder="输入笼位ID">
-        </div>
-        <div class="form-group">
-          <label>位置</label>
-          <input type="text" v-model="newCage.location" placeholder="输入位置">
-        </div>
-        <div class="form-group">
-          <label>区域</label>
-          <select v-model="newCage.section">
-            <option v-for="section in availableSections" :key="section" :value="section.identifier">
-              {{ section.identifier }}
-            </option>
-          </select>
-        </div>
-        <div class="form-group">
-          <label>笼位类型</label>
-          <select v-model="newCage.cage_type">
-            <option value="normal">普通笼</option>
-            <option value="breeding">繁殖笼</option>
-          </select>
-        </div>
-        <div class="form-group">
-          <label>笼内小鼠出生日期</label>
-          <input type="date" v-model="newCage.mice_birth_date">
-        </div>
-        <div class="form-group">
-          <label>笼内小鼠数量</label>
-          <input type="number" v-model.number="newCage.mice_count" min="0">
-        </div>
-        <div class="form-group">
-          <label>笼内小鼠性别</label>
-          <select v-model="newCage.mice_sex">
-            <option value="M">雄性</option>
-            <option value="F">雌性</option>
-            <option value="Mixed">混合</option>
-          </select>
-        </div>
-        <div class="form-group">
-          <label>笼内小鼠基因型</label>
-          <input type="text" v-model="newCage.mice_genotype" placeholder="如: WT/KO/其他">
-        </div>
-        <div class="dialog-buttons">
-          <button class="btn btn-outline" @click="addCageDialogVisible = false">取消</button>
-          <button class="btn btn-primary" @click="addNewCage">确定</button>
-        </div>
-      </div>
-    </div>
-    
     <!-- 小鼠详细视图 -->
     <MouseDetailModal 
       v-if="showMouseDetail" 
@@ -207,7 +152,7 @@
       class="context-menu"
       :style="{ top: cageContextMenu.y + 'px', left: cageContextMenu.x + 'px' }">
       <ul>
-          <li @click="openEditCageDialog(cageContextMenu.cage)">
+          <li @click="openCageModal(cageContextMenu.cage)">
               <i class="material-icons">edit</i> 编辑笼位信息
           </li>
           <li @click="exchangeCage(cageContextMenu.cage)">
@@ -219,22 +164,23 @@
       </ul>
   </div>
 
-  <!-- 编辑笼位对话框 -->
-  <div v-if="editCageDialogVisible" class="dialog-overlay">
-  <div class="modal-backdrop" @click="editCageDialogVisible = false"></div>
-    <div class="dialog-container">
-      <h2>修改笼位信息</h2>
+  <!-- 统一笼位对话框 -->
+  <div v-if="cageModalVisible" class="dialog-overlay">
+    <div class="modal-backdrop" @click="closeCageModal"></div>
+    <div class="dialog-container cage-modal">
+      <h2>{{ isEditing ? '修改笼位信息' : '添加新笼位' }}</h2>
       <div class="form-group">
-        <label>ID</label>
-        <input type="text" v-model="editingCage.cage_id" placeholder="输入笼位ID">
+        <label>笼位ID</label>
+        <input type="text" v-model="currentCage.cage_id" placeholder="输入笼位ID" v-if="!isEditing">
+        <label v-if="isEditing">  {{ currentCage.cage_id }}  </label>
       </div>
       <div class="form-group">
         <label>位置</label>
-        <input type="text" v-model="editingCage.location" placeholder="输入位置">
+        <input type="text" v-model="currentCage.location" placeholder="输入位置">
       </div>
       <div class="form-group">
         <label>区域</label>
-        <select v-model="editingCage.section">
+        <select v-model="currentCage.section">
           <option v-for="section in availableSections" :key="section" :value="section.identifier">
             {{ section.identifier }}
           </option>
@@ -242,22 +188,22 @@
       </div>
       <div class="form-group">
         <label>笼位类型</label>
-        <select v-model="editingCage.cage_type">
+        <select v-model="currentCage.cage_type">
           <option value="normal">普通笼</option>
           <option value="breeding">繁殖笼</option>
         </select>
       </div>
       <div class="form-group">
         <label>笼内小鼠出生日期</label>
-        <input type="date" v-model="editingCage.mice_birth_date">
+        <input type="date" v-model="currentCage.mice_birth_date">
       </div>
       <div class="form-group">
         <label>笼内小鼠数量</label>
-        <input type="number" v-model.number="editingCage.mice_count" min="0">
+        <input type="number" v-model.number="currentCage.mice_count" min="0">
       </div>
       <div class="form-group">
         <label>笼内小鼠性别</label>
-        <select v-model="editingCage.mice_sex">
+        <select v-model="currentCage.mice_sex">
           <option value="M">雄性</option>
           <option value="F">雌性</option>
           <option value="Mixed">混合</option>
@@ -265,11 +211,13 @@
       </div>
       <div class="form-group">
         <label>笼内小鼠基因型</label>
-        <input type="text" v-model="editingCage.mice_genotype" placeholder="如: WT/KO/其他">
+        <input type="text" v-model="currentCage.mice_genotype" placeholder="如: WT/KO/其他">
       </div>
       <div class="dialog-buttons">
-        <button class="btn btn-outline" @click="editCageDialogVisible = false">取消</button>
-        <button class="btn btn-primary" @click="updateCage">确定</button>
+        <button class="btn btn-outline" @click="closeCageModal">取消</button>
+        <button class="btn btn-primary" @click="isEditing ? updateCage() : addNewCage()">
+          {{ isEditing ? '更新' : '添加' }}
+        </button>
       </div>
     </div>
   </div>
@@ -347,8 +295,9 @@ const temporaryMice = ref([])
 const dragData = ref(null)
 const showMouseDetail = ref(false)
 const selectedMouseId = ref(null)
-const addCageDialogVisible = ref(false)
-const newCage = reactive({
+const cageModalVisible = ref(false)
+const isEditing = ref(false)
+const currentCage = reactive({
   id: '',
   cage_id: '',
   location: '',
@@ -364,18 +313,6 @@ const cageContextMenu = reactive({
   x: 0,
   y: 0,
   cage: null
-})
-const editCageDialogVisible = ref(false)
-const editingCage = reactive({
-  id: '',
-  cage_id: '',
-  location: '',
-  section: '',
-  cage_type: 'normal',
-  mice_birth_date: '',
-  mice_count: null,
-  mice_sex: '',
-  mice_genotype: ''
 })
 const activeSection = ref('')
 const availableSections = ref([])
@@ -415,7 +352,7 @@ onMounted(async () => {
   
   section_key.value = true
   
-  // 延迟1秒再开始加载，确保所有依赖都准备好
+  // 延迟0.1秒再开始加载，确保所有依赖都准备好
   setTimeout(async () => {
     console.log('开始延迟加载数据...')
     await fetchCages()
@@ -450,7 +387,7 @@ async function fetchCages() {
     // 设置默认选中的section为第一个
     if (availableSections.value.length > 0 && section_key.value) {
       activeSection.value = availableSections.value[0].identifier
-      newCage.section = availableSections.value[0].identifier
+      currentCage.section = availableSections.value[0].identifier
       section_key.value = false
       console.log('设置默认section为:', activeSection.value)
     }
@@ -550,24 +487,57 @@ function openMouseDetail(mouseId) {
   showMouseDetail.value = true
 }
 
-// 添加新笼位对话框
-function addCageDialog() {
-  newCage.section = activeSection.value
-  addCageDialogVisible.value = true
+// 打开笼位对话框
+function openCageModal(cage = null) {
+  isEditing.value = !!cage
+  
+  if (isEditing.value) {
+    // 编辑模式：填充当前笼位数据
+    Object.assign(currentCage, { ...cage })
+  } else {
+    // 添加模式：重置表单
+    Object.assign(currentCage, {
+      id: '',
+      cage_id: '',
+      location: '',
+      section: activeSection.value,
+      cage_type: 'normal',
+      mice_birth_date: '',
+      mice_count: null,
+      mice_sex: '',
+      mice_genotype: ''
+    })
+  }
+  
+  cageModalVisible.value = true
+}
+
+function closeCageModal(){
+  cageModalVisible.value = false
+  Object.assign(currentCage, {
+    id: '',
+    cage_id: '',
+    location: '',
+    section: activeSection.value,
+    cage_type: 'normal',
+    mice_birth_date: '',
+    mice_count: null,
+    mice_sex: '',
+    mice_genotype: ''
+  })
 }
 
 // 添加新笼位
 async function addNewCage() {
-  if (!newCage.cage_id || !newCage.section) {
+  if (!currentCage.cage_id || !currentCage.section) {
     alert('请填写笼位ID和区域')
     return
   }
   
   try {
-    await axios.post('/api/cages', newCage)
+    await axios.post('/api/cages', currentCage)
     await fetchCages() // 刷新笼位列表
-    addCageDialogVisible.value = false
-    Object.assign(newCage, { id: '', cage_id: '', location: '', section: '', cage_type: 'normal', mice_birth_date: '', mice_count: null, mice_sex: '', mice_genotype: '' })
+    closeCageModal()
   } catch (error) {
     console.error('添加笼位失败:', error)
     alert('添加笼位失败，请重试')
@@ -590,39 +560,32 @@ function closeContextMenu() {
   document.removeEventListener('click', closeContextMenu)
 }
 
-// 打开编辑笼位对话框
-function openEditCageDialog(cage) {
-  Object.assign(editingCage, { ...cage })
-  editCageDialogVisible.value = true
-  closeContextMenu()
-}
-
 // 更新笼位信息
 async function updateCage() {
   try {
-    await axios.put(`/api/cages/${editingCage.id}`, {
-      cage_id: editingCage.cage_id,
-      location: editingCage.location,
-      section: editingCage.section,
-      cage_type: editingCage.cage_type,
-      mice_birth_date: editingCage.mice_birth_date,
-      mice_count: editingCage.mice_count,
-      mice_sex: editingCage.mice_sex,
-      mice_genotype: editingCage.mice_genotype
+    await axios.put(`/api/cages/${currentCage.id}`, {
+      cage_id: currentCage.cage_id,
+      location: currentCage.location,
+      section: currentCage.section,
+      cage_type: currentCage.cage_type,
+      mice_birth_date: currentCage.mice_birth_date,
+      mice_count: currentCage.mice_count,
+      mice_sex: currentCage.mice_sex,
+      mice_genotype: currentCage.mice_genotype
     })
     // 更新本地数据
-    const index = cages.value.findIndex(c => c.id === editingCage.id)
+    const index = cages.value.findIndex(c => c.id === currentCage.id)
     if (index !== -1) {
-      cages.value[index].cage_id = editingCage.cage_id
-      cages.value[index].location = editingCage.location
-      cages.value[index].section = editingCage.section
-      cages.value[index].cage_type = editingCage.cage_type
-      cages.value[index].mice_birth_date = editingCage.mice_birth_date
-      cages.value[index].mice_count = editingCage.mice_count
-      cages.value[index].mice_sex = editingCage.mice_sex
-      cages.value[index].mice_genotype = editingCage.mice_genotype
+      cages.value[index].cage_id = currentCage.cage_id
+      cages.value[index].location = currentCage.location
+      cages.value[index].section = currentCage.section
+      cages.value[index].cage_type = currentCage.cage_type
+      cages.value[index].mice_birth_date = currentCage.mice_birth_date
+      cages.value[index].mice_count = currentCage.mice_count
+      cages.value[index].mice_sex = currentCage.mice_sex
+      cages.value[index].mice_genotype = currentCage.mice_genotype
     }
-    editCageDialogVisible.value = false
+    closeCageModal()
   } catch (error) {
     console.error('修改笼位失败:', error)
     alert('修改笼位失败，请重试')
@@ -649,6 +612,9 @@ async function exchangeCage(cage) {
   sourceCage.value = cage
   swapStatus.value = "select-source"
   closeContextMenu()
+  setTimeout(() => {
+    cancelSwap()
+  }, 5000)
 }
 
 // 处理笼位点击
@@ -1200,7 +1166,10 @@ const generatePDFAsArrayBuffer = () => {
   background-color: white;
   padding: 20px;
   border-radius: 8px;
-  width: 400px;
+  width: 90%;
+  max-width: 500px;
+  max-height: 90vh;
+  overflow-y: auto;
   box-shadow: 0 4px 20px rgba(0, 0, 0, 0.2);
 }
 
@@ -1225,6 +1194,7 @@ const generatePDFAsArrayBuffer = () => {
   border: 1px solid #ddd;
   border-radius: 4px;
   font-size: 14px;
+  box-sizing: border-box;
 }
 
 .dialog-buttons {
