@@ -92,6 +92,12 @@
             <th @click="sortBy('live_status')">
               存活状态 <i :class="sortIcon('live_status')"></i>
             </th>
+            <th @click="sortBy('tests_planned')">
+              计划实验 <i :class="sortIcon('tests_planned')"></i>
+            </th>
+            <th @click="sortBy('tests_done')">
+              完成实验 <i :class="sortIcon('tests_done')"></i>
+            </th>
           </tr>
 
           <tr class="filter-row">
@@ -131,6 +137,12 @@
                 <option value=4>丢弃</option>
               </select>
             </th>
+            <th>
+              <input v-model.number="filters.tests_planned" @input="applyFilters" placeholder="实验编号" type="number">
+            </th>
+            <th>
+              <input v-model.number="filters.tests_done" @input="applyFilters" placeholder="实验编号" type="number">
+            </th>
           </tr>
 
         </thead>
@@ -159,6 +171,12 @@
                 mouse.live_status === 4 ? '丢弃' : 
                 '未知状态' 
               }}
+            </td>
+            <td>
+              {{ mouse.tests_planned.length > 0 ? mouse.tests_planned.join(', ') : '无' }}
+            </td>
+            <td>
+              {{ mouse.tests_done.length > 0 ? mouse.tests_done.join(', ') : '无' }}
             </td>
           </tr>
         </tbody>
@@ -571,7 +589,9 @@ const filters = reactive({
   days_old_max: null,
   weeks_old_min: null,
   weeks_old_max: null,
-  live_status: 1
+  live_status: 1,
+  tests_done: null,
+  tests_planned: null
 })
 
 // 父本母本选择
@@ -734,7 +754,9 @@ const resetSearch = () => {
     days_old_max: null,
     weeks_old_min: null,
     weeks_old_max: null,
-    live_status: -1
+    live_status: -1,
+    tests_done: null,
+    tests_planned: null
   })
   applyFilters()
 }
@@ -788,6 +810,12 @@ const applyFilters = () => {
   }
   if (filters.live_status >= 0) {
     result = result.filter(m => m.live_status === filters.live_status)
+  }
+  if (filters.tests_done) {
+    result = result.filter(m => m.tests_done.includes(filters.tests_done))
+  }
+  if (filters.tests_planned) {
+    result = result.filter(m => m.tests_planned.includes(filters.tests_planned))
   }
   
   // 应用排序
@@ -1374,6 +1402,15 @@ onMounted(async () => {
 }
 .mouse-table tbody tr.selected-multiple {
     background-color: #d1ecf1;
+}
+        
+/* 选中行悬停样式 */
+.mouse-table tbody tr.selected:hover {
+    background-color: #c2d9e9 !important;
+}
+
+.mouse-table tbody tr.selected-multiple:hover {
+    background-color: #bde1e6 !important;
 }
 
 /* 模态框样式 */

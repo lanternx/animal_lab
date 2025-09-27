@@ -75,7 +75,7 @@
                 :class="{ 'active': isActive }"
                 @click="navigate"
               >
-                <div class="number-badge">{{ index+1 }}</div>
+                <div class="number-badge">{{ expr.id }}</div>
                 <span v-if="!sidebarCollapsed">{{ expr.name }}</span>
                 <div class="tooltip" v-if="sidebarCollapsed">{{ expr.name }}</div>
               </div>

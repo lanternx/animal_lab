@@ -1661,7 +1661,7 @@ def add_mouse_to_group(experiment_id):
             return jsonify({'error': 'mouse_id是必需的'}), 400
         
         # 验证实验和小鼠是否存在
-        Experiment.query.get_or_404(experiment_id)
+        ExperimentType.query.get_or_404(experiment_id)
         Mouse.query.get_or_404(mouse_id)
 
         if from_class_id:
@@ -1688,7 +1688,6 @@ def add_mouse_to_group(experiment_id):
             )
             db.session.add(experiment_class)
         db.session.commit()
-        
         return jsonify({'message': '小鼠已成功添加到分组', 'id': experiment_class.id})
     except Exception as e:
         db.session.rollback()

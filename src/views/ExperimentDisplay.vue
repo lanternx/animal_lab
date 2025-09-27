@@ -132,12 +132,15 @@
             <!-- 候选小鼠 -->
             <div class="mb-4">
             <h5>候选小鼠 ({{ candidateMice.length }})</h5>
-            <div class="candidate-list" @dragover.prevent @drop="onDrop($event, null)">
+            <div class="candidate-list" @dragover.prevent @drop="onDrop($event, '')">
                 <div v-for="mouse in candidateMice" :key="mouse.tid" class="candidate-item"
-                draggable="true" @dragstart="onDragStart($event, null)">
-                <div class="mouse-info" @click="toggleCandidateSelection(mouse.tid)">
-                    {{ mouse.id }} ({{ mouse.genotype }}, {{ mouse.sex }}, {{ mouse.birth_date }})
-                </div>
+                draggable="true" @dragstart="onDragStart($event, '', mouse.tid)"
+                :class="{
+                        'selected': isSelected(mouse.tid)
+                    }">
+                    <div class="mouse-info" @click="toggleCandidateSelection(mouse.tid)">
+                        {{ mouse.id }} ({{ mouse.genotype }}, {{ mouse.sex }}, {{ mouse.birth_date }})
+                    </div>
                 </div>
             </div>
             </div>
@@ -166,16 +169,16 @@
                     <i class="material-icons">edit</i>
                     </button>
                 </div>
-                <button class="btn btn-sm btn-danger" @click="clearSelection">
-                    <i class="material-icons">clear</i>
-                </button>
                 <button class="btn btn-sm btn-danger" @click="deleteGroup(groupId)">
                     <i class="material-icons">delete</i>
                 </button>
                 </div>
                 <div class="group-body">
                 <div v-for="mouse in group" :key="mouse.mouse_id" class="mouse-item"
-                    draggable="true" @dragstart="onDragStart($event, groupId)">
+                    draggable="true" @dragstart="onDragStart($event, groupId, mouse.mouse_id)"
+                    :class="{
+                        'selected': isSelected(mouse.tid)
+                    }">
                     <div class="mouse-info" @click="toggleCandidateSelection(mouse.tid)">
                     {{ mouse.mouse_info.id }} ({{ mouse.mouse_info.genotype }}, {{ mouse.mouse_info.sex }}, {{ mouse.birth_date }})
                     </div>
@@ -573,23 +576,36 @@ if (index > -1) {
 }
 }
 
-function onDragStart(event, groupId) {
-const ids = selectedCandidates.value.join(',');
-event.dataTransfer.setData('mouseIds', ids);
-event.dataTransfer.setData('groupId', groupId);
+function isSelected(tid) {
+return selectedCandidates.value.includes(tid);
+}
+
+function onDragStart(event, groupId, mouseId) {
+    let ids = '';
+    if (selectedCandidates.value.length === 0) {
+        ids = mouseId;
+    } else {
+        if (!selectedCandidates.value.includes(mouseId)) {
+            selectedCandidates.value.push(mouseId);
+        }
+        ids = selectedCandidates.value.join(',');
+    }
+    event.dataTransfer.setData('mouseIds', ids);
+    event.dataTransfer.setData('groupId', groupId);
 }
 
 function onDrop(event, toGroupId) {
-const mouseIds = event.dataTransfer.getData('mouseIds').split(',');
-const fromGroupId = event.dataTransfer.getData('groupId');
-
-mouseIds.forEach(id => {
-    changeMouseGroup(id, toGroupId, fromGroupId);
-});
+    const mouseIds = event.dataTransfer.getData('mouseIds').split(',').map(Number);
+    const fromGroupId = event.dataTransfer.getData('groupId');
+    toast.info(mouseIds)
+    mouseIds.forEach(id => {
+        changeMouseGroup(id, fromGroupId, toGroupId);
+    });
 }
 
 async function changeMouseGroup(mouseId, groupId, newGroupId) {
 try {
+    toast.info(mouseId + ' ' + groupId + ' ' + newGroupId)
     await axios.post(`/api/experiment/${experimentId.value}/class_change`, {
     mouse_id: mouseId,
     class_id: groupId,
@@ -598,6 +614,7 @@ try {
     
     await fetchCandidateMice();
     await fetchGroups();
+    selectedCandidates.value = [];
 } catch (error) {
     console.error('添加小鼠到分组失败:', error);
     toast.error('添加小鼠到分组失败: ' + error.message);
@@ -966,10 +983,16 @@ justify-content: space-between;
 align-items: center;
 padding: 8px;
 border-bottom: 1px solid #f1f1f1;
+transition: background-color 0.2s ease;
+cursor: pointer;
 }
 
 .candidate-item:last-child {
 border-bottom: none;
+}
+
+.candidate-item.selected {
+    background-color: #d4e6f1;
 }
 
 .groups-container {
@@ -1012,6 +1035,10 @@ border-bottom: 1px solid #f1f1f1;
 
 .mouse-item:last-child {
 border-bottom: none;
+}
+
+.mouse-item.selected {
+    background-color: #d4e6f1;
 }
 
 .add-group {
@@ -1199,6 +1226,10 @@ background: white;
 .group-name-container {
 flex-grow: 1;
 margin-right: 10px;
+display: flex;
+flex-direction: row;
+align-items: center;
+gap: 10px;  
 }
 
 .group-name-display {
