@@ -37,17 +37,8 @@
         </button>
     </div>
     <!-- 数据展示区域 -->
-    <div class="data-display">
-        <!-- 图表展示区域 -->
-        <div v-if="hasData" class="chart-container">
+    <div v-if="hasData" class="chart-container" id="chart-container">
         <canvas id="experimentChart"></canvas>
-        </div>
-        
-        <!-- 无数据提示 -->
-        <div v-else class="no-data">
-        <i class="material-icons">bar_chart</i>
-        <p>暂无数据，请点击"生成图表"按钮查看可视化结果</p>
-        </div>
     </div>
     </div>
 
@@ -231,6 +222,7 @@ import { toast } from 'vue3-toastify';
 import 'vue3-toastify/dist/index.css';
 import { TabulatorFull as Tabulator } from 'tabulator-tables';
 import 'tabulator-tables/dist/css/tabulator.min.css';
+import { Chart } from 'chart.js';
 
 //切换实验时
 onBeforeRouteUpdate((to, from) => {
@@ -252,7 +244,7 @@ const activeTab = ref('visualization');
 const experimentData = ref([]);
 const fieldDefinitions = ref([]);
 const hasData = ref(false);
-let experimentChart = null;
+const colors = ['#F27970', '#BB9727', '#54B345', '#32B897', '#05B9E2', '#8983BF', '#C76DA2', "#743027"];
 
 // 分组管理状态
 const candidateMice = ref([]);
@@ -496,6 +488,8 @@ try {
     
     // 初始化 Tabulator
     initTabulator();
+
+    generateChart()
 } catch (error) {
     console.error('初始化失败:', error);
     toast.error('初始化失败: ' + error.message);
@@ -506,7 +500,6 @@ function initTabulator() {
 if (!tabulatorRef.value) return;
     
 tabulatorInstance.value = new Tabulator(tabulatorRef.value, {
-    height: "300px",
     data: processedData.value,
     columns: columnDefs.value.map(col => ({
         ...col,
@@ -800,34 +793,538 @@ if (!hasData.value) {
     return;
 }
 
-nextTick(() => {
-    const ctx = document.getElementById('experimentChart');
-    if (!ctx) return;
+    // 清空图表容器
+    const chartContainer = document.getElementById('chart-container');
+    if (!chartContainer) return;
     
-    if (experimentChart) {
-    experimentChart.destroy();
-    }
+    chartContainer.innerHTML = '';
     
+    // 获取字段定义
     const xFields = fieldDefinitions.value.filter(f => f.visualize_type === 'x');
     const yFields = fieldDefinitions.value.filter(f => f.visualize_type === 'y');
     const columnFields = fieldDefinitions.value.filter(f => f.visualize_type === 'column');
     
-    if (xFields.length > 0 && yFields.length > 0) {
-    createXYChart(ctx, xFields, yFields);
-    } else if (columnFields.length > 0) {
-    createColumnChart(ctx, columnFields);
-    } else if (yFields.length > 0 && xFields.length === 0) {
-    console.log('只有Y字段，不绘制图表');
+    // 如果没有可视化字段，提示用户
+    if (xFields.length === 0 && yFields.length === 0 && columnFields.length === 0) {
+        const noVizFields = document.createElement('div');
+        noVizFields.className = 'no-data';
+        noVizFields.innerHTML = `
+        <i class="material-icons">bar_chart</i>
+        <p>没有配置可视化字段，请在字段设置中指定x、y或column类型</p>
+        `;
+        chartContainer.appendChild(noVizFields);
+        return;
     }
-});
+
+    // 处理数据分组
+    const groupedData = {};
+    processedData.value.forEach(item => {
+        const group = item.group;
+        if (!groupedData[group]) {
+        groupedData[group] = [];
+        }
+        groupedData[group].push(item);
+    });
+
+    // 创建图表包装器
+    const chartsWrapper = document.createElement('div');
+    chartsWrapper.className = 'charts-wrapper';
+    chartContainer.appendChild(chartsWrapper);
+    
+    // 创建X-Y图表（散点图/折线图）
+    if (xFields.length > 0 && yFields.length > 0) {
+        // 为每个X-Y组合创建图表
+        xFields.forEach((xField, xIndex) => {
+        yFields.forEach((yField, yIndex) => {
+            const chartCard = document.createElement('div');
+            chartCard.className = 'chart-card';
+            
+            const canvas = document.createElement('canvas');
+            canvas.id = `chart-xy-${xField.id}-${yField.id}`;
+            canvas.className = 'chart-canvas';
+            canvas.width = 300;
+            canvas.height = 400;
+            chartCard.appendChild(canvas);
+            chartsWrapper.appendChild(chartCard);
+            
+            createXYChart(canvas, xField, yField, groupedData);
+        });
+        });
+    }
+
+    // 创建柱状图
+    if (columnFields.length > 0) {
+    columnFields.forEach((columnField, colIndex) => {
+        const chartCard = document.createElement('div');
+        chartCard.className = 'chart-card';
+        
+        const canvas = document.createElement('canvas');
+        canvas.id = `chart-column-${columnField.id}`;
+        canvas.className = 'chart-canvas';
+        canvas.width = 300;
+        canvas.height = 400;
+        chartCard.appendChild(canvas);
+        chartsWrapper.appendChild(chartCard);
+        
+        createBoxPlotWithPoints(canvas, columnField, groupedData); // 使用新函数
+    });
+    }
+
+    // 如果只有Y字段，创建箱线图+散点图
+    if (xFields.length === 0 && yFields.length > 0 && columnFields.length === 0) {
+    yFields.forEach((columnField, colIndex) => {
+        const chartCard = document.createElement('div');
+        chartCard.className = 'chart-card';
+        
+        const canvas = document.createElement('canvas');
+        canvas.id = `chart-column-${columnField.id}`;
+        canvas.className = 'chart-canvas';
+        canvas.width = 300;
+        canvas.height = 400;
+        chartCard.appendChild(canvas);
+        chartsWrapper.appendChild(chartCard);
+        
+        createBoxPlotWithPoints(canvas, columnField, groupedData); // 使用新函数
+    });
+    }
+
+    // 如果只有X字段，创建频率分布图
+    if (xFields.length > 0 && yFields.length === 0 && columnFields.length === 0) {
+        xFields.forEach((xField, xIndex) => {
+        const chartCard = document.createElement('div');
+        chartCard.className = 'chart-card';
+        
+        const canvas = document.createElement('canvas');
+        canvas.id = `chart-dist-${xField.id}`;
+        canvas.className = 'chart-canvas';
+        canvas.width = 300;
+        canvas.height = 400;
+        chartCard.appendChild(canvas);
+        chartsWrapper.appendChild(chartCard);
+        
+        createDistributionChart(canvas, xField, groupedData);
+        });
+    }
 }
 
-function createXYChart(ctx, xFields, yFields) {
-console.log('创建XY图表', xFields, yFields);
+function createXYChart(canvas, xField, yField, groupedData) {
+    const ctx = canvas.getContext('2d');
+
+    // 准备数据集
+    const datasets = [];
+    // 检查x字段是否为日期类型
+    const isDateField = xField.data_type === 'DATE';
+
+    Object.keys(groupedData).forEach((groupName, index) => {
+        const groupData = groupedData[groupName];
+        const data = [];
+        
+        groupData.forEach(item => {
+            const xValue = item[`field_${xField.id}`];
+            const yValue = item[`field_${yField.id}`];
+            
+            // 如果是日期字段，将日期字符串转换为时间戳
+            if (isDateField && xValue) {
+                // 处理日期格式，确保它能被正确解析
+                if (typeof xValue === 'string') {
+                    xValue = new Date(xValue).getTime();
+                } else if (xValue instanceof Date) {
+                    xValue = xValue.getTime();
+                }
+            }
+            if (xValue !== null && yValue !== null && !isNaN(xValue) && !isNaN(yValue)) {
+                data.push({
+                x: parseFloat(xValue),
+                y: parseFloat(yValue)
+                });
+            }
+        });
+        
+        // 按x值排序
+        data.sort((a, b) => a.x - b.x);
+        
+        datasets.push({
+            label: groupName,
+            data: data,
+            borderColor: colors[index % colors.length],
+            backgroundColor: 'rgba(0, 0, 0, 0)',
+            tension: 0.1,
+            pointRadius: 5,
+            pointHoverRadius: 7,
+            showLine: false
+        });
+    });
+
+    // 如果是日期字段，配置x轴为时间刻度
+    if (isDateField) {
+        chartConfig.options.scales.x = {
+        type: 'time',
+        time: {
+            parser: 'yyyy-MM-dd', // 根据您的日期格式调整
+            tooltipFormat: 'yyyy-MM-dd',
+            displayFormats: {
+            day: 'MMM dd',
+            week: 'MMM dd',
+            month: 'MMM yyyy',
+            year: 'yyyy'
+            }
+        },
+        title: {
+            display: true,
+            text: `${xField.field_name}${xField.unit ? ` (${xField.unit})` : ''}`
+        }
+        };
+    }
+    
+    // 创建图表
+    new Chart(ctx, {
+        type: 'scatter',
+        data: {
+        datasets: datasets
+        },
+        options: {
+        responsive: true,
+        maintainAspectRatio: false,
+        scales: {
+            x: {
+            title: {
+                display: true,
+                text: `${xField.field_name}${xField.unit ? ` (${xField.unit})` : ''}`
+            }
+            },
+            y: {
+            title: {
+                display: true,
+                text: `${yField.field_name}${yField.unit ? ` (${yField.unit})` : ''}`
+            }
+            }
+        },
+        plugins: {
+            title: {
+            display: true,
+            text: `${xField.field_name} vs ${yField.field_name}`,
+            font: {
+                size: 16
+            }
+            },
+            tooltip: {
+            callbacks: {
+                label: function(context) {
+                    return `${context.dataset.label}: (${context.parsed.x}, ${context.parsed.y})`;
+                }
+            }
+            }
+        }
+        }
+    });
 }
 
-function createColumnChart(ctx, columnFields) {
-console.log('创建柱状图', columnFields);
+// 创建箱线图+散点图函数
+function createBoxPlotWithPoints(canvas, columnField, groupedData) {
+  const ctx = canvas.getContext('2d');
+  
+  // 准备数据
+  const groupNames = Object.keys(groupedData);
+  const scatterData = [];
+  const boxPlotStats = [];
+  let globalMin = Infinity;
+  let globalMax = -Infinity;
+
+  // 为每个分组计算统计数据
+  groupNames.forEach((groupName, groupIndex) => {
+    const groupItems = groupedData[groupName];
+    
+    // 获取该分组所有小鼠在该字段上的值
+    const values = groupItems
+      .map(item => {
+        const value = parseFloat(item[`field_${columnField.id}`]);
+        return isNaN(value) ? null : value;
+      })
+      .filter(val => val !== null);
+    
+    if (values.length > 0) {
+      // 排序以便计算分位数
+      values.sort((a, b) => a - b);
+      
+      // 计算五数概括
+      const min = values[0];
+      const q1 = calculateQuartile(values, 0.25);
+      const median = calculateMedian(values);
+      const q3 = calculateQuartile(values, 0.75);
+      const max = values[values.length - 1];
+      
+      boxPlotStats.push({
+        min, q1, median, q3, max
+      });
+      
+      // 散点数据（显示原始数据点）
+      values.forEach((value, index) => {
+        // 为散点添加一些随机偏移，避免重叠
+        const xOffset = (Math.random() - 0.5) * 0.2;
+        scatterData.push({
+          x: groupIndex + xOffset,
+          y: value,
+          groupIndex: groupIndex
+        });
+      });
+    } else {
+      boxPlotStats.push({ min: 0, q1: 0, median: 0, q3: 0, max: 0 });
+    }
+  });
+
+  // 如果全局最小值和最大值仍然是Infinity，则设置为0
+  if (globalMin === Infinity) globalMin = 0;
+  if (globalMax === -Infinity) globalMax = 1;
+  
+  // 计算y轴的范围，留出一些边距
+  const padding = (globalMax - globalMin) * 0.1;
+  const yMin = globalMin - padding;
+  const yMax = globalMax + padding;
+  
+  // 创建组合图表
+  new Chart(ctx, {
+    data: {
+      labels: groupNames,
+      datasets: [
+        // 散点图（显示原始数据点）
+        {
+          type: 'scatter',
+          label: '原始数据点',
+          data: scatterData.map(point => ({
+            x: point.x,
+            y: point.y
+          })),
+          backgroundColor: scatterData.map(point => colors[point.groupIndex] + 'AA'), // 半透明
+          borderColor: '#FFFFFF',
+          borderWidth: 1,
+          pointRadius: 4,
+          pointHoverRadius: 6
+        }
+      ]
+    },
+    options: {
+      responsive: true,
+      maintainAspectRatio: false,
+      scales: {
+        y: {
+          beginAtZero: false,
+          min: yMin,
+          max: yMax,
+          title: {
+            display: true,
+            text: `${columnField.field_name}${columnField.unit ? ` (${columnField.unit})` : ''}`
+          }
+        },
+        x: {
+          title: {
+            display: true,
+            text: '分组'
+          },
+          min: -0.5,
+          max: groupNames.length - 0.5,
+          ticks: {
+            callback: function(value, index, values) {
+              return groupNames[value] || '';
+            }
+          }
+        }
+      },
+      plugins: {
+        title: {
+          display: true,
+          text: `${columnField.field_name}的分布（箱线图+散点图）`,
+          font: {
+            size: 16
+          }
+        },
+        tooltip: {
+          callbacks: {
+            label: function(context) {
+              if (context.dataset.type === 'scatter') {
+                return `数据点: ${context.parsed.y.toFixed(2)}`;
+              }
+              return `${context.dataset.label}: ${context.parsed.y.toFixed(2)}`;
+            }
+          }
+        },
+        legend: {
+          position: 'top'
+        }
+      }
+    },
+    plugins: [{
+      // 自定义插件绘制箱线图
+      afterDraw: function(chart) {
+        const ctx = chart.ctx;
+        const xAxis = chart.scales.x;
+        const yAxis = chart.scales.y;
+        
+        // 绘制每个分组的箱线图
+        groupNames.forEach((groupName, groupIndex) => {
+          const stats = boxPlotStats[groupIndex];
+          if (!stats) return;
+          
+          const xCenter = xAxis.getPixelForValue(groupIndex);
+          const boxWidth = 20;
+          const whiskerWidth = 10;
+          
+          // 设置颜色
+          ctx.strokeStyle = colors[groupIndex];
+          ctx.fillStyle = colors[groupIndex] + '40'; // 半透明填充
+          ctx.lineWidth = 1.5;
+          
+          // 绘制箱体 (Q1到Q3)
+          const boxTop = yAxis.getPixelForValue(stats.q3);
+          const boxBottom = yAxis.getPixelForValue(stats.q1);
+          const boxHeight = boxBottom - boxTop;
+          
+          ctx.fillRect(xCenter - boxWidth/2, boxTop, boxWidth, boxHeight);
+          ctx.strokeRect(xCenter - boxWidth/2, boxTop, boxWidth, boxHeight);
+          
+          // 绘制中位数线
+          const medianY = yAxis.getPixelForValue(stats.median);
+          ctx.beginPath();
+          ctx.moveTo(xCenter - boxWidth/2, medianY);
+          ctx.lineTo(xCenter + boxWidth/2, medianY);
+          ctx.strokeStyle = colors[groupIndex];
+          ctx.lineWidth = 2;
+          ctx.stroke();
+          
+          // 绘制须线
+          const minY = yAxis.getPixelForValue(stats.min);
+          const maxY = yAxis.getPixelForValue(stats.max);
+          
+          // 上须线
+          ctx.beginPath();
+          ctx.moveTo(xCenter, boxTop);
+          ctx.lineTo(xCenter, minY);
+          ctx.stroke();
+          
+          // 下须线
+          ctx.beginPath();
+          ctx.moveTo(xCenter, boxBottom);
+          ctx.lineTo(xCenter, maxY);
+          ctx.stroke();
+          
+          // 绘制须线端点
+          // 上端点
+          ctx.beginPath();
+          ctx.moveTo(xCenter - whiskerWidth/2, minY);
+          ctx.lineTo(xCenter + whiskerWidth/2, minY);
+          ctx.stroke();
+          
+          // 下端点
+          ctx.beginPath();
+          ctx.moveTo(xCenter - whiskerWidth/2, maxY);
+          ctx.lineTo(xCenter + whiskerWidth/2, maxY);
+          ctx.stroke();
+        });
+      }
+    }]
+  });
+}
+
+// 计算中位数的辅助函数
+function calculateMedian(values) {
+  const sorted = [...values].sort((a, b) => a - b);
+  const mid = Math.floor(sorted.length / 2);
+  
+  if (sorted.length % 2 === 0) {
+    return (sorted[mid - 1] + sorted[mid]) / 2;
+  } else {
+    return sorted[mid];
+  }
+}
+
+// 计算四分位数的辅助函数
+function calculateQuartile(values, quartile) {
+  const sorted = [...values].sort((a, b) => a - b);
+  const pos = (sorted.length - 1) * quartile;
+  const base = Math.floor(pos);
+  const rest = pos - base;
+  
+  if (sorted[base + 1] !== undefined) {
+    return sorted[base] + rest * (sorted[base + 1] - sorted[base]);
+  } else {
+    return sorted[base];
+  }
+}
+
+function createDistributionChart(canvas, xField, groupedData) {
+  const ctx = canvas.getContext('2d');
+  
+  // 准备数据集
+  const datasets = [];
+  
+  Object.keys(groupedData).forEach((groupName, index) => {
+    const groupData = groupedData[groupName];
+    const values = groupData
+      .map(item => parseFloat(item[`field_${xField.id}`]))
+      .filter(val => !isNaN(val));
+    
+    // 计算频率分布
+    const min = Math.min(...values);
+    const max = Math.max(...values);
+    const range = max - min;
+    const binCount = Math.min(10, Math.ceil(Math.sqrt(values.length)));
+    const binSize = range / binCount;
+    
+    const bins = Array(binCount).fill(0).map((_, i) => ({
+      x: min + (i + 0.5) * binSize,
+      y: 0
+    }));
+    
+    values.forEach(value => {
+      const binIndex = Math.min(
+        binCount - 1, 
+        Math.floor((value - min) / binSize)
+      );
+      bins[binIndex].y += 1;
+    });
+    
+    datasets.push({
+      label: groupName,
+      data: bins,
+      borderColor: colors[index % colors.length],
+      backgroundColor: 'rgba(0, 0, 0, 0)',
+      tension: 0.1
+    });
+  });
+  
+  // 创建图表
+  new Chart(ctx, {
+    type: 'line',
+    data: {
+      datasets: datasets
+    },
+    options: {
+      responsive: true,
+      maintainAspectRatio: false,
+      scales: {
+        x: {
+          title: {
+            display: true,
+            text: `${xField.field_name}${xField.unit ? ` (${xField.unit})` : ''}`
+          }
+        },
+        y: {
+          title: {
+            display: true,
+            text: '频率'
+          }
+        }
+      },
+      plugins: {
+        title: {
+          display: true,
+          text: `${xField.field_name}的频率分布`,
+          font: {
+            size: 16
+          }
+        }
+      }
+    }
+  });
 }
 
 function initRecordData() {
@@ -960,9 +1457,25 @@ box-shadow: 0 2px 8px rgba(0,0,0,0.1);
 }
 
 .chart-container {
+display: flex;
+flex-wrap: wrap;
+gap: 20px;
+justify-content: center;
 position: relative;
+overflow-y: auto;
+height: 90%;
+width: 90%;
+min-height: 500px;
+}
+
+.chart-canvas {
+width: 300px;
 height: 400px;
-width: 100%;
+border: 1px solid #e0e0e0;
+border-radius: 8px;
+padding: 15px;
+background: white;
+box-shadow: 0 2px 8px rgba(0,0,0,0.1);
 }
 
 .no-data {
@@ -1238,6 +1751,10 @@ font-weight: 500;
 
 .tab-content {
 padding: 10px 0;
+flex-direction: column;
+flex: 1;
+display: flex;
+max-width: 95%;
 }
 
 .data-table-container {
@@ -1245,7 +1762,7 @@ background: white;
 border-radius: 8px;
 padding: 20px;
 box-shadow: 0 2px 8px rgba(0,0,0,0.1);
-max-width: 90%;
+max-width: 95%;
 max-height: 90%;
 overflow: auto;
 }
@@ -1312,5 +1829,40 @@ background: white;
 border-radius: 8px;
 overflow: auto;
 box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+}
+
+.charts-wrapper {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 20px;
+  justify-content: center;
+  width: 100%;
+}
+
+.chart-card {
+  flex: 0 0 calc(50% - 20px);
+  margin-bottom: 20px;
+  background: white;
+  border-radius: 8px;
+  box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+  padding: 15px;
+  width: 330px; /* 400px + 左右padding */
+  height: 430px; /* 最小宽度 */
+}
+
+
+/* 图表标题样式 */
+.chart-title {
+  font-size: 16px;
+  font-weight: bold;
+  margin-bottom: 10px;
+  text-align: center;
+}
+
+@media (max-width: 1024px) {
+  .chart-card {
+    flex: 0 0 100%;
+    min-width: auto;
+  }
 }
 </style>

@@ -748,7 +748,7 @@ setup() {
                         position: 'top',
                         labels: {
                             filter: item => !item.text.includes('数据点') && 
-                                   !item.text.includes('置信区间下界')
+                                    !item.text.includes('置信区间下界')
                         }
                     },
                     tooltip: {
