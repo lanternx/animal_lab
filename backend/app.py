@@ -914,6 +914,10 @@ def export_data(export_type):
                 })
         df = pd.DataFrame(data)
         return create_export_file(df, export_format, filename='survival_export')
+    elif export_type == 'experiment':
+        ids = request.args.getlist('experiment_ids[]')
+        ids = [int(id) for id in ids] if ids else []
+        return export_experiments_to_excel(ids)
     else:
         return jsonify({'error': '无效的导出类型'}), 400
     
@@ -1673,7 +1677,7 @@ def add_mouse_to_group(experiment_id):
         from_class_id = data.get('class_id')
         to_class_id = data.get('class_new_id')
         
-        if not mouse_id or (from_class_id and to_class_id):
+        if not mouse_id:
             return jsonify({'error': 'mouse_id是必需的'}), 400
         
         # 验证实验和小鼠是否存在
@@ -1879,7 +1883,7 @@ def update_experiment(experiment_id):
                     field_definition_id=fdi
                 )
                 db.session.add(experiment_value)
-                
+
             # 根据字段类型设置值
             if field_def.data_type == 'INTEGER':
                 try:
@@ -1944,6 +1948,181 @@ def delete_experiment(experiment_id):
         db.session.rollback()
         return jsonify({'error': str(e)}), 500
 
+
+def get_experiment_data_by_type(experiment_ids):
+    '''获取某些实验类型的所有实验数据，返回DataFrame形式'''
+    exp_types = []
+    for t in experiment_ids:
+        exp_types.append(ExperimentType.query.get(t))
+        
+    # 存储每种实验类型的数据
+    experiment_dfs = {}
+    for exp_type in exp_types:
+        # 获取该实验类型的所有字段定义（按显示顺序排序）
+        field_defs = (db.session.query(FieldDefinition)
+                        .filter(FieldDefinition.experiment_type_id == exp_type.id)
+                        .order_by(FieldDefinition.display_order)
+                        .all())
+        
+        # 获取该类型的所有实验记录
+        experiments = (db.session.query(Experiment)
+                        .filter(Experiment.experiment_type_id == exp_type.id)
+                        .all())
+        
+        # 准备数据容器
+        data_rows = []
+        classes_info = ExperimentClass.query.filter_by(experiment_id = exp_type.id)
+        for exp in experiments:
+            # 获取分组信息
+            class_info = classes_info.filter_by(mouse_id = exp.mouse_id).first()
+            
+            # 获取实验的基本信息
+            row_data = {
+                'experiment_id': exp.id,
+                'mouse_id': Mouse.query.get(exp.mouse_id).id if exp.mouse_id else None,
+                'class_id': class_info.class_id if class_info else None,
+                'researcher': exp.researcher,
+                'date': exp.date,
+                'notes': exp.notes
+            }
+            
+            # 获取该实验的所有值
+            values = ExperimentValue.query.filter_by(experiment_id = exp.id).all()
+            
+            # 将值添加到行数据中
+            for value in values:
+                # 获取字段定义
+                field_def = value.field_definition
+                
+                # 根据数据类型获取正确的值
+                if field_def.data_type == 'INTEGER':
+                    val = value.value_int
+                elif field_def.data_type == 'REAL':
+                    val = value.value_real
+                elif field_def.data_type == 'TEXT':
+                    val = value.value_text
+                elif field_def.data_type == 'BOOLEAN':
+                    val = value.value_bool
+                elif field_def.data_type == 'DATE':
+                    val = value.value_date
+                else:
+                    val = None
+                
+                # 添加单位信息到列名
+                col_name = field_def.field_name
+                if field_def.unit:
+                    col_name = f"{col_name} ({field_def.unit})"
+                
+                row_data[col_name] = val
+            data_rows.append(row_data)
+        
+        # 创建DataFrame
+        if data_rows:
+            df = pd.DataFrame(data_rows)
+            
+            # 确保所有字段都有列（即使某些实验没有该字段的值）
+            for field_def in field_defs:
+                col_name = field_def.field_name
+                if field_def.unit:
+                    col_name = f"{col_name} ({field_def.unit})"
+            
+            # 重新排序列
+            base_columns = ['experiment_id', 'class_id', 'mouse_id', 'researcher', 'date', 'notes']
+            field_columns = [f"{fd.field_name} ({fd.unit})" if fd.unit else fd.field_name 
+                            for fd in field_defs]
+            df = df[base_columns + field_columns]
+            
+            experiment_dfs[exp_type.name] = df
+    
+    return experiment_dfs
+
+def export_experiments_to_excel(ids, filename='experiments_export'):
+    try:
+        # 获取按实验类型分表的数据
+        experiment_dfs = get_experiment_data_by_type(ids)
+
+        output = BytesIO()
+        # 创建Excel写入器
+        with pd.ExcelWriter(output, engine='openpyxl') as writer:
+            # 写入每个实验类型的数据到单独的工作表
+            for exp_type_name, df in experiment_dfs.items():
+                # 清理工作表名称
+                sheet_name = clean_sheet_name(exp_type_name)
+                
+                # 写入工作表
+                df.to_excel(writer, index=False, sheet_name=sheet_name)
+                
+                # 获取工作表对象进行格式设置
+                worksheet = writer.sheets[sheet_name]
+                
+                # 设置列宽（自动调整）
+                auto_adjust_column_widths(worksheet)
+                
+                # 冻结首行
+                worksheet.freeze_panes = 'A2'
+            
+            # 添加汇总工作表
+            add_summary_sheet(writer, experiment_dfs)
+        output.seek(0)
+        return send_file(output, as_attachment=True, download_name=f'{filename}.xlsx', mimetype='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet')
+    
+    except Exception as e:
+        return jsonify({'error': '导出失败'}), 500
+
+def clean_sheet_name(name):
+    """清理工作表名称以符合Excel要求"""
+    # 移除非法字符
+    illegal_chars = r':\/?*[]'
+    for char in illegal_chars:
+        name = name.replace(char, '')
+    
+    # 截断到31字符
+    return name[:31]
+
+def auto_adjust_column_widths(worksheet):
+    """自动调整列宽"""
+    for column in worksheet.columns:
+        max_length = 0
+        column_letter = column[0].column_letter
+        
+        # 计算列的最大宽度
+        for cell in column:
+            try:
+                cell_value = str(cell.value)
+                if len(cell_value) > max_length:
+                    max_length = len(cell_value)
+            except:
+                pass
+        
+        # 设置列宽（加缓冲空间）
+        adjusted_width = max_length + 2
+        worksheet.column_dimensions[column_letter].width = adjusted_width
+
+def add_summary_sheet(writer, experiment_dfs):
+    """添加汇总工作表"""
+    summary_data = []
+    
+    for exp_type_name, df in experiment_dfs.items():
+        # 计算日期范围
+        min_date = df['date'].min()
+        max_date = df['date'].max()
+        
+        summary_data.append({
+            '实验类型': exp_type_name,
+            '记录数量': len(df),
+            '字段数量': len(df.columns) - 8,  # 减去基础字段
+            '最早日期': min_date.strftime('%Y-%m-%d') if pd.notnull(min_date) else '无',
+            '最近日期': max_date.strftime('%Y-%m-%d') if pd.notnull(max_date) else '无',
+            '小鼠数量': df['mouse_id'].nunique()
+        })
+    
+    summary_df = pd.DataFrame(summary_data)
+    summary_df.to_excel(writer, index=False, sheet_name='汇总')
+    
+    # 设置汇总工作表格式
+    worksheet = writer.sheets['汇总']
+    auto_adjust_column_widths(worksheet)
+    worksheet.freeze_panes = 'A2'
 
 if __name__ == '__main__':
     with app.app_context():

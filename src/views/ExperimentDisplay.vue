@@ -506,6 +506,7 @@ function initTabulator() {
 if (!tabulatorRef.value) return;
     
 tabulatorInstance.value = new Tabulator(tabulatorRef.value, {
+    height: "300px",
     data: processedData.value,
     columns: columnDefs.value.map(col => ({
         ...col,
@@ -559,10 +560,7 @@ recordTabulatorInstance.value = new Tabulator(recordTabulatorRef.value, {
 function onSearchChange() {
     if (tabulatorInstance.value) {
         // 多字段搜索 - 使用 OR 逻辑
-        tabulatorInstance.value.setFilter([
-        {field: "id", type: "starts", value: searchTerm.value},
-        {field: "group", type: "starts", value: searchTerm.value}
-        ]);
+        tabulatorInstance.value.setFilter("id",  "starts", searchTerm.value);
     }
 }
 
@@ -588,15 +586,28 @@ function resetFilters() {
 
 function exportData() {
     if (tabulatorInstance.value) {
-        // 支持多种格式导出
-        tabulatorInstance.value.download("csv", `${experimentName.value}_数据.csv`, {
-        bom: true,
-        delimiter: ",",
-        });
-        
-        // 也可以导出其他格式
-        // tabulatorInstance.value.download("xlsx", `${experimentName.value}_数据.xlsx`);
-        // tabulatorInstance.value.download("pdf", `${experimentName.value}_数据.pdf`);
+        const params = {
+                experiment_ids: [experimentId.value],
+                format: 'xlsx'
+            };
+        axios.get(`/api/export/experiment`, { 
+            params,
+            responseType: 'blob'
+        })
+        .then(response => {
+            // 使用 PyWebview 的保存文件对话框
+            if (window.pywebview && window.pywebview.api) {
+                // 创建默认文件名
+                const filename = `experiment_export.xlsx`;
+                
+                response.data.arrayBuffer().then(arrayBuffer => {
+                    const uint8array = new Uint8Array(arrayBuffer);
+                    const dataArray = Array.from(uint8array);
+                    // 调用 PyWebview API 保存文件
+                    window.pywebview.api.save_file_dialog(dataArray, filename);
+                });
+            }
+        })
     }
 }
 

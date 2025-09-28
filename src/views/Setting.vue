@@ -127,10 +127,11 @@
         <button class="btn btn-primary" @click="exportData('weights')">导出体重表</button>
         <button class="btn btn-primary" @click="exportData('survival')">导出生存表</button>
         <button class="btn btn-primary" @click="exportData('records')">导出状态信息表</button>
+        <button class="btn btn-primary" @click="exportData('experiment')">导出实验记录表</button>
         </div>
         
         <div v-if="exportOptionsVisible" class="export-options">
-        <div v-if="currentExportType !== 'survival'" class="form-group">
+        <div v-if="currentExportType !== 'survival' || currentExportType !== 'experiment'" class="form-group">
             <label>时间范围</label>
             <div class="date-range">
             <input type="date" v-model="exportStartDate">
@@ -138,11 +139,34 @@
             <input type="date" v-model="exportEndDate">
             </div>
         </div>
-        
+        <table class="settings-table" v-if="currentExportType === 'experiment'" >
+            <thead>
+                <tr>
+                <th>实验类型名称</th>
+                <th>描述</th>
+                <th>字段数量</th>
+                <th>操作</th>
+                </tr>
+            </thead>
+            <tbody>
+            <template v-for="experimentType in experimentTypes" :key="experimentType.id">
+                <tr :class="{ selected: selectedExperiments.includes(experimentType.id) }">
+                    <td>{{ experimentType.name }}</td>
+                    <td>{{ experimentType.description }}</td>
+                    <td>{{ experimentType.fields ? experimentType.fields.length : 0 }}</td>
+                    <td class="action-cell">
+                        <button class="action-btn btn-info" @click="toggleSelect(experimentType.id)">
+                            {{ selectedExperiments.includes(experimentType.id) ? '取消' : '选择' }}
+                        </button>
+                    </td>
+                </tr>
+            </template>
+            </tbody>   
+        </table> 
         <div class="form-group">
             <label>文件格式</label>
             <select v-model="exportFormat">
-            <option value="csv">CSV</option>
+            <option v-if="currentExportType !== 'experiment'" value="csv">CSV</option>
             <option value="xlsx">Excel</option>
             </select>
         </div>
@@ -180,7 +204,7 @@
             <select v-model="importType">
             <option value="mice">小鼠信息</option>
             <option value="weights">体重数据</option>
-           <!-- <option value="pedigree">血统关系</option>功能尚未实现 -->
+            <!-- <option value="pedigree">血统关系</option>功能尚未实现 -->
             </select>
         </div>
         
@@ -706,6 +730,7 @@ data() {
     exportEndDate: '',
     exportFormat: 'xlsx',
     currentExportType: '',
+    selectedExperiments: [],
     
     // 导入设置
     selectedFile: null,
@@ -866,13 +891,24 @@ methods: {
     
     exportData(type) {
     this.currentExportType = type;
+    this.selectedExperiments = [];
     this.exportOptionsVisible = true;
+    },
+
+    toggleSelect(id) {
+    const index = this.selectedExperiments.indexOf(id);
+    if (index === -1) {
+        this.selectedExperiments.push(id);
+    } else {
+        this.selectedExperiments.splice(index, 1);
+    }
     },
     
     confirmExport() {
     const params = {
         start_date: this.exportStartDate,
         end_date: this.exportEndDate,
+        experiment_ids: this.selectedExperiments,
         format: this.exportFormat
     };
     
@@ -1377,6 +1413,10 @@ top: 0;
 
 .settings-table tbody tr:hover {
 background-color: #f5f7fa;
+}
+
+.settings-table tbody tr.selected {
+background-color: #d3f1d9;
 }
 
 .action-cell {
