@@ -221,13 +221,37 @@ class ExperimentValue(db.Model):
     
     # 与字段定义的关系
     field_definition = db.relationship('FieldDefinition', backref=db.backref('values', lazy=True))
-
+    def to_dict(self):
+        # 根据字段定义的数据类型获取对应的值
+        value = None
+        if self.field_definition:
+            if self.field_definition.data_type == 'INTEGER':
+                value = self.value_int
+            elif self.field_definition.data_type == 'REAL':
+                value = self.value_real
+            elif self.field_definition.data_type == 'TEXT':
+                value = self.value_text
+            elif self.field_definition.data_type == 'BOOLEAN':
+                value = self.value_bool
+            elif self.field_definition.data_type == 'DATE':
+                value = self.value_date.isoformat() if self.value_date else None
+        
+        return {
+            'id': self.id,
+            'experiment_id': self.experiment_id,
+            'field_definition_id': self.field_definition_id,
+            'value': value,
+            'field_name': self.field_definition.field_name if self.field_definition else None,
+            'data_type': self.field_definition.data_type if self.field_definition else None,
+            'unit': self.field_definition.unit if self.field_definition else None
+        }
+    
 #实验分组表
 class ExperimentClass(db.Model):
     id = db.Column(db.Integer, primary_key=True)
     mouse_id = db.Column(db.Integer, db.ForeignKey('mouse.tid'), nullable=False)
     experiment_id = db.Column(db.Integer, db.ForeignKey('experiment.id'), nullable=False)
-    class_id = db.Column(db.Integer, nullable=False)
+    class_id = db.Column(db.String, nullable=False)
 
     # 关系
     mouse = db.relationship('Mouse', backref=db.backref('experiment_classes', lazy=True))

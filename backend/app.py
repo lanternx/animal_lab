@@ -1647,6 +1647,22 @@ def get_experiment_groups(experiment_id):
         return jsonify(groups)
     except Exception as e:
         return jsonify({'error': str(e)}), 500
+    
+@app.route('/api/experiment/<int:experiment_id>/groups/<oldGroupId>', methods=['PUT'])
+def rename_experiment_group(experiment_id, oldGroupId):
+    """实验分组改名"""
+    new_id = request.get_json()['newGroupId']
+    try:
+        # 验证实验是否存在
+        ExperimentType.query.get_or_404(experiment_id)
+        experiment_classes = ExperimentClass.query.filter_by(experiment_id=experiment_id).filter_by(class_id=oldGroupId).all()
+        for ec in experiment_classes:
+            ec.class_id = new_id
+        db.session.commit()
+        return jsonify({'message': f'分组 {oldGroupId} 已重命名为 {new_id}'})
+    except Exception as e:
+        db.session.rollback()
+        return jsonify({'error': str(e)}), 500
 
 @app.route('/api/experiment/<int:experiment_id>/class_change', methods=['POST'])
 def add_mouse_to_group(experiment_id):
@@ -1692,11 +1708,6 @@ def add_mouse_to_group(experiment_id):
     except Exception as e:
         db.session.rollback()
         return jsonify({'error': str(e)}), 500
-    
-@app.route('/api/experiment/<int:experiment_id>/groups', methods=['POST'])
-def add_group(experiment_id):
-    """增加分组"""
-    pass
 
 @app.route('/api/experiment/<int:experiment_id>/groups/<int:class_id>', methods=['DELETE'])
 def delete_group(experiment_id, class_id):
@@ -1818,6 +1829,117 @@ def input_experiment_records():
         
         db.session.commit()
         return jsonify({'message': '实验记录保存成功', 'count': len(records)})
+    except Exception as e:
+        db.session.rollback()
+        return jsonify({'error': str(e)}), 500
+
+# 部分更新实验记录
+@app.route('/api/experiments/<int:experiment_id>', methods=['PATCH'])
+def update_experiment(experiment_id):
+    try:
+        # 获取请求数据
+        data = request.get_json()
+        if not data:
+            return jsonify({'error': '没有提供更新数据'}), 400
+        
+        # 获取实验记录
+        experiment = Experiment.query.get(experiment_id)
+        if not experiment:
+            return jsonify({'error': '实验记录未找到'}), 404
+        
+        # 更新基本字段
+        if 'researcher' in data:
+            experiment.researcher = data['researcher']
+        if 'date' in data:
+            try:
+                experiment.date = datetime.strptime(data['date'], '%Y-%m-%d').date()
+            except ValueError:
+                return jsonify({'error': '无效的日期格式，请使用 YYYY-MM-DD'}), 400
+        if 'notes' in data:
+            experiment.notes = data['notes']
+
+        # 更新实验值字段
+        if 'value' in data:
+            value_update = data['value'].get('field_value')
+            fdi = data['value'].get('field_definition_id')
+            # 验证字段定义是否存在
+            field_def = FieldDefinition.query.get(fdi)
+            if not field_def:
+                return jsonify({'error': f'字段定义 {fdi} 不存在'}), 400
+            
+            # 查找或创建实验值记录
+            experiment_value = ExperimentValue.query.filter_by(
+                experiment_id=experiment_id,
+                field_definition_id=fdi
+            ).first()
+            
+            if not experiment_value:
+                experiment_value = ExperimentValue(
+                    experiment_id=experiment_id,
+                    field_definition_id=fdi
+                )
+                db.session.add(experiment_value)
+                
+            # 根据字段类型设置值
+            if field_def.data_type == 'INTEGER':
+                try:
+                    experiment_value.value_int = int(value_update)
+                except ValueError:
+                    return jsonify({'error': f'字段 {field_def.field_name} 需要整数值'}), 400
+            elif field_def.data_type == 'REAL':
+                try:
+                    experiment_value.value_real = float(value_update)
+                except ValueError:
+                    return jsonify({'error': f'字段 {field_def.field_name} 需要数值'}), 400
+            elif field_def.data_type == 'TEXT':
+                experiment_value.value_text = str(value_update)
+            elif field_def.data_type == 'BOOLEAN':
+                if isinstance(value_update, bool):
+                    experiment_value.value_bool = value_update
+                elif isinstance(value_update, str):
+                    if value_update.lower() in ['true', '1', 'yes']:
+                        experiment_value.value_bool = True
+                    elif value_update.lower() in ['false', '0', 'no']:
+                        experiment_value.value_bool = False
+                    else:
+                        return jsonify({'error': f'字段 {field_def.field_name} 需要布尔值'}), 400
+                else:
+                    return jsonify({'error': f'字段 {field_def.field_name} 需要布尔值'}), 400
+            elif field_def.data_type == 'DATE':
+                try:
+                    experiment_value.value_date = datetime.strptime(value_update, '%Y-%m-%d').date()
+                except ValueError:
+                    return jsonify({'error': f'字段 {field_def.field_name} 需要日期值 (YYYY-MM-DD)'}), 400
+            else:
+                return jsonify({'error': f'未知的数据类型 {field_def.data_type}'}), 400
+        # 提交更改
+        db.session.commit()
+        return jsonify({
+            'message': '记录更新成功',
+            'data': experiment.to_dict()
+        }), 200
+        
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
+# 删除实验记录
+@app.route('/api/experiments/<int:experiment_id>', methods=['DELETE'])
+def delete_experiment(experiment_id):
+    try:
+        # 获取实验记录
+        experiment = Experiment.query.get(experiment_id)
+        if not experiment:
+            return jsonify({'error': '实验记录未找到'}), 404
+        
+        # 删除实验记录（关联的实验值会自动删除，因为有 cascade='all, delete-orphan'）
+        db.session.delete(experiment)
+        db.session.commit()
+        
+        return jsonify({
+            'message': '实验记录删除成功',
+            'deleted_id': experiment_id
+        }), 200
+        
     except Exception as e:
         db.session.rollback()
         return jsonify({'error': str(e)}), 500

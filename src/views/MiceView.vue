@@ -11,7 +11,7 @@
       </div>
       
       <!-- 搜索控件 -->
-      <div class="search-controls">
+      <div class="search-controls" v-if="selectedMice.length === 0">
         <input v-model="searchTerm" placeholder="搜索小鼠ID或基因型" @keyup.enter="loadMice">
         <button @click="loadMice" class="search-btn">
           <i class="material-icons">search</i>
@@ -549,8 +549,6 @@ const contextMenu = reactive({
 })
 const selectedMice = ref([])
 const lastSelectedIndex = ref(-1)
-const ctrlKeyPressed = ref(false)
-const shiftKeyPressed = ref(false)
 const batchSelectedTests = ref([])
 
 // 模态框相关
@@ -558,6 +556,9 @@ const showModal = ref(false)
 const modalMode = ref('') // 'add', 'edit', 'template'
 const templateMouse = ref(null)
 const newMice = ref([])
+
+let clickTimer = ref(null);
+const delay = 250;
 
 // 表单数据
 const formData = reactive({
@@ -610,23 +611,6 @@ const showTestsPlanDropdown = ref(false)
 
 const selectedTestsDone = ref([])
 const selectedTestsPlanned = ref([])
-
-// 监听键盘事件
-document.addEventListener('keydown', (e) => {
-  if (e.key === 'Control') {
-    ctrlKeyPressed.value = true
-  } else if (e.key === 'Shift') {
-    shiftKeyPressed.value = true;
-  }
-})
-
-document.addEventListener('keyup', (e) => {
-  if (e.key === 'Control') {
-    ctrlKeyPressed.value = false
-  } else if (e.key === 'Shift') {
-    shiftKeyPressed.value = false;
-  }
-})
 
 // 计算可用的测试（过滤掉已选的计划测试和已完成测试）
 const availableTestsPlan = computed(() => {
@@ -842,19 +826,36 @@ const applyFilters = () => {
   filteredMice.value = result
 }
 
-const selectMice = (mouse) => {
-    if (ctrlKeyPressed.value) {
-      // Ctrl+点击：切换选中状态
-      toggleMouseSelection(mouse.tid);
-      lastSelectedIndex.value = index;
-  } else if (shiftKeyPressed.value && lastSelectedIndex.value !== -1) {
-      // Shift+点击：选择范围
-      selectRange(lastSelectedIndex.value, index);
+const selectMice = (mouse, event, index) => {
+  clearTimeout(clickTimer.value);
+  if (!clickTimer.value) {
+    clickTimer.value = setTimeout(() => {
+      // 执行单击逻辑
+      if (event.ctrlKey || event.metaKey) {
+        // Ctrl+点击：切换选中状态
+        toggleMouseSelection(mouse.tid);
+        lastSelectedIndex.value = index;
+      } else if (event.shiftKey && lastSelectedIndex.value !== -1) {
+          // Shift+点击：选择范围
+          selectRange(lastSelectedIndex.value, index);
+      } else {
+        if (selectedMice.value.length === 1 && selectedMice.value[0] === mouse.tid) {
+          // 点击已选中的小鼠：取消选择
+          selectedMice.value = [];
+          lastSelectedIndex.value = -1;
+        } else {
+          // 普通点击：选中当前，取消其他
+          selectedMice.value = [mouse.tid];
+          lastSelectedIndex.value = index;
+        }
+      }
+      clickTimer.value = null;
+    }, delay);
   } else {
-      // 普通点击：选中当前，取消其他
-      selectedMice = [mouse.tid];
-      lastSelectedIndex.value = index;
+    clearTimeout(clickTimer.value);
+    clickTimer.value = null;
   }
+
 }
 
 // 切换小鼠选中状态
