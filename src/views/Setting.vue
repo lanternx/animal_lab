@@ -131,7 +131,7 @@
         </div>
         
         <div v-if="exportOptionsVisible" class="export-options">
-        <div v-if="currentExportType !== 'survival' || currentExportType !== 'experiment'" class="form-group">
+        <div v-if="currentExportType !== 'survival' && currentExportType !== 'experiment'" class="form-group">
             <label>时间范围</label>
             <div class="date-range">
             <input type="date" v-model="exportStartDate">
@@ -184,45 +184,42 @@
     <p class="section-description">从Excel文件导入小鼠数据</p>
     
     <div class="form-section">
-        <h3>选择Excel文件</h3>
-        <div class="file-upload" @dragover.prevent @drop="handleDrop">
-        <input type="file" accept=".xlsx, .xls" @change="handleFileUpload">
-        <div class="upload-area" :class="{ 'dragover': isDragging }">
-            <i class="material-icons">cloud_upload</i>
-            <p v-if="!selectedFile">点击或拖拽Excel文件到此处上传</p>
-            <p v-else class="file-info">
-            <span>{{ selectedFile.name }}</span>
-            <span>({{ formatFileSize(selectedFile.size) }})</span>
-            </p>
-            <button v-if="selectedFile" class="btn btn-outline" @click="clearFile">清除</button>
+        <div class="import-options">
+            <div class="form-group">
+                <label>导入类型</label>
+                <select v-model="importType">
+                    <option value="mice">小鼠信息</option>
+                    <option value="weights">体重数据</option>
+                    <!-- <option value="pedigree">血统关系</option>功能尚未实现 -->
+                </select>
+            </div>
+            <h3>选择Excel文件</h3>
+            <div class="file-upload" @dragover.prevent @drop="handleDrop">
+                <input type="file" accept=".xlsx, .xls" @change="handleFileUpload">
+                <div class="upload-area" :class="{ 'dragover': isDragging }">
+                    <i class="material-icons">cloud_upload</i>
+                    <p v-if="!selectedFile">点击或拖拽Excel文件到此处上传</p>
+                    <p v-else class="file-info">
+                    <span>{{ selectedFile.name }}</span>
+                    <span>({{ formatFileSize(selectedFile.size) }})</span>
+                    </p>
+                    <button v-if="selectedFile" class="btn btn-outline" @click="clearFile">清除</button>
+                </div>
+            </div>
+            <div v-if="selectedFile" class="form-group">
+                <label>处理重复数据</label>
+                <select v-model="importConflictResolution">
+                <option value="skip">跳过重复项</option>
+                <option value="overwrite">覆盖现有数据</option>
+                </select>
+            </div>
+            <div v-if="selectedFile" class="form-group">
+                <button class="btn btn-primary" @click="importData" :disabled="isImporting">
+                <span v-if="isImporting">导入中...</span>
+                <span v-else>开始导入</span>
+                </button>
+            </div>
         </div>
-        </div>
-        
-        <div v-if="selectedFile" class="import-options">
-        <div class="form-group">
-            <label>导入类型</label>
-            <select v-model="importType">
-            <option value="mice">小鼠信息</option>
-            <option value="weights">体重数据</option>
-            <!-- <option value="pedigree">血统关系</option>功能尚未实现 -->
-            </select>
-        </div>
-        
-        <div class="form-group">
-            <label>处理重复数据</label>
-            <select v-model="importConflictResolution">
-            <option value="skip">跳过重复项</option>
-            <option value="overwrite">覆盖现有数据</option>
-            </select>
-        </div>
-        
-        <div class="form-group">
-            <button class="btn btn-primary" @click="importData" :disabled="isImporting">
-            <span v-if="isImporting">导入中...</span>
-            <span v-else>开始导入</span>
-            </button>
-        </div>
-
         <!-- 数据格式提示 - 根据导入类型动态显示 -->
         <div class="format-hint">
             <h4>
@@ -415,7 +412,6 @@
                     </div>
                 </div>
             </div>
-        </div>  
         </div>
     </div>
     </div>
@@ -502,9 +498,10 @@
                     </td>
                     <td>
                     <select v-model="field.visualize_type" required>
-                        <option value="x">作为横坐标</option>
-                        <option value="y">作为纵坐标</option>
-                        <option value="column">作为柱状图</option>
+                        <option value="">不进行可视化</option>
+                        <option v-if="field.data_type === 'INTEGER' || 'REAL' || 'DATE'" value="x">作为横坐标</option>
+                        <option v-if="field.data_type === 'INTEGER' || 'REAL'" value="y">作为纵坐标</option>
+                        <option v-if="field.data_type === 'INTEGER' || 'REAL'" value="column">作为柱状图</option>
                     </select>
                     </td>
                     <td class="action-cell">
@@ -1044,7 +1041,7 @@ methods: {
         data_type: 'TEXT',
         unit: '',
         is_required: false,
-        visualize_type: null,
+        visualize_type: "",
         display_order: this.editingExperimentType.fields.length
         });
     },
@@ -1077,6 +1074,8 @@ methods: {
             return;
         }
         }
+
+        if (this.editingExperimentType.id && !confirm('调整属性后，这个实验的分组不受影响，但已有数据会被删除（建议及时导出），是否继续？')) return;
         
         const url = this.editingExperimentType.id 
         ? `/api/experiment-types/${this.editingExperimentType.id}`

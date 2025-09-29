@@ -222,15 +222,22 @@ import { toast } from 'vue3-toastify';
 import 'vue3-toastify/dist/index.css';
 import { TabulatorFull as Tabulator } from 'tabulator-tables';
 import 'tabulator-tables/dist/css/tabulator.min.css';
-import { Chart } from 'chart.js';
+import { Chart } from 'chart.js/auto';
 
 //切换实验时
-onBeforeRouteUpdate((to, from) => {
+onBeforeRouteUpdate(async (to, from) => {
+    if (currentRequestToken) {
+        currentRequestToken.cancel('取消上一个请求');
+    }
+    experimentData.value = [];
+    candidateMice.value = [];
+    groupedMice.value = {};
     if (to.params.experimentId !== from.params.experimentId) {
         experimentId.value = to.params.experimentId;
-        init();
+        await init();
     }
 });
+let currentRequestToken = null;
 
 // 路由和实验信息
 const route = useRoute();
@@ -248,7 +255,7 @@ const colors = ['#F27970', '#BB9727', '#54B345', '#32B897', '#05B9E2', '#8983BF'
 
 // 分组管理状态
 const candidateMice = ref([]);
-const groupedMice = reactive({});
+const groupedMice = ref({});
 const selectedCandidates = ref([]);
 const editingGroups = ref({});
 const editingGroupNames = ref({});
@@ -275,31 +282,35 @@ const recordRowData = ref([]);
 
 // 计算属性
 const processedData = computed(() => {
-    const data = [];
-    experimentData.value.forEach(item => {
-        const groupName = Object.keys(groupedMice).find(groupName => {
-            return groupedMice[groupName].some(mouseData => 
-                mouseData.mouse_id && mouseData.mouse_id === item.mouse_id
-            );
-        });
-        const rowData = {
-            __experimentId: item.id,
-            id: groupedMice[groupName].find(m => m.mouse_id === item.mouse_id)?.mouse_info.id || '未知',
-            group: groupName || '未分组',
-            date: item.date,
-            researcher: item.researcher,
+    const mouseIdToGroupMap = {}; 
+    const mouseIdToInfoMap = {}; 
+    Object.keys(groupedMice.value).forEach(groupName => { 
+        groupedMice.value[groupName].forEach(mouseData => { 
+            if (mouseData.mouse_id) { 
+                mouseIdToGroupMap[mouseData.mouse_id] = groupName; 
+                mouseIdToInfoMap[mouseData.mouse_id] = mouseData.mouse_info; 
+            }
+        }); 
+    }); 
+
+    return experimentData.value.map(item => { 
+        const groupName = mouseIdToGroupMap[item.mouse_id] || '未分组'; 
+        const mouseInfo = mouseIdToInfoMap[item.mouse_id]; 
+        const rowData = { 
+            __experimentId: item.id, 
+            id: mouseInfo ? mouseInfo.id : '未知', 
+            group: groupName, 
+            field_date: item.date, 
+            researcher: item.researcher, 
             notes: item.notes
-        };
+        }; 
+        // 添加字段数据 
+        fieldDefinitions.value.forEach(field => { 
+            rowData[`field_${field.id}`] = item[field.field_name] !== undefined ? item[field.field_name] : null; 
+        }); 
 
-        fieldDefinitions.value.forEach(field => {
-            const value = item[field.field_name] !== undefined ? item[field.field_name] : null;
-            rowData[`field_${field.id}`] = value;
-        });
-
-        data.push(rowData);
-    });
-
-    return data;
+        return rowData; 
+    }); 
 });
 
 var cellContextMenu = [
@@ -319,7 +330,7 @@ var cellContextMenu = [
                 // 确定更新的是基本字段还是实验值字段
                 let updateData = {};
                 
-                if (['researcher', 'date', 'notes'].includes(field)) {
+                if (['researcher', 'notes'].includes(field)) {
                     // 更新基本字段
                     updateData[field] = value;
                 } else {
@@ -360,7 +371,7 @@ const columnDefs = computed(() => {
     const baseColumns = [
         {
         title: '记录时间',
-        field: 'date',
+        field: 'field_date',
         width: 150,
         headerHozAlign: 'left',
         frozen: true,
@@ -477,8 +488,9 @@ if (tabulatorInstance.value) {
 
 // 方法
 async function init() {
+currentRequestToken = axios.CancelToken.source();
 try {
-    const expResponse = await axios.get(`/api/experiment/${experimentId.value}`);
+    const expResponse = await axios.get(`/api/experiment/${experimentId.value}`, {cancelToken: currentRequestToken.token});
     experimentName.value = expResponse.data.name;
     fieldDefinitions.value = expResponse.data.fields;
     
@@ -491,14 +503,18 @@ try {
 
     generateChart()
 } catch (error) {
-    console.error('初始化失败:', error);
-    toast.error('初始化失败: ' + error.message);
+    if (!axios.isCancel(error)) {
+        console.error('初始化失败:', error);
+        toast.error('初始化失败: ' + error.message);
+    }
 }
 }
 
 function initTabulator() {
 if (!tabulatorRef.value) return;
-    
+if (tabulatorInstance.value) {
+tabulatorInstance.value.destroy();
+}
 tabulatorInstance.value = new Tabulator(tabulatorRef.value, {
     data: processedData.value,
     columns: columnDefs.value.map(col => ({
@@ -521,7 +537,9 @@ tabulatorInstance.value = new Tabulator(tabulatorRef.value, {
 
 function initRecordTabulator() {
 if (!recordTabulatorRef.value) return;
-    
+if (recordTabulatorInstance.value) {
+recordTabulatorInstance.value.destroy();
+}
 recordTabulatorInstance.value = new Tabulator(recordTabulatorRef.value, {
     data: recordRowData.value,
     columns: recordColumnDefs.value,
@@ -606,7 +624,7 @@ function exportData() {
 
 async function fetchCandidateMice() {
 try {
-    const response = await axios.get(`/api/experiment/${experimentId.value}/candidate_mice`);
+    const response = await axios.get(`/api/experiment/${experimentId.value}/candidate_mice`, {cancelToken: currentRequestToken.token});
     candidateMice.value = response.data;
 } catch (error) {
     console.error('获取候选小鼠失败:', error);
@@ -615,18 +633,18 @@ try {
 }
 
 async function fetchGroups() {
-try {
-    const response = await axios.get(`/api/experiment/${experimentId.value}/groups`);
-    Object.assign(groupedMice, response.data);
-} catch (error) {
-    console.error('获取分组失败:', error);
-    toast.error('获取分组失败: ' + error.message);
-}
+    try {
+        const response = await axios.get(`/api/experiment/${experimentId.value}/groups`, {cancelToken: currentRequestToken.token});
+        groupedMice.value = { ...response.data }; 
+    } catch (error) {
+        console.error('获取分组失败:', error);
+        toast.error('获取分组失败: ' + error.message);
+    }
 }
 
 async function fetchData() {
 try {
-    const response = await axios.get(`/api/experiment/${experimentId.value}/data`);
+    const response = await axios.get(`/api/experiment/${experimentId.value}/data`, {cancelToken: currentRequestToken.token});
     experimentData.value = response.data;
     hasData.value = experimentData.value.length > 0;
 } catch (error) {
@@ -721,13 +739,13 @@ selectedCandidates.value = [];
 }
 
 function addNewGroup() {
-    if (Object.keys(groupedMice).length >= 5) {
+    if (Object.keys(groupedMice.value).length >= 5) {
         toast.error('最多只能添加5个分组');
         return;
     }
     const newGroupId = prompt('请输入新分组的名称:');
     if (newGroupId && newGroupId.trim() !== '') {
-        groupedMice[newGroupId] = [];
+        groupedMice.value[newGroupId] = [];
     }
 }
 
@@ -757,7 +775,7 @@ async function saveGroupName(oldGroupId) {
         return;
     }
 
-    if (Object.keys(groupedMice).includes(newGroupId)) {
+    if (Object.keys(groupedMice.value).includes(newGroupId)) {
         alert('分组名称已存在，请使用其他名称');
         return;
     }
@@ -766,8 +784,8 @@ async function saveGroupName(oldGroupId) {
         const response = await axios.put(`/api/experiment/${experimentId.value}/groups/${oldGroupId}`, {newGroupId:newGroupId});
         
         if (response.data && response.data.message) {
-            groupedMice[newGroupId] = groupedMice[oldGroupId];
-            delete groupedMice[oldGroupId];
+            groupedMice.value[newGroupId] = groupedMice.value[oldGroupId];
+            delete groupedMice.value[oldGroupId];
             
             editingGroups.value[oldGroupId] = false;
             delete editingGroupNames.value[oldGroupId];
@@ -788,11 +806,10 @@ delete editingGroupNames.value[groupId];
 }
 
 async function generateChart() {
-if (!hasData.value) {
-    toast.error('暂无实验数据，无法生成图表');
-    return;
-}
-
+    if (!hasData.value) {
+        toast.error('暂无实验数据，无法生成图表');
+        return;
+    }
     // 清空图表容器
     const chartContainer = document.getElementById('chart-container');
     if (!chartContainer) return;
@@ -804,6 +821,7 @@ if (!hasData.value) {
     const yFields = fieldDefinitions.value.filter(f => f.visualize_type === 'y');
     const columnFields = fieldDefinitions.value.filter(f => f.visualize_type === 'column');
     
+    xFields.push({field_name: '日期', id: 'date', data_type: 'DATE'}); // 添加日期字段作为X轴选项
     // 如果没有可视化字段，提示用户
     if (xFields.length === 0 && yFields.length === 0 && columnFields.length === 0) {
         const noVizFields = document.createElement('div');
@@ -825,11 +843,6 @@ if (!hasData.value) {
         }
         groupedData[group].push(item);
     });
-
-    // 创建图表包装器
-    const chartsWrapper = document.createElement('div');
-    chartsWrapper.className = 'charts-wrapper';
-    chartContainer.appendChild(chartsWrapper);
     
     // 创建X-Y图表（散点图/折线图）
     if (xFields.length > 0 && yFields.length > 0) {
@@ -842,10 +855,15 @@ if (!hasData.value) {
             const canvas = document.createElement('canvas');
             canvas.id = `chart-xy-${xField.id}-${yField.id}`;
             canvas.className = 'chart-canvas';
-            canvas.width = 300;
-            canvas.height = 400;
+            canvas.width = 400;
+            canvas.height = 350;
+            canvas.style.backgroundColor = 'white';
+            canvas.style.border = '1px solid #e0e0e0';
+            canvas.style.borderRadius = '8px';
+            canvas.style.padding = '15px';
+            canvas.style.boxShadow = '0 2px 8px rgba(0,0,0,0.1)';
             chartCard.appendChild(canvas);
-            chartsWrapper.appendChild(chartCard);
+            chartContainer.appendChild(chartCard);
             
             createXYChart(canvas, xField, yField, groupedData);
         });
@@ -862,9 +880,14 @@ if (!hasData.value) {
         canvas.id = `chart-column-${columnField.id}`;
         canvas.className = 'chart-canvas';
         canvas.width = 300;
-        canvas.height = 400;
+        canvas.height = 350;
+        canvas.style.backgroundColor = 'white';
+        canvas.style.border = '1px solid #e0e0e0';
+        canvas.style.borderRadius = '8px';
+        canvas.style.padding = '15px';
+        canvas.style.boxShadow = '0 2px 8px rgba(0,0,0,0.1)';
         chartCard.appendChild(canvas);
-        chartsWrapper.appendChild(chartCard);
+        chartContainer.appendChild(chartCard);
         
         createBoxPlotWithPoints(canvas, columnField, groupedData); // 使用新函数
     });
@@ -880,9 +903,14 @@ if (!hasData.value) {
         canvas.id = `chart-column-${columnField.id}`;
         canvas.className = 'chart-canvas';
         canvas.width = 300;
-        canvas.height = 400;
+        canvas.height = 350;
+        canvas.style.backgroundColor = 'white';
+        canvas.style.border = '1px solid #e0e0e0';
+        canvas.style.borderRadius = '8px';
+        canvas.style.padding = '15px';
+        canvas.style.boxShadow = '0 2px 8px rgba(0,0,0,0.1)';
         chartCard.appendChild(canvas);
-        chartsWrapper.appendChild(chartCard);
+        chartContainer.appendChild(chartCard);
         
         createBoxPlotWithPoints(canvas, columnField, groupedData); // 使用新函数
     });
@@ -898,9 +926,14 @@ if (!hasData.value) {
         canvas.id = `chart-dist-${xField.id}`;
         canvas.className = 'chart-canvas';
         canvas.width = 300;
-        canvas.height = 400;
+        canvas.height = 350;
+        canvas.style.backgroundColor = 'white';
+        canvas.style.border = '1px solid #e0e0e0';
+        canvas.style.borderRadius = '8px';
+        canvas.style.padding = '15px';
+        canvas.style.boxShadow = '0 2px 8px rgba(0,0,0,0.1)';
         chartCard.appendChild(canvas);
-        chartsWrapper.appendChild(chartCard);
+        chartContainer.appendChild(chartCard);
         
         createDistributionChart(canvas, xField, groupedData);
         });
@@ -914,29 +947,57 @@ function createXYChart(canvas, xField, yField, groupedData) {
     const datasets = [];
     // 检查x字段是否为日期类型
     const isDateField = xField.data_type === 'DATE';
+    let globalMin = Infinity;
+    let globalMax = -Infinity;
+    let globalXMin = Infinity;
+    let globalXMax = -Infinity;
 
+    let firstDayTimestamp = Infinity;
+    // 计算第一天的时间戳
+    if (isDateField) {
+        firstDayTimestamp = Math.min(...Object.values(groupedData).flatMap(group => 
+            group.map(item => {
+                const xValue = item[`field_${xField.id}`];
+                if (xValue) {
+                    if (typeof xValue === 'string') return new Date(xValue).getTime();
+                    if (xValue instanceof Date) return xValue.getTime();
+                }
+                return Infinity;
+            }).filter(ts => !isNaN(ts))
+        ));
+    }
+        
     Object.keys(groupedData).forEach((groupName, index) => {
         const groupData = groupedData[groupName];
         const data = [];
-        
+
         groupData.forEach(item => {
             const xValue = item[`field_${xField.id}`];
             const yValue = item[`field_${yField.id}`];
             
             // 如果是日期字段，将日期字符串转换为时间戳
             if (isDateField && xValue) {
+                let timestamp = null;
                 // 处理日期格式，确保它能被正确解析
                 if (typeof xValue === 'string') {
-                    xValue = new Date(xValue).getTime();
+                    timestamp = new Date(xValue).getTime();
                 } else if (xValue instanceof Date) {
-                    xValue = xValue.getTime();
+                    timestamp = xValue.getTime();
                 }
-            }
-            if (xValue !== null && yValue !== null && !isNaN(xValue) && !isNaN(yValue)) {
-                data.push({
-                x: parseFloat(xValue),
-                y: parseFloat(yValue)
-                });
+                if (timestamp && !isNaN(timestamp) && yValue !== null && !isNaN(yValue)) {
+                    const daysSinceStart = Math.floor((timestamp - firstDayTimestamp) / (1000 * 60 * 60 * 24));
+                    data.push({
+                        x: daysSinceStart,
+                        y: parseFloat(yValue)
+                    });
+                }
+            } else {
+                if (xValue !== null && yValue !== null && !isNaN(xValue) && !isNaN(yValue)) {
+                    data.push({
+                    x: parseFloat(xValue),
+                    y: parseFloat(yValue)
+                    });
+                }
             }
         });
         
@@ -953,27 +1014,31 @@ function createXYChart(canvas, xField, yField, groupedData) {
             pointHoverRadius: 7,
             showLine: false
         });
+
+        globalMin = Math.min(globalMin, ...data.map(d => d.y));
+        globalMax = Math.max(globalMax, ...data.map(d => d.y));
+        globalXMin = Math.min(globalXMin, ...data.map(d => d.x));
+        globalXMax = Math.max(globalXMax, ...data.map(d => d.x));
     });
 
-    // 如果是日期字段，配置x轴为时间刻度
-    if (isDateField) {
-        chartConfig.options.scales.x = {
-        type: 'time',
-        time: {
-            parser: 'yyyy-MM-dd', // 根据您的日期格式调整
-            tooltipFormat: 'yyyy-MM-dd',
-            displayFormats: {
-            day: 'MMM dd',
-            week: 'MMM dd',
-            month: 'MMM yyyy',
-            year: 'yyyy'
-            }
-        },
-        title: {
-            display: true,
-            text: `${xField.field_name}${xField.unit ? ` (${xField.unit})` : ''}`
-        }
-        };
+    // 如果全局最小值和最大值仍然是Infinity，则设置为0
+    if (globalMin === Infinity) globalMin = 0;
+    if (globalMax === -Infinity) globalMax = 1;
+    if (globalXMin === Infinity) globalXMin = 0;
+    if (globalXMax === -Infinity) globalXMax = 1;
+    
+    // 计算y轴的范围，留出一些边距
+    const padding = (globalMax - globalMin) * 0.1;
+    const yMin = globalMin - padding;
+    const yMax = globalMax + padding;
+    const xPadding = (globalXMax - globalXMin) * 0.1;
+    const xMin = globalXMin - xPadding;
+    const xMax = globalXMax + xPadding;
+
+    if (xMin === xMax) {
+        // 如果所有x值相同，设置一个默认范围
+        xMin -= 1;
+        xMax += 1;
     }
     
     // 创建图表
@@ -987,12 +1052,27 @@ function createXYChart(canvas, xField, yField, groupedData) {
         maintainAspectRatio: false,
         scales: {
             x: {
-            title: {
-                display: true,
-                text: `${xField.field_name}${xField.unit ? ` (${xField.unit})` : ''}`
+                min: isDateField ? Math.floor(xMin) : xMin,
+                max: isDateField ? Math.ceil(xMax) : xMax,
+                title: {
+                    display: true,
+                    text: isDateField ? "距离开始的天数" : `${xField.field_name}${xField.unit ? ` (${xField.unit})` : ''}`
+                },
+                ticks: {
+                    // 对于日期字段，强制显示整数刻度
+                    callback: function(value) {
+                        if (isDateField) {
+                            return Math.round(value); // 四舍五入到最接近的整数
+                        }
+                        return value;
+                    },
+                    stepSize: isDateField ? 1 : undefined // 对于日期字段，设置步长为1
+                }
             }
-            },
+            ,
             y: {
+            min: yMin,
+            max: yMax,
             title: {
                 display: true,
                 text: `${yField.field_name}${yField.unit ? ` (${yField.unit})` : ''}`
@@ -1070,6 +1150,9 @@ function createBoxPlotWithPoints(canvas, columnField, groupedData) {
     } else {
       boxPlotStats.push({ min: 0, q1: 0, median: 0, q3: 0, max: 0 });
     }
+
+    globalMin = Math.min(globalMin, ...values);
+    globalMax = Math.max(globalMax, ...values);
   });
 
   // 如果全局最小值和最大值仍然是Infinity，则设置为0
@@ -1251,86 +1334,134 @@ function calculateQuartile(values, quartile) {
 }
 
 function createDistributionChart(canvas, xField, groupedData) {
-  const ctx = canvas.getContext('2d');
-  
-  // 准备数据集
-  const datasets = [];
-  
-  Object.keys(groupedData).forEach((groupName, index) => {
-    const groupData = groupedData[groupName];
-    const values = groupData
-      .map(item => parseFloat(item[`field_${xField.id}`]))
-      .filter(val => !isNaN(val));
+    const ctx = canvas.getContext('2d');
+
+    // 准备数据集
+    const datasets = [];
+    const fieldKey = `field_${xField.id}`;
+
+    // 检查x字段是否为日期类型
+    let firstDayTimestamp = Infinity;
+    const isDateField = xField.data_type === 'DATE';
+    if (isDateField) {
+        firstDayTimestamp = Math.min(...Object.values(groupedData).flatMap(group => 
+        group.map(item => {
+            const xValue = item[fieldKey];
+            if (xValue) {
+                if (typeof xValue === 'string') return new Date(xValue).getTime();
+                if (xValue instanceof Date) return xValue.getTime();
+            }
+            return Infinity;
+        }).filter(ts => !isNaN(ts))
+        ));
+    }
+
+    for (const [index, [groupName, groupData]] of Object.entries(Object.entries(groupedData))) {
+    const values = [];
     
-    // 计算频率分布
+    for (const item of groupData) {
+        const rawValue = item[fieldKey];
+        if (rawValue == null) continue;
+        let timestamp = null;
+        if (typeof rawValue === 'string') {
+            timestamp = new Date(rawValue).getTime();
+        } else if (rawValue instanceof Date) {
+            timestamp = rawValue.getTime();
+        }
+        const numValue = isDateField
+        ? Math.floor((timestamp - firstDayTimestamp) / (1000 * 60 * 60 * 24))
+        : parseFloat(rawValue);
+        
+        if (!isNaN(numValue)) values.push(numValue);
+    }
+
+    if (values.length === 0) {
+        datasets.push({ label: groupName, data: [] });
+        continue;
+    }
+
     const min = Math.min(...values);
     const max = Math.max(...values);
     const range = max - min;
-    const binCount = Math.min(10, Math.ceil(Math.sqrt(values.length)));
-    const binSize = range / binCount;
+
+    let binCount = Math.min(10, Math.ceil(Math.log2(values.length)) + 1);
+    let binSize = range / binCount;
     
-    const bins = Array(binCount).fill(0).map((_, i) => ({
-      x: min + (i + 0.5) * binSize,
-      y: 0
-    }));
-    
-    values.forEach(value => {
-      const binIndex = Math.min(
-        binCount - 1, 
-        Math.floor((value - min) / binSize)
-      );
-      bins[binIndex].y += 1;
-    });
-    
-    datasets.push({
-      label: groupName,
-      data: bins,
-      borderColor: colors[index % colors.length],
-      backgroundColor: 'rgba(0, 0, 0, 0)',
-      tension: 0.1
-    });
-  });
-  
-  // 创建图表
-  new Chart(ctx, {
-    type: 'line',
-    data: {
-      datasets: datasets
-    },
-    options: {
-      responsive: true,
-      maintainAspectRatio: false,
-      scales: {
-        x: {
-          title: {
-            display: true,
-            text: `${xField.field_name}${xField.unit ? ` (${xField.unit})` : ''}`
-          }
-        },
-        y: {
-          title: {
-            display: true,
-            text: '频率'
-          }
-        }
-      },
-      plugins: {
-        title: {
-          display: true,
-          text: `${xField.field_name}的频率分布`,
-          font: {
-            size: 16
-          }
-        }
-      }
+    if (min === max) {
+        binCount = 1;
+        binSize = 1;
     }
-  });
+
+    const bins = Array.from({ length: binCount }, (_, i) => ({
+        x: min + (i + 0.5) * binSize,
+        y: 0
+    }));
+
+    for (const value of values) {
+        const normalized = (value - min) / (range || 1); // 避免除零
+        const binIndex = Math.min(binCount - 1, Math.floor(normalized * binCount));
+        bins[binIndex].y++;
+    }
+
+    datasets.push({
+        label: groupName,
+        data: bins,
+        borderColor: colors[index % colors.length],
+        backgroundColor: "transparent",
+        tension: 0.1
+    });
+    }
+
+    // 创建图表
+    new Chart(ctx, {
+        type: 'line',
+        data: {
+        datasets: datasets
+        },
+        options: {
+        responsive: true,
+        maintainAspectRatio: false,
+        scales: {
+            x: {
+            title: {
+                display: true,
+                text: isDateField ? "距离开始的天数" : `${xField.field_name}${xField.unit ? ` (${xField.unit})` : ''}`
+            },
+            ticks: {
+                // 对于日期字段，强制显示整数刻度
+                callback: function(value) {
+                    if (isDateField) {
+                        return Math.round(value); // 四舍五入到最接近的整数
+                    }
+                    return value;
+                },
+                stepSize: isDateField ? 1 : undefined // 对于日期字段，设置步长为1
+            }
+            },
+            y: {
+            title: {
+                display: true,
+                text: '频率'
+            }
+            }
+        },
+        plugins: {
+            title: {
+            display: true,
+            text: `${xField.field_name}的频率分布`,
+            font: {
+                size: 16
+            }
+            }
+        }
+        }
+    });
 }
 
 function initRecordData() {
     const rowData = [];
 
-    Object.entries(groupedMice).forEach(([groupName, group]) => {
+    Object.entries(groupedMice.value).forEach(([groupName, group]) => {
         group.forEach(mouseData => {
         const mouse = mouseData.mouse_info;
         const row = {
@@ -1391,6 +1522,11 @@ try {
     
     const allRows = recordTabulatorInstance.value.getData();
     
+    if (recordDate.value === '') {
+        toast.error('请填写记录日期');
+        return;
+    }
+
     for (const row of allRows) {
         for (const field of fieldDefinitions.value) {
             if (field.is_required && (row[`field_${field.id}`] === null || row[`field_${field.id}`] === undefined || row[`field_${field.id}`] === '')) {
@@ -1457,15 +1593,16 @@ box-shadow: 0 2px 8px rgba(0,0,0,0.1);
 }
 
 .chart-container {
-display: flex;
-flex-wrap: wrap;
-gap: 20px;
-justify-content: center;
-position: relative;
-overflow-y: auto;
-height: 90%;
-width: 90%;
-min-height: 500px;
+display: grid;
+grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
+  gap: 20px;
+  justify-content: center;
+  align-items: start;
+  padding: 20px;
+  overflow-y: auto;
+  height: 90%;
+  width: 90%;
+  min-height: 500px;
 }
 
 .chart-canvas {
@@ -1829,14 +1966,6 @@ background: white;
 border-radius: 8px;
 overflow: auto;
 box-shadow: 0 2px 8px rgba(0,0,0,0.1);
-}
-
-.charts-wrapper {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 20px;
-  justify-content: center;
-  width: 100%;
 }
 
 .chart-card {

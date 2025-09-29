@@ -1457,6 +1457,11 @@ def update_experiment_type(id):
         if existing:
             return jsonify({'error': '已存在同名实验类型'}), 400
         
+        # 清除存在的实验数据
+        expr_data = Experiment.query.filter_by(experiment_type_id = id).all()
+        for ed in expr_data:
+            db.session.delete(ed)
+
         # 更新实验类型基本信息
         experiment_type.name = data['name']
         experiment_type.description = data.get('description', '')
