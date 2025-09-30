@@ -7,7 +7,7 @@ import sys
 from pathlib import Path
 import pandas as pd
 from io import BytesIO
-from sqlalchemy import text
+from sqlalchemy import text, inspect
 from sqlalchemy.orm import joinedload
 
 import socket
@@ -91,46 +91,135 @@ with app.app_context():
         db.session.execute(text('SELECT 1'))
         print("数据库连接测试成功")
         # 轻量迁移：为缺失字段添加列
-        def column_exists(table, col):
+        def column_exists(table_name, column_name):
+            """检查表中是否存在某列"""
+            inspector = inspect(db.engine)
+            columns = inspector.get_columns(table_name)
+            return any(col['name'] == column_name for col in columns)
+
+        def table_exists(table_name):
+            """检查表是否存在"""
+            inspector = inspect(db.engine)
+            return table_name in inspector.get_table_names()
+
+        def migrate_database():
+            """执行数据库迁移"""
             try:
-                res = db.session.execute(text(f"PRAGMA table_info({table})")).fetchall()
-                return any(row[1] == col for row in res)
-            except Exception:
-                return False
+                # 添加Mouse表的新列
+                mouse_new_columns = [
+                    ("strain", "TEXT"),
+                    ("tests_done", "JSON"),
+                    ("tests_planned", "JSON")
+                ]
+                for col, coltype in mouse_new_columns:
+                    if not column_exists('mouse', col):
+                        try:
+                            db.session.execute(text(f"ALTER TABLE mouse ADD COLUMN {col} {coltype}"))
+                            db.session.commit()
+                            print(f"已添加列 mouse.{col}")
+                        except Exception as e:
+                            db.session.rollback()
+                            print(f"添加列 mouse.{col} 失败: {e}")
 
-        # Mouse 表新增列
-        mouse_new_columns = [
-            ("strain", "TEXT"),
-            ("tests_done", "TEXT"),
-            ("tests_planned", "TEXT")
-        ]
-        for col, coltype in mouse_new_columns:
-            if not column_exists('mouse', col):
-                try:
-                    db.session.execute(text(f"ALTER TABLE mouse ADD COLUMN {col} {coltype}"))
-                    db.session.commit()
-                    print(f"已添加列 mouse.{col}")
-                except Exception as e:
-                    db.session.rollback()
-                    print(f"添加列 mouse.{col} 失败: {e}")
+                # 添加Cage表的新列
+                cage_new_columns = [
+                    ("mice_birth_date", "DATE"),
+                    ("mice_count", "INTEGER"),
+                    ("mice_sex", "TEXT"),
+                    ("mice_genotype", "TEXT")
+                ]
+                for col, coltype in cage_new_columns:
+                    if not column_exists('cage', col):
+                        try:
+                            db.session.execute(text(f"ALTER TABLE cage ADD COLUMN {col} {coltype}"))
+                            db.session.commit()
+                            print(f"已添加列 cage.{col}")
+                        except Exception as e:
+                            db.session.rollback()
+                            print(f"添加列 cage.{col} 失败: {e}")
 
-        # Cage 表新增列
-        cage_new_columns = [
-            ("mice_birth_date", "DATE"),
-            ("mice_count", "INTEGER"),
-            ("mice_sex", "TEXT"),
-            ("mice_genotype", "TEXT")
-        ]
-        for col, coltype in cage_new_columns:
-            if not column_exists('cage', col):
-                try:
-                    db.session.execute(text(f"ALTER TABLE cage ADD COLUMN {col} {coltype}"))
-                    db.session.commit()
-                    print(f"已添加列 cage.{col}")
-                except Exception as e:
-                    db.session.rollback()
-                    print(f"添加列 cage.{col} 失败: {e}")
-        
+                # 创建新表
+                new_tables = [
+                    'experiment_type',
+                    'field_definition',
+                    'experiment',
+                    'experiment_value',
+                    'experiment_class'
+                ]
+                
+                for table in new_tables:
+                    if not table_exists(table):
+                        try:
+                            db.create_all()  # 这会创建所有定义的表
+                            print(f"已创建表 {table}")
+                        except Exception as e:
+                            print(f"创建极速 {table} 失败: {e}")
+                print("数据库迁移完成！")
+                return True, "数据库迁移成功完成"
+                
+            except Exception as e:
+                db.session.rollback()
+                print(f"迁移过程中出错: {str(e)}")
+                return False, f"迁移失败: {str(e)}"
+            
+        def migrate_schema():
+            """修改数据库表结构"""
+            try:
+                # 修改 mouse 表的 tests_done 和 tests_planned 列类型为 JSON
+                # 注意：在 SQLite 中，JSON 实际上是作为 TEXT 存储的
+                # 但使用 JSON 类型可以让 SQLAlchemy 自动处理序列化和反序列化
+                
+                # 由于 SQLite 不支持直接修改列类型，我们需要使用更复杂的方法
+                # 这里我们创建一个新表，复制数据，然后删除旧表
+                
+                # 1. 创建临时表
+                temp_table_sql = """
+                CREATE TABLE mouse_temp (
+                    tid INTEGER PRIMARY KEY,
+                    id TEXT NOT NULL,
+                    genotype TEXT,
+                    sex TEXT,
+                    live_status INTEGER DEFAULT 1,
+                    birth_date DATE,
+                    death_date DATE,
+                    cage_id TEXT,
+                    strain TEXT,
+                    tests_done JSON,
+                    tests_planned JSON,
+                    FOREIGN KEY (cage_id) REFERENCES cage (id)
+                )
+                """
+                db.session.execute(text(temp_table_sql))
+                
+                # 2. 复制数据到临时表
+                copy_data_sql = """
+                INSERT INTO mouse_temp 
+                SELECT tid, id, genotype, sex, live_status, birth_date, death_date, cage_id, strain, 
+                    CASE WHEN tests_done IS NULL OR tests_done = '' THEN '[]' ELSE tests_done END,
+                    CASE WHEN tests_planned IS NULL OR tests_planned = '' THEN '[]' ELSE tests_planned END
+                FROM mouse
+                """
+                db.session.execute(text(copy_data_sql))
+                
+                # 3. 删除原表
+                drop_table_sql = "DROP TABLE mouse"
+                db.session.execute(text(drop_table_sql))
+                
+                # 4. 重命名临时表
+                rename_table_sql = "ALTER TABLE mouse_temp RENAME TO mouse"
+                db.session.execute(text(rename_table_sql))
+                
+                db.session.commit()
+                print("已成功修改 mouse 表的列类型")
+                
+                return True, "数据库表结构修改成功"
+                
+            except Exception as e:
+                db.session.rollback()
+                print(f"修改数据库表结构过程中出错: {str(e)}")
+                return False, f"修改失败: {str(e)}"
+        migrate_schema()
+        migrate_database()
         # 自动创建默认位置（如果不存在）
         if not db.session.query(Location).first():
             new_location = Location(
