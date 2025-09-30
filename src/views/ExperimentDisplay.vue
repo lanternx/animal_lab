@@ -201,7 +201,7 @@
             </div>
             
             <!-- 录入数据表格 -->
-            <div ref="recordTabulatorRef" class="tabulator-table" style="height: 400px;"></div>
+            <div ref="recordTabulatorRef" class="tabulator-table" style="height: 300px;"></div>
             
             <div class="d-grid mt-3">
                 <button class="btn btn-primary" @click="saveExperimentRecord">

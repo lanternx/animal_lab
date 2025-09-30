@@ -896,6 +896,9 @@ const clearSelection = () => {
 
 const batchAddExperiment = async (batchTest) => {
   try {
+    if (!confirm(`确认要为选中的 ${selectedMice.value.length} 只小鼠批量修改实验 ${batchTest} 吗？注意，未选择的实验会被清除！对应小鼠在其中的数据也会被清除！`)) {
+      return
+    }
     const api = createAxiosInstance()
     await api.put('/mice/experiments', {
       batchTest: batchTest,

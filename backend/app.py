@@ -151,7 +151,7 @@ with app.app_context():
 
 def allowed_file(filename):
     return '.' in filename and \
-           filename.rsplit('.', 1)[1].lower() in app.config['ALLOWED_EXTENSIONS']
+        filename.rsplit('.', 1)[1].lower() in app.config['ALLOWED_EXTENSIONS']
 
 
 @app.route('/')
@@ -369,6 +369,12 @@ def batch_experiments_change():
                 m = Mouse.query.get(mtid)
                 if not m:
                     continue
+                if m.tests_done:
+                    for t in m.tests_done:
+                        ExperimentClass.query.filter(
+                            ExperimentClass.mouse_id == m.tid,
+                            ExperimentClass.experiment_id == t
+                        ).delete()
                 m.tests_done = test_ids
         elif operation == "计划实验":
             for mtid in mice_ids:
@@ -1620,12 +1626,14 @@ def get_experiment_data(experiment_id):
 def get_candidate_mice(experiment_id):
     """获取候选池小鼠 - 基于tests_done字段筛选"""
     try:
-        # 获取实验信息
-        experiment = ExperimentType.query.get_or_404(experiment_id)
         
-        query = Mouse.query.filter_by(live_status=1).filter(Mouse.tests_done.contains([experiment.id]))  # 只选择存活的小鼠
+        ExperimentType.query.get_or_404(experiment_id) # 验证实验
+        query = Mouse.query.filter_by(live_status=1)  # 只选择存活的小鼠
         
-        candidate_mice = query.all()
+        candidate_mice = []
+        for mouse in query.all():
+            if experiment_id in mouse.tests_done:
+                candidate_mice.append(mouse)
         
         # 排除已经在分组中的小鼠
         existing_mice_ids = [ec.mouse_id for ec in 
@@ -1641,8 +1649,7 @@ def get_candidate_mice(experiment_id):
 def get_experiment_groups(experiment_id):
     """获取实验的所有分组"""
     try:
-        # 验证实验是否存在
-        ExperimentType.query.get_or_404(experiment_id)
+        ExperimentType.query.get_or_404(experiment_id)# 验证实验是否存在
         
         # 获取所有分组
         groups = {}
