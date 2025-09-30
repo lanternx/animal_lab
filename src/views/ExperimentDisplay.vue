@@ -223,6 +223,7 @@ import 'vue3-toastify/dist/index.css';
 import { TabulatorFull as Tabulator } from 'tabulator-tables';
 import 'tabulator-tables/dist/css/tabulator.min.css';
 import { Chart } from 'chart.js/auto';
+import regression from 'regression';
 
 //切换实验时
 onBeforeRouteUpdate(async (to, from) => {
@@ -766,7 +767,7 @@ async function saveGroupName(oldGroupId) {
     const newGroupId = editingGroupNames.value[oldGroupId].trim();
 
     if (!newGroupId) {
-        alert('分组名称不能为空');
+        toast.error('分组名称不能为空');
         return;
     }
 
@@ -776,7 +777,7 @@ async function saveGroupName(oldGroupId) {
     }
 
     if (Object.keys(groupedMice.value).includes(newGroupId)) {
-        alert('分组名称已存在，请使用其他名称');
+        toast.error('分组名称已存在，请使用其他名称');
         return;
     }
 
@@ -968,6 +969,7 @@ function createXYChart(canvas, xField, yField, groupedData) {
     }
         
     Object.keys(groupedData).forEach((groupName, index) => {
+        const color = colors[index % colors.length]
         const groupData = groupedData[groupName];
         const data = [];
 
@@ -1007,13 +1009,43 @@ function createXYChart(canvas, xField, yField, groupedData) {
         datasets.push({
             label: groupName,
             data: data,
-            borderColor: colors[index % colors.length],
+            borderColor: color,
             backgroundColor: 'rgba(0, 0, 0, 0)',
             tension: 0.1,
             pointRadius: 5,
             pointHoverRadius: 7,
             showLine: false
         });
+
+        // 计算LOESS平滑线和置信区间（需要至少6个点）
+        if (data.length >= 6) {
+            try {
+                const mappedData = data.map(d => [d.x, d.y]);
+                const result = regression.polynomial(mappedData, { order: 3, precision: 4 });
+                const fitPoints = [];
+                const xMin = Math.min(...mappedData.map(p => p[0]));
+                const xMax = Math.max(...mappedData.map(p => p[0]));
+                const pointCount = 200; // 趋势线点数
+                for (let i = 0; i < pointCount; i++) {
+                    const x = xMin + (xMax - xMin) * i / (pointCount - 1);
+                    const y = result.predict(x)[1];
+                    fitPoints.push({ x, y });
+                }
+                datasets.push({
+                    label: `${groupName}趋势线`,
+                    data: fitPoints,
+                    borderColor: color,
+                    backgroundColor: 'rgba(0,0,0,0)',
+                    pointRadius: 0,
+                    borderWidth: 2,
+                    showLine: true,
+                    tension: 0.1,
+                    type: 'line'
+                });
+            } catch (e) {
+                console.error(`计算失败: ${e.message}`);
+            }
+        }
 
         globalMin = Math.min(globalMin, ...data.map(d => d.y));
         globalMax = Math.max(globalMax, ...data.map(d => d.y));
@@ -1032,15 +1064,15 @@ function createXYChart(canvas, xField, yField, groupedData) {
     const yMin = globalMin - padding;
     const yMax = globalMax + padding;
     const xPadding = (globalXMax - globalXMin) * 0.1;
-    const xMin = globalXMin - xPadding;
-    const xMax = globalXMax + xPadding;
+    let xMin = globalXMin - xPadding;
+    let xMax = globalXMax + xPadding;
 
     if (xMin === xMax) {
         // 如果所有x值相同，设置一个默认范围
         xMin -= 1;
         xMax += 1;
     }
-    
+
     // 创建图表
     new Chart(ctx, {
         type: 'scatter',
@@ -1338,6 +1370,7 @@ function createDistributionChart(canvas, xField, groupedData) {
 
     // 准备数据集
     const datasets = [];
+    let allValues = {};
     const fieldKey = `field_${xField.id}`;
 
     // 检查x字段是否为日期类型
@@ -1356,62 +1389,74 @@ function createDistributionChart(canvas, xField, groupedData) {
         ));
     }
 
-    for (const [index, [groupName, groupData]] of Object.entries(Object.entries(groupedData))) {
-    const values = [];
-    
-    for (const item of groupData) {
-        const rawValue = item[fieldKey];
-        if (rawValue == null) continue;
-        let timestamp = null;
-        if (typeof rawValue === 'string') {
-            timestamp = new Date(rawValue).getTime();
-        } else if (rawValue instanceof Date) {
-            timestamp = rawValue.getTime();
-        }
-        const numValue = isDateField
-        ? Math.floor((timestamp - firstDayTimestamp) / (1000 * 60 * 60 * 24))
-        : parseFloat(rawValue);
+    let globalMax = -Infinity;
+    let globalMin = Infinity;
+
+    for (const [groupName, groupData] of Object.entries(groupedData)){
+        const values = [];
         
-        if (!isNaN(numValue)) values.push(numValue);
+        for (const item of groupData) {
+            const rawValue = item[fieldKey];
+            if (rawValue == null) continue;
+            let timestamp = null;
+            if (typeof rawValue === 'string') {
+                timestamp = new Date(rawValue).getTime();
+            } else if (rawValue instanceof Date) {
+                timestamp = rawValue.getTime();
+            }
+            const numValue = isDateField
+            ? Math.floor((timestamp - firstDayTimestamp) / (1000 * 60 * 60 * 24))
+            : parseFloat(rawValue);
+            
+            if (!isNaN(numValue)) values.push(numValue);
+        }
+        globalMax = Math.max(globalMax, ...values);
+        globalMin = Math.min(globalMin, ...values);
+        allValues[groupName] = values;
     }
 
-    if (values.length === 0) {
-        datasets.push({ label: groupName, data: [] });
-        continue;
-    }
+    const range = globalMax - globalMin;
+    const bandwidth = 1; // 固定带宽为1
 
-    const min = Math.min(...values);
-    const max = Math.max(...values);
-    const range = max - min;
+    // 高斯核函数
+    const gaussianKernel = u => Math.exp(-u * u / 2) / Math.sqrt(2 * Math.PI);
 
-    let binCount = Math.min(10, Math.ceil(Math.log2(values.length)) + 1);
-    let binSize = range / binCount;
-    
-    if (min === max) {
-        binCount = 1;
-        binSize = 1;
-    }
-
-    const bins = Array.from({ length: binCount }, (_, i) => ({
-        x: min + (i + 0.5) * binSize,
-        y: 0
-    }));
-
-    for (const value of values) {
-        const normalized = (value - min) / (range || 1); // 避免除零
-        const binIndex = Math.min(binCount - 1, Math.floor(normalized * binCount));
-        bins[binIndex].y++;
-    }
-
-    datasets.push({
-        label: groupName,
-        data: bins,
-        borderColor: colors[index % colors.length],
-        backgroundColor: "transparent",
-        tension: 0.1
-    });
-    }
-
+    // 为每个分组创建核密度估计
+    for (const [index, [groupName, values]] of Object.entries(Object.entries(allValues))) {
+        if (values.length === 0) {
+            datasets.push({ label: groupName, data: [] });
+            return;
+        }
+        
+        // 创建200个均匀分布的点
+        const n = 200;
+        const step = range / n;
+        const points = [];
+        
+        for (let i = 0; i <= n; i++) {
+            const x = globalMin + i * step;
+            let sum = 0;
+            
+            for (const v of values) {
+                const u = (x - v) / bandwidth;
+                sum += gaussianKernel(u);
+            }
+            
+            const density = sum / (values.length * bandwidth);
+            points.push({ x, y: density });
+        }
+        
+        datasets.push({
+            label: groupName,
+            data: points,
+            borderColor: colors[index % colors.length],
+            backgroundColor: colors[index % colors.length] + '40',
+            borderWidth: 2,
+            pointRadius: 0,
+            tension: 0.3,
+            fill: true
+        });
+    };
     // 创建图表
     new Chart(ctx, {
         type: 'line',
@@ -1423,25 +1468,18 @@ function createDistributionChart(canvas, xField, groupedData) {
         maintainAspectRatio: false,
         scales: {
             x: {
+            type: 'linear',
             title: {
                 display: true,
                 text: isDateField ? "距离开始的天数" : `${xField.field_name}${xField.unit ? ` (${xField.unit})` : ''}`
             },
-            ticks: {
-                // 对于日期字段，强制显示整数刻度
-                callback: function(value) {
-                    if (isDateField) {
-                        return Math.round(value); // 四舍五入到最接近的整数
-                    }
-                    return value;
-                },
-                stepSize: isDateField ? 1 : undefined // 对于日期字段，设置步长为1
-            }
+            min: isDateField ? Math.floor(globalMin) : globalMin,
+            max: isDateField ? Math.ceil(globalMax) : globalMax,
             },
             y: {
             title: {
                 display: true,
-                text: '频率'
+                text: '概率密度'
             }
             }
         },
@@ -1527,29 +1565,33 @@ try {
         return;
     }
 
+    let records = [];
     for (const row of allRows) {
+        let values = {};
+        let is_valid = true;
         for (const field of fieldDefinitions.value) {
             if (field.is_required && (row[`field_${field.id}`] === null || row[`field_${field.id}`] === undefined || row[`field_${field.id}`] === '')) {
-            toast.error(`小鼠 ${row.mouse_id} 的字段 ${field.field_name} 是必填的`);
-            return;
+                is_valid = false;
             }
-        }
-    }
-    
-    const records = allRows.map(row => {
-        const values = {};
-        fieldDefinitions.value.forEach(field => {
             values[field.id] = row[`field_${field.id}`];
-        });
-        
-        return {
+        }
+        if (!is_valid) {
+            for (const field of fieldDefinitions.value) {
+                if (field.is_required && values[field.id]) {
+                    toast.error(`小鼠 ${row.mouse_id} 的字段 ${field.field_name} 是必填的`);
+                    return;
+                }
+            }
+            continue; // 跳过未填写的行
+        }
+        records.push({
             mouse_id: row.mouse_tid,
             researcher: researcher.value,
             date: recordDate.value,
             notes: row.notes,
             values: values
-        };
-    });
+        });
+    }
     
     const requestData = {
         experiment_type_id: experimentId.value,

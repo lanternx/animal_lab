@@ -894,6 +894,8 @@ def export_data(export_type):
         now = datetime.now().date()
         data = []
         for m in mice:
+            if m.birth_date is None:
+                continue
             if m.live_status == 0:
                 data.append({
                     'mouse_id': m.id,

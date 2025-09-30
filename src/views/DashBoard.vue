@@ -172,7 +172,7 @@
       <div class="form-group">
         <label>笼位ID</label>
         <input type="text" v-model="currentCage.cage_id" placeholder="输入笼位ID" v-if="!isEditing">
-        <label v-if="isEditing">  {{ currentCage.cage_id }}  </label>
+        <label v-else>  {{ currentCage.cage_id }}  </label>
       </div>
       <div class="form-group">
         <label>位置</label>
@@ -489,7 +489,7 @@ function openMouseDetail(mouseId) {
 
 // 打开笼位对话框
 function openCageModal(cage = null) {
-  isEditing.value = !!cage
+  isEditing.value = !cage
   
   if (isEditing.value) {
     // 编辑模式：填充当前笼位数据
@@ -513,6 +513,7 @@ function openCageModal(cage = null) {
 }
 
 function closeCageModal(){
+  isEditing.value = false
   cageModalVisible.value = false
   Object.assign(currentCage, {
     id: '',

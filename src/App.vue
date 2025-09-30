@@ -147,15 +147,15 @@
       <div class="status-indicators">
           <div class="status-item">
               <i class="material-icons status-icon online">cloud_done</i>
-              <span>数据库已连接</span>
+              <span>数据库位置：mice.db</span>
           </div>
           <div class="status-item">
               <i class="material-icons status-icon">save</i>
-              <span>最后保存: 10:58:23</span>
+              <span>自动保存</span>
           </div>
       </div>
       <div class="version-info">
-          版本号: 3.1 | 2025-08-15
+          版本号: 2.0 | 2025-10-1
       </div>
   </footer>
       </div>
