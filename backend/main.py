@@ -120,7 +120,7 @@ def run_flask(port):
     try:
         logger.info(f"启动Flask服务器，端口: {port}")
         # 关闭调试模式，提高生产环境稳定性
-        app.run(host='localhost', port=port, debug=True, use_reloader=False)
+        app.run(host='localhost', port=port, use_reloader=False)
     except Exception as e:
         logger.exception(f"Flask服务器启动失败: {str(e)}")
 
@@ -285,7 +285,6 @@ if __name__ == '__main__':
         # 启动webview
         logger.info("启动Webview窗口")
         webview.start(
-            debug=True,
             private_mode=False,  # 禁用私有模式以允许文件访问
             http_server=False,   # 禁用内置HTTP服务器
         )
