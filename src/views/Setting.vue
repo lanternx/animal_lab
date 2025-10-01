@@ -653,7 +653,7 @@
     </div>
     
     <!-- 导入结果对话框 -->
-    <div v-if="importResultDialogVisible" class="dialog-overlay">
+    <div v-if="importResultDialogVisible" @click.self="importResultDialogVisible=false" class="dialog-overlay">
     <div class="dialog-container">
         <h2>导入结果</h2>
         <div class="import-result">

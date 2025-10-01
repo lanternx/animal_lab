@@ -158,7 +158,11 @@
             <td>{{ mouse.id }}</td>
             <td>{{ mouse.genotype }}</td>
             <td>{{ mouse.strain }}</td>
-            <td>{{ mouse.sex === 'M' ? '雄性' : '雌性' }}</td>
+            <td>
+              <div class="mouse-sex" :class="mouse.sex === 'F' ? 'sex-female' : 'sex-male'">
+                {{ mouse.sex === 'F' ? '♀' : '♂' }}
+              </div>
+            </td>
             <td>{{ mouse.birth_date }}</td>
             <td>{{ mouse.days_old }}</td>
             <td>{{ mouse.weeks_old }}</td>
@@ -980,6 +984,8 @@ const closeModal = () => {
   modalMode.value = ''
   templateMouse.value = null
   newMice.value = []
+  fatherQuery.value = ''
+  motherQuery.value = ''
 }
 
 const saveMouse = async () => {
@@ -1081,15 +1087,28 @@ const searchParents = (type) => {
   }
   
   const lowerQuery = query.toLowerCase()
-  const suggestions = mice.value.filter(mouse =>
+  let suggestions = mice.value.filter(mouse =>
     mouse.sex === (type === 'father' ? 'M' : 'F') &&
-    mouse.id.toLowerCase().includes(lowerQuery) &&
-    (!formData.tid || mouse.tid !== formData.tid) &&
-    (!mouse.father.includes(formData.tid) && !mouse.mother.includes(formData.tid))
-  ).slice(0, 10)
+    mouse.id.toLowerCase().includes(lowerQuery))
   
-  if (type === 'father') fatherSuggestions.value = suggestions
-  else motherSuggestions.value = suggestions
+  if (modalMode.value === 'edit'){
+    suggestions.filter(mouse => {
+        let flag = false;
+        if (formData.tid) {
+          if (mouse.tid !== formData.tid) flag=true;
+        }
+        if (type === 'father') {
+          if (mouse.father) return flag && !mouse.father.includes(formData.tid);
+          else return flag;
+        } else {
+          if (mouse.mother) return flag && !mouse.mother.includes(formData.tid);
+          else return flag;
+        }
+    })
+  }
+
+  if (type === 'father') fatherSuggestions.value = suggestions.slice(0, 10)
+  else motherSuggestions.value = suggestions.slice(0, 10)
 }
 
 const selectParent = (type, mouse) => {
@@ -1362,6 +1381,7 @@ onMounted(async () => {
   text-align: left;
   padding: 14px 12px;
   border-bottom: 2px solid #e2e8f0;
+  min-width: 90px;
 }
 
 .mouse-table th i {
@@ -1381,6 +1401,8 @@ onMounted(async () => {
 .mouse-table td {
   padding: 12px;
   border-bottom: 1px solid #f1f5f9;
+  overflow: auto;
+  max-width: 200px;
 }
 
 .mouse-table tr:nth-child(even) {
@@ -1987,4 +2009,29 @@ onMounted(async () => {
     cursor: pointer;
     margin-left: 10px; 
 }
+
+.mouse-sex {
+  width: 24px;
+  height: 24px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  margin-right: 8px;
+  font-size: 12px;
+  color: white;
+  font-weight: bold;
+  flex-shrink: 0; /* 防止在flex容器中缩小 */
+  overflow: hidden; /* 防止内容溢出导致变形 */
+  box-sizing: border-box; /* 确保内边距不影响尺寸 */
+}
+
+.sex-female {
+  background-color: #ff4081;
+}
+
+.sex-male {
+  background-color: #2196f3;
+}
+
 </style>

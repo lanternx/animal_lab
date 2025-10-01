@@ -182,7 +182,7 @@ const totalPages = computed(() => Math.ceil(totalRecords.value / pageSize.value)
 
 const newRecord = ref({
 mouse_id: '',
-record_date: new Date(),
+record_date: new Date().toISOString().split('T')[0],
 weight: ''
 })
 
@@ -283,11 +283,10 @@ showAddModal.value = false
 editingRecord.value = null
 newRecord.value = {
     mouse_id: '',
-    record_date: new Date().toISOString().slice(0, 16),
+    record_date: new Date().toISOString().split('T')[0],
     weight: ''
 }
 selectedMouse.value = null
-mouseQuery.value = ''
 }
 
 const resetFilters = () => {

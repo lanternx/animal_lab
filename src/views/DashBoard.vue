@@ -15,7 +15,7 @@
           <i class="material-icons btn-icon">picture_as_pdf</i>
           当前位置导出pdf
         </button>
-        <button class="btn btn-primary" @click="openCageModal">
+        <button class="btn btn-primary" @click="openCageModal(null)">
           <i class="material-icons btn-icon">add</i>
           添加笼位
         </button>
@@ -491,8 +491,8 @@ function openMouseDetail(mouseId) {
 }
 
 // 打开笼位对话框
-function openCageModal(cage = null) {
-  isEditing.value = !cage
+function openCageModal(cage) {
+  isEditing.value = cage
   
   if (isEditing.value) {
     // 编辑模式：填充当前笼位数据
@@ -1111,6 +1111,9 @@ const generatePDFAsArrayBuffer = () => {
   font-size: 12px;
   color: white;
   font-weight: bold;
+  flex-shrink: 0; /* 防止在flex容器中缩小 */
+  overflow: hidden; /* 防止内容溢出导致变形 */
+  box-sizing: border-box; /* 确保内边距不影响尺寸 */
 }
 
 .sex-female {
@@ -1133,6 +1136,8 @@ const generatePDFAsArrayBuffer = () => {
 .mouse-genotype {
   font-size: 0.8rem;
   color: #666;
+  max-width: 70px;
+  overflow: auto;
 }
 
 .mouse-days {

@@ -313,19 +313,20 @@ def add_mouse():
         mouse.tests_done = data.get('tests_done')
         mouse.tests_planned = data.get('tests_planned')
         db.session.add(mouse)
+        db.session.flush()
         if data['father']:
             for t in data['father']:
-                parent = Pedigree()
-                parent.mouse_id = mouse.tid
-                parent.parent_id = t
-                parent.parent_type = 'father'
+                parent = Pedigree(
+                    mouse_id = mouse.tid,
+                    parent_id = t,
+                    parent_type = 'father')
                 db.session.add(parent)
         if data['mother']:
             for t in data['mother']:
-                parent = Pedigree()
-                parent.mouse_id = mouse.tid
-                parent.parent_id = t
-                parent.parent_type = 'mother'
+                parent = Pedigree(
+                    mouse_id = mouse.tid,
+                    parent_id = t,
+                    parent_type = 'mother')
                 db.session.add(parent)
         db.session.commit()
         return jsonify({
@@ -733,7 +734,7 @@ def add_status_record():
         db.session.add(record)
         db.session.commit()
         return jsonify({
-            'mouse_tid': record.mouse_tid,
+            'mouse_tid': record.mouse_id,
             'record_livingdays': record.record_livingdays,
             'status': record.status
         }), 201
@@ -1947,13 +1948,13 @@ def input_experiment_records():
                 
                 # 根据数据类型设置值
                 if field_def.data_type == 'INTEGER':
-                    exp_value.value_int = int(value) if value is not None else None
+                    exp_value.value_int = int(value) if value else None
                 elif field_def.data_type == 'REAL':
-                    exp_value.value_real = float(value) if value is not None else None
+                    exp_value.value_real = float(value) if value else None
                 elif field_def.data_type == 'TEXT':
-                    exp_value.value_text = str(value) if value is not None else None
+                    exp_value.value_text = str(value) if value else None
                 elif field_def.data_type == 'BOOLEAN':
-                    exp_value.value_bool = bool(value) if value is not None else None
+                    exp_value.value_bool = bool(value) if value else None
                 elif field_def.data_type == 'DATE':
                     try:
                         exp_value.value_date = datetime.strptime(value, '%Y-%m-%d').date() if value else None

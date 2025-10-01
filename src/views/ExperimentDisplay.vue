@@ -1577,7 +1577,7 @@ try {
         }
         if (!is_valid) {
             for (const field of fieldDefinitions.value) {
-                if (field.is_required && values[field.id]) {
+                if (field.is_required && !values[field.id]) {
                     toast.error(`小鼠 ${row.mouse_id} 的字段 ${field.field_name} 是必填的`);
                     return;
                 }
