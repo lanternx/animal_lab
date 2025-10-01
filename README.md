@@ -36,7 +36,7 @@
 ### 桌面应用
 
 - PyWebView - 轻量级 Web UI 库
-- PyInstaller - 应用打包工具
+- nuitka - 应用打包工具（后端打包成二进制文件，相比于pyinstaller开启速度更快，避免idna错误）
 
 ## 安装与运行
 
