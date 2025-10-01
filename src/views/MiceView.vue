@@ -231,7 +231,7 @@
         <div class="form-body">
           <!-- 小鼠ID字段（仅在添加模式显示） -->
           <div class="form-group" v-if="modalMode === 'add'">
-            <label>小鼠 ID:</label>
+            <label>小鼠 ID *:</label>
             <input type="text" v-model="formData.id">
           </div>
           <!-- 显示小鼠ID（仅在编辑模式显示） -->

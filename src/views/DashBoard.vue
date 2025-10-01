@@ -169,17 +169,20 @@
     <div class="modal-backdrop" @click="closeCageModal"></div>
     <div class="dialog-container cage-modal">
       <h2>{{ isEditing ? '修改笼位信息' : '添加新笼位' }}</h2>
-      <div class="form-group">
-        <label>笼位ID</label>
-        <input type="text" v-model="currentCage.cage_id" placeholder="输入笼位ID" v-if="!isEditing">
-        <label v-else>  {{ currentCage.cage_id }}  </label>
+      <div v-if="!isEditing" class="form-group">
+        <label>笼位ID *</label>
+        <input type="text" v-model="currentCage.cage_id" placeholder="输入笼位ID">
       </div>
+      <div v-else class="form-group">
+        <label>  笼位ID: {{ currentCage.cage_id }}  </label>
+      </div>
+
       <div class="form-group">
         <label>位置</label>
         <input type="text" v-model="currentCage.location" placeholder="输入位置">
       </div>
       <div class="form-group">
-        <label>区域</label>
+        <label>区域 *</label>
         <select v-model="currentCage.section">
           <option v-for="section in availableSections" :key="section" :value="section.identifier">
             {{ section.identifier }}

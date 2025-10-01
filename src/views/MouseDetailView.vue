@@ -26,27 +26,27 @@
     <div class="grid-item basic-info">
         <div class="card">
         <h3 class="card-title">小鼠基本信息</h3>
-        <div class="info-content">
-            <div class="info-row">
+        <div class="info-grid">
+          <div class="info-row">
             <span class="info-label">ID:</span>
             <span class="info-value">{{ mouseData.id }}</span>
-            </div>
-            <div class="info-row">
-            <span class="info-label">基因型:</span>
-            <span class="info-value">{{ mouseData.genotype }}</span>
-            </div>
-            <div class="info-row">
+          </div>
+          <div class="info-row">
             <span class="info-label">性别:</span>
             <span class="info-value">{{ mouseData.sex }}</span>
-            </div>
-            <div class="info-row">
-            <span class="info-label">动物房位置:</span>
-            <span class="info-value">{{ mouseData.cage_section || '未分配' }}</span>
-            </div>
-            <div class="info-row">
-            <span class="info-label">笼位:</span>
-            <span class="info-value">{{ mouseData.cage_id || '未分配' }}</span>
-            </div>
+          </div>
+        </div>
+          <div class="info-row">
+            <span class="info-label">基因型:</span>
+            <span class="info-value">{{ mouseData.genotype }}</span>
+          </div>
+          <div class="info-row">
+            <span class="info-label">笼位位置:</span>
+            <span class="info-value">{{ mouseData.cage_section && mouseData.cage_id ? `${mouseData.cage_section}-${mouseData.cage_id}` : '未分配' }}</span>
+          </div>
+          <div class="info-row">
+            <span class="info-label">完成实验:</span>
+            <span class="info-value">{{ mouseData.tests_done && mouseData.tests_done.length ? mouseData.tests_done.join(', ') : '无' }}</span>
         </div>
         </div>
     </div>
@@ -896,6 +896,8 @@ padding: 20px;
 height: 100%;
 display: flex;
 flex-direction: column;
+flex:1;
+max-width: 600px;
 }
 
 .card-title {
@@ -927,6 +929,7 @@ flex-shrink: 0;
 
 .info-value {
 color: #333;
+overflow : auto;
 }
 
 .status-content {
@@ -1269,4 +1272,11 @@ background: #3367d6;
 .page-header .back-button {
   margin-right: 10px;
 }
+
+.info-grid {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 20px;
+}
+
 </style>

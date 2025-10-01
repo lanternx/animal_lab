@@ -292,6 +292,7 @@ def get_all_mice():
 
 @app.route('/api/mice', methods=['POST'])
 def add_mouse():
+    """添加新小鼠"""
     data = request.json
     try:
         mouse = Mouse()
@@ -656,6 +657,15 @@ def get_mice_info(mouse_tid):
             content['birth_date'] = mouse.birth_date.strftime('%Y-%m-%d')
     else:
         return jsonify({'error': 'Mouse not found'}), 404
+    if mouse.tests_done:
+        tests = []
+        for t in mouse.tests_done:
+            et = ExperimentType.query.get(t)
+            if et:
+                tests.append(et.name)
+        content['tests_done'] = tests
+    else:
+        content['tests_done'] = []
     mid, father, mother, offspring = None, None, None, None
     pedigree = Pedigree.query.filter_by(mouse_id=mouse.tid).all()
     if pedigree:
@@ -1113,7 +1123,10 @@ def import_mice_data(df, result, conflict_resolution):
     for index, row in df.iterrows():
         try:
             # 转换出生日期格式
-            birth_date = datetime.strptime(str(row['birth_date'].date()), '%Y-%m-%d').date()
+            if type(row['birth_date']) == str:
+                birth_date = datetime.strptime(row['birth_date'], '%Y-%m-%d').date()
+            else:
+                birth_date = datetime.strptime(str(row['birth_date'].date()), '%Y-%m-%d').date()
             
             existing = Mouse.query.filter_by(id=row['id']).filter_by(birth_date=birth_date).first()
             if existing:
@@ -1138,19 +1151,34 @@ def import_mice_data(df, result, conflict_resolution):
                     genotype=genotype,
                     sex=str(row['sex']).upper()[0],  # 只取第一个字母
                     birth_date=birth_date,
-                    live_status=int(row.get('live_status', 1))
+                    live_status=int(row.get('live_status', 1)),
+                    tests_done = [],
+                    tests_planned = []
                 )
             else:
                 continue
             # 可选字段
             if 'death_date' in df.columns and pd.notna(row['death_date']) and mouse.live_status != 1:
-                mouse.death_date = datetime.strptime(str(row['death_date'].date()), '%Y-%m-%d').date()
-            
+                if type(row['death_date']) == str:
+                    mouse.death_date = datetime.strptime(row['death_date'], '%Y-%m-%d').date()
+                else:
+                    mouse.death_date = datetime.strptime(str(row['death_date'].date()), '%Y-%m-%d').date()
             if 'cage_id' in df.columns and pd.notna(row['cage_id']):
-                mouse.cage_id = str(row['cage_id'])
+                cage_id = str(row['cage_id'].strip())
+                if genotype and genotype != "":
+                    existing_cage = Cage.query.filter_by(cage_id=cage_id).first()
+                    if not existing_genotype:
+                        min_order = db.session.query(db.func.min(Location.order)).scalar()
+                        section_name = Location.query.filter_by(order=min_order).first().identifier
+                        max_order = db.session.query(db.func.max(Cage.order)).scalar()
+                        new_order = max_order + 1 if max_order is not None else 0
+                        existing_cage = Cage(section=section_name, cage_id=cage_id, order=new_order)
+                        db.session.add(existing_cage)
+                        db.session.flush()
+                    mouse.cage_id = existing_cage.id
             else:
                 mouse.cage_id = '-1'
-            
+
             db.session.add(mouse)
             db.session.commit()
             result['successCount'] += 1

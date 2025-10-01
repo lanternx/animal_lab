@@ -26,7 +26,7 @@
         <form @submit.prevent="addGenotype" class="form-group-row">
         <div class="form-group">
             <label>基因型名称 *</label>
-            <input type="text" v-model="newGenotype.name" placeholder="例如: C57BL/6J" required>
+            <input type="text" v-model="newGenotype.name" placeholder="例如: WT" required>
         </div>
         
         <div class="form-group">
@@ -272,7 +272,7 @@
                             <td><span class="required">live_status</span></td>
                             <td>整数</td>
                             <td><span class="required">是</span></td>
-                            <td>存活状态（1=存活，0=死亡）</td>
+                            <td>存活状态（1=存活，0=死亡，2=解剖，3=失踪，4=丢弃，5=处理后死亡）</td>
                             <td class="example-row">1</td>
                         </tr>
                         <tr>
@@ -295,10 +295,12 @@
                 <div class="note">
                     <div class="note-title">重要提示：</div>
                     <div class="note-content">
-                        <p>1. 日期格式必须为YYYY-MM-DD（例如：2023-05-15）</p>
-                        <p>2. 性别字段只接受'M'（雄性）或'F'（雌性）</p>
-                        <p>3. 基因型如果不存在会自动创建新基因型</p>
-                        <p>4. 当live_status=0（死亡）时，必须提供death_date</p>
+                        <p>1. 列名一定要按照要求填写，否则无法识别</p>
+                        <p>2. 日期格式必须为YYYY-MM-DD（例如：2023-05-15）</p>
+                        <p>3. 性别字段只接受'M'（雄性）或'F'（雌性）</p>
+                        <p>4. 基因型如果不存在会自动创建新基因型</p>
+                        <p>5. 当live_status!=1（不为存活）时，必须提供death_date</p>
+                        <p>6. 新笼位添加到默认第一区域，后续可调整</p>
                     </div>
                 </div>
             </div>
@@ -350,10 +352,11 @@
                 <div class="note">
                     <div class="note-title">重要提示：</div>
                     <div class="note-content">
-                        <p>1. 日期格式必须为YYYY-MM-DD（例如：2023-05-15）</p>
-                        <p>2. 体重值应为数值类型，最多保留两位小数</p>
-                        <p>3. 记录日期必须晚于出生日期</p>
-                        <p>4. 系统会自动计算生存天数 = (记录日期 - 出生日期)</p>
+                        <p>1. 列名一定要按照要求填写，否则无法识别</p>
+                        <p>2. 日期格式必须为YYYY-MM-DD（例如：2023-05-15）</p>
+                        <p>3. 体重值应为数值类型，最多保留两位小数</p>
+                        <p>4. 记录日期必须晚于出生日期</p>
+                        <p>5. 系统会自动计算生存天数 = (记录日期 - 出生日期)</p>
                     </div>
                 </div>
             </div>
@@ -405,10 +408,11 @@
                 <div class="note">
                     <div class="note-title">重要提示：</div>
                     <div class="note-content">
-                        <p>1. 日期格式必须为YYYY-MM-DD（例如：2023-05-15）</p>
-                        <p>2. 父鼠ID和母鼠ID如不存在，必须填写字符串'None'（区分大小写）</p>
-                        <p>3. 所有小鼠ID必须已在系统中存在</p>
-                        <p>4. 父鼠和母鼠的出生日期必须早于当前小鼠的出生日期</p>
+                        <p>1. 列名一定要按照要求填写，否则无法识别</p>
+                        <p>2. 日期格式必须为YYYY-MM-DD（例如：2023-05-15）</p>
+                        <p>3. 父鼠ID和母鼠ID如不存在，必须填写字符串'None'（区分大小写）</p>
+                        <p>4. 所有小鼠ID必须已在系统中存在</p>
+                        <p>5. 父鼠和母鼠的出生日期必须早于当前小鼠的出生日期</p>
                     </div>
                 </div>
             </div>
