@@ -1569,20 +1569,28 @@ try {
     for (const row of allRows) {
         let values = {};
         let is_valid = true;
+        let is_integrated = true;
+        let lack_field = '';
         for (const field of fieldDefinitions.value) {
             if (field.is_required && (row[`field_${field.id}`] === null || row[`field_${field.id}`] === undefined || row[`field_${field.id}`] === '')) {
                 is_valid = false;
+                lack_field = field.field_name;
+                break;
             }
             values[field.id] = row[`field_${field.id}`];
         }
         if (!is_valid) {
             for (const field of fieldDefinitions.value) {
-                if (field.is_required && !values[field.id]) {
-                    toast.error(`小鼠 ${row.mouse_id} 的字段 ${field.field_name} 是必填的`);
-                    return;
+                if (field.is_required && values[field.id]) {
+                    is_integrated = false;
                 }
             }
-            continue; // 跳过未填写的行
+            if (!is_integrated) {
+                toast.error(`小鼠 ${row.mouse_id} 的字段 ${lack_field} 是必填的`);
+                return;
+            } else {
+                continue; // 跳过未填写的行
+            }
         }
         records.push({
             mouse_id: row.mouse_tid,

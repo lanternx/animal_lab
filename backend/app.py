@@ -1166,14 +1166,14 @@ def import_mice_data(df, result, conflict_resolution):
                     mouse.death_date = datetime.strptime(str(row['death_date'].date()), '%Y-%m-%d').date()
             if 'cage_id' in df.columns and pd.notna(row['cage_id']):
                 cage_id = str(row['cage_id'].strip())
-                if genotype and genotype != "":
+                if cage_id and cage_id != "":
                     existing_cage = Cage.query.filter_by(cage_id=cage_id).first()
-                    if not existing_genotype:
+                    if not existing_cage:
                         min_order = db.session.query(db.func.min(Location.order)).scalar()
                         section_name = Location.query.filter_by(order=min_order).first().identifier
                         max_order = db.session.query(db.func.max(Cage.order)).scalar()
                         new_order = max_order + 1 if max_order is not None else 0
-                        existing_cage = Cage(section=section_name, cage_id=cage_id, order=new_order)
+                        existing_cage = Cage(id=str(cage_id), section=section_name, cage_id=cage_id, order=new_order)
                         db.session.add(existing_cage)
                         db.session.flush()
                     mouse.cage_id = existing_cage.id
@@ -1203,8 +1203,20 @@ def update_existing_mouse(existing, row, result):
             existing.death_date = datetime.strptime(str(row['death_date'].date()), '%Y-%m-%d').date()
         
         if 'cage_id' in row and pd.notna(row['cage_id']):
-            existing.cage_id = str(row['cage_id'])
-        
+            cage_id = str(row['cage_id'].strip())
+            if cage_id and cage_id != "":
+                existing_cage = Cage.query.filter_by(cage_id=cage_id).first()
+                if not existing_cage:
+                    min_order = db.session.query(db.func.min(Location.order)).scalar()
+                    section_name = Location.query.filter_by(order=min_order).first().identifier
+                    max_order = db.session.query(db.func.max(Cage.order)).scalar()
+                    new_order = max_order + 1 if max_order is not None else 0
+                    existing_cage = Cage(id=str(cage_id), section=section_name, cage_id=cage_id, order=new_order)
+                    db.session.add(existing_cage)
+                    db.session.flush()
+                existing.cage_id = existing_cage.id
+        else:
+            existing.cage_id = '-1'
         # 更新基因型关联
         if existing.genotype:
             existing_genotype = Genotype.query.filter_by(name=existing.genotype).first()
@@ -1840,7 +1852,7 @@ def add_mouse_to_group(experiment_id):
             )
             db.session.add(experiment_class)
         db.session.commit()
-        return jsonify({'message': '小鼠已成功添加到分组', 'id': experiment_class.id})
+        return jsonify({'message': '小鼠已成功添加到分组'})
     except Exception as e:
         db.session.rollback()
         return jsonify({'error': str(e)}), 500
