@@ -285,7 +285,6 @@ if __name__ == '__main__':
         # 启动webview
         logger.info("启动Webview窗口")
         webview.start(
-            debug=True,
             private_mode=False,  # 禁用私有模式以允许文件访问
             http_server=False,   # 禁用内置HTTP服务器
         )

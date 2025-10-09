@@ -2,6 +2,54 @@
   <div class="main-content">
     <div class="content-header" id="contentHeader">
       <h1 class="page-title">笼位视图</h1>
+      <!-- 搜索框 -->
+      <div class="search-container">
+        <div class="search-box">
+          <i class="material-icons">search</i>
+          <input 
+            type="text" 
+            v-model="searchTerm" 
+            placeholder="搜索小鼠ID..." 
+            @input="performSearch"
+            @keyup.enter="performSearch"
+          />
+          <button v-if="searchTerm" @click="clearSearch" class="search-clear">
+            <i class="material-icons">close</i>
+          </button>
+        </div>
+        
+        <!-- 搜索结果下拉框 -->
+        <div v-if="searchResults.length > 0" class="search-results">
+          <div class="search-result-header">
+            <span>找到 {{ searchResults.length }} 个结果</span>
+            <div class="search-nav">
+              <button @click="navigateResults(-1)" :disabled="currentResultIndex <= 0">
+                <i class="material-icons">arrow_upward</i>
+              </button>
+              <button @click="navigateResults(1)" :disabled="currentResultIndex >= searchResults.length - 1">
+                <i class="material-icons">arrow_downward</i>
+              </button>
+            </div>
+          </div>
+          
+          <div 
+            v-for="(result, index) in searchResults" 
+            :key="index" 
+            class="search-result-item"
+            :class="{ active: index === currentResultIndex }"
+            @click="selectSearchResult(result, index)"
+          >
+            <div class="mouse-sex" :class="result.mouse.sex === 'F' ? 'sex-female' : 'sex-male'">
+              {{ result.mouse.sex === 'F' ? '♀' : '♂' }}
+            </div>
+            <div class="result-info">
+              <div class="mouse-id">{{ result.mouse.id }}</div>
+              <div class="cage-info">{{ result.cage.section }} - {{ result.cage.cage_id }} ({{ result.cage.location }})</div>
+            </div>
+          </div>
+        </div>
+      </div>
+
       <div class="action-buttons">
         <button class="btn btn-outline" @click="fetchCages">
           <i class="material-icons btn-icon">refresh</i>
@@ -50,11 +98,13 @@
         <div 
           v-for="cage in filteredCages" 
           :key="cage.id" 
-          class="cage-card" 
+          class="cage-card"
+          :data-cage-id="cage.id"
           :class="{
             'breeding': cage.cage_type === 'breeding',
             'swap-source': cage.id === sourceCage?.id,
-            'swap-target': cage.id === targetCage?.id
+            'swap-target': cage.id === targetCage?.id,
+            'search-highlight': isCageHighlighted(cage.id)
             }"
           @dragover.prevent
           @drop="handleDrop($event, cage.id)"
@@ -278,7 +328,7 @@
 </template>
 
 <script setup>
-import { ref, reactive, nextTick, computed, onMounted } from 'vue'
+import { ref, reactive, nextTick, computed, onMounted, watch } from 'vue'
 import axios from 'axios'
 import MouseDetailModal from './MouseDetailView.vue'
 import { toast } from 'vue3-toastify';
@@ -321,12 +371,25 @@ const activeSection = ref('')
 const availableSections = ref([])
 const section_key = ref(false)
 
+// 搜索相关状态
+const searchTerm = ref('')
+const searchResults = ref([])
+const currentResultIndex = ref(-1)
+const highlightedCageId = ref(null)
+
 // 交换状态
 const swapStatus = ref(null)
 const sourceCage = ref(null)
 const targetCage = ref(null)
 
 const showTemporaryArea = ref(false)
+
+// 监听搜索词变化
+watch(searchTerm, (newVal) => {
+  if (!newVal) {
+    clearSearch()
+  }
+})
 
 // 计算属性 - 过滤笼位
 const filteredCages = computed(() => {
@@ -556,6 +619,25 @@ function openCageContextMenu(event, cage) {
   cageContextMenu.cage = cage
   // 点击其他地方关闭菜单
   document.addEventListener('click', closeContextMenu)
+  // 在下一个tick中获取实际菜单尺寸并调整位置
+  nextTick(() => {
+    const menu = document.querySelector('.context-menu')
+    if (menu) {
+      const rect = menu.getBoundingClientRect()
+      const viewportHeight = window.innerHeight
+      const viewportWidth = window.innerWidth
+      
+      // 垂直方向避让
+      if (event.pageY + rect.height > viewportHeight) {
+        cageContextMenu.y = event.pageY - rect.height
+      }
+      
+      // 水平方向避让
+      if (event.pageX + rect.width > viewportWidth) {
+        cageContextMenu.x = event.pageX - rect.width
+      }
+    }
+  })
 }
 
 // 关闭上下文菜单
@@ -879,6 +961,108 @@ const generatePDFAsArrayBuffer = () => {
     }).catch(reject);
   });
 };
+
+// 添加搜索方法
+function performSearch() {
+  if (!searchTerm.value.trim()) {
+    clearSearch()
+    return
+  }
+  
+  const term = searchTerm.value.toLowerCase().trim()
+  searchResults.value = []
+  
+  // 搜索所有笼位中的小鼠
+  cages.value.forEach(cage => {
+    if (cage.mice && cage.mice.length > 0) {
+      cage.mice.forEach(mouse => {
+        if (mouse.id.toLowerCase().includes(term)) {
+          searchResults.value.push({
+            mouse: mouse,
+            cage: cage
+          })
+        }
+      })
+    }
+  })
+  
+  // 搜索临时区中的小鼠
+  if (temporaryMice.value && temporaryMice.value.length > 0) {
+    temporaryMice.value.forEach(mouse => {
+      if (mouse.id.toLowerCase().includes(term)) {
+        searchResults.value.push({
+          mouse: mouse,
+          cage: { 
+            id: '-1', 
+            cage_id: '临时区', 
+            section: '临时存放区' 
+          }
+        })
+      }
+    })
+  }
+  
+  // 如果有结果，高亮第一个
+  if (searchResults.value.length > 0) {
+    currentResultIndex.value = 0
+    highlightSearchResult(searchResults.value[0])
+  } else {
+    currentResultIndex.value = -1
+    highlightedCageId.value = null
+  }
+}
+
+// 清除搜索
+function clearSearch() {
+  searchTerm.value = ''
+  searchResults.value = []
+  currentResultIndex.value = -1
+  highlightedCageId.value = null
+}
+
+// 导航搜索结果
+function navigateResults(direction) {
+  if (searchResults.value.length === 0) return
+  
+  const newIndex = currentResultIndex.value + direction
+  if (newIndex >= 0 && newIndex < searchResults.value.length) {
+    currentResultIndex.value = newIndex
+    highlightSearchResult(searchResults.value[newIndex])
+  }
+}
+
+// 选择搜索结果
+function selectSearchResult(result, index) {
+  currentResultIndex.value = index
+  highlightSearchResult(result)
+}
+
+// 高亮搜索结果
+function highlightSearchResult(result) {
+  highlightedCageId.value = result.cage.id
+  
+  // 如果结果在临时区，确保临时区可见
+  if (result.cage.id === '-1') {
+    showTemporaryArea.value = true
+  } else {
+    // 切换到正确的section
+    activeSection.value = result.cage.section
+  }
+  
+  // 滚动到可见区域
+  nextTick(() => {
+    // 滚动到笼位
+    const cageElement = document.querySelector(`.cage-card[data-cage-id="${result.cage.id}"]`)
+    if (cageElement) {
+      cageElement.scrollIntoView({ behavior: 'smooth', block: 'nearest' })
+    }
+  })
+}
+
+// 检查笼位是否应该高亮
+function isCageHighlighted(cageId) {
+  return highlightedCageId.value === cageId
+}
 </script>
 
 <style scoped>
@@ -1369,6 +1553,218 @@ const generatePDFAsArrayBuffer = () => {
   padding: 15px 20px;
   background: #f8fafc;
   border-top: 1px solid #e2e8f0;
+}
+
+/* 搜索相关样式 */
+.search-container {
+  position: relative;
+  flex: 1;
+  max-width: 300px;
+  margin: 0 20px;
+}
+
+.search-box {
+  display: flex;
+  align-items: center;
+  background: white;
+  border: 1px solid #ddd;
+  border-radius: 20px;
+  padding: 5px 12px;
+  transition: all 0.3s;
+}
+
+.search-box:focus-within {
+  border-color: #1976d2;
+  box-shadow: 0 0 0 2px rgba(25, 118, 210, 0.2);
+}
+
+.search-box i {
+  color: #666;
+  margin-right: 8px;
+}
+
+.search-box input {
+  flex: 1;
+  border: none;
+  outline: none;
+  background: transparent;
+  font-size: 14px;
+}
+
+.search-clear {
+  background: none;
+  border: none;
+  color: #999;
+  cursor: pointer;
+  padding: 2px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.search-clear:hover {
+  color: #666;
+}
+
+.search-results {
+  position: absolute;
+  top: 100%;
+  left: 0;
+  right: 0;
+  background: white;
+  border: 1px solid #ddd;
+  border-radius: 4px;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+  z-index: 1000;
+  max-height: 300px;
+  overflow-y: auto;
+  margin-top: 5px;
+}
+
+.search-result-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 8px 12px;
+  background-color: #f5f5f5;
+  border-bottom: 1px solid #eee;
+  font-size: 12px;
+  color: #666;
+}
+
+.search-nav {
+  display: flex;
+  gap: 4px;
+}
+
+.search-nav button {
+  background: none;
+  border: none;
+  cursor: pointer;
+  padding: 2px;
+  border-radius: 2px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.search-nav button:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.search-nav button:hover:not(:disabled) {
+  background-color: #e0e0e0;
+}
+
+.search-result-item {
+  display: flex;
+  align-items: center;
+  padding: 8px 12px;
+  cursor: pointer;
+  border-bottom: 1px solid #f0f0f0;
+}
+
+.search-result-item:last-child {
+  border-bottom: none;
+}
+
+.search-result-item:hover {
+  background-color: #f0f6ff;
+}
+
+.search-result-item.active {
+  background-color: #e3f2fd;
+}
+
+.search-result-item .mouse-sex {
+  width: 24px;
+  height: 24px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  margin-right: 10px;
+  font-size: 12px;
+  font-weight: bold;
+  flex-shrink: 0;
+}
+
+.search-result-item .sex-female {
+  background-color: #ff4081;
+  color: white;
+}
+
+.search-result-item .sex-male {
+  background-color: #2196f3;
+  color: white;
+}
+
+.result-info {
+  flex: 1;
+}
+
+.result-info .mouse-id {
+  font-weight: 600;
+  font-size: 14px;
+}
+
+.result-info .cage-info {
+  font-size: 12px;
+  color: #666;
+}
+
+/* 添加笼位高亮样式 */
+.cage-card.search-highlight {
+  border: 2px solid #1976d2;
+  box-shadow: 0 0 10px rgba(25, 118, 210, 0.4);
+  animation: pulse-highlight 2s infinite;
+}
+
+@keyframes pulse-highlight {
+  0% { box-shadow: 0 0 0 0 rgba(25, 118, 210, 0.4); }
+  70% { box-shadow: 0 0 0 10px rgba(25, 118, 210, 0); }
+  100% { box-shadow: 0 0 0 0 rgba(25, 118, 210, 0); }
+}
+
+/* 调整内容头部布局 */
+.content-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 20px;
+  flex-wrap: wrap;
+  gap: 15px;
+}
+
+.page-title {
+  font-size: 1.8rem;
+  font-weight: 600;
+  color: var(--primary);
+  white-space: nowrap;
+}
+
+.action-buttons {
+  display: flex;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
+/* 响应式调整 */
+@media (max-width: 768px) {
+  .content-header {
+    flex-direction: column;
+    align-items: stretch;
+  }
+  
+  .search-container {
+    max-width: 100%;
+    margin: 10px 0;
+  }
+  
+  .action-buttons {
+    justify-content: center;
+  }
 }
 </style>
 

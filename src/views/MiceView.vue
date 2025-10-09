@@ -531,7 +531,7 @@
 </template>
 
 <script setup>
-import { ref, reactive, computed, onMounted, watch } from 'vue'
+import { ref, reactive, computed, onMounted, watch, nextTick } from 'vue'
 import axios from 'axios'
 import { toast } from 'vue3-toastify'
 import 'vue3-toastify/dist/index.css'
@@ -1069,9 +1069,29 @@ const deleteMouse = async (mouseId) => {
 
 const showContextMenu = (event, mouse) => {
   contextMenu.visible = true
+  contextMenu.mouse = mouse
   contextMenu.x = event.pageX
   contextMenu.y = event.pageY
-  contextMenu.mouse = mouse
+  
+  // 在下一个tick中获取实际菜单尺寸并调整位置
+  nextTick(() => {
+    const menu = document.querySelector('.context-menu')
+    if (menu) {
+      const rect = menu.getBoundingClientRect()
+      const viewportHeight = window.innerHeight
+      const viewportWidth = window.innerWidth
+      
+      // 垂直方向避让
+      if (event.pageY + rect.height > viewportHeight) {
+        contextMenu.y = event.pageY - rect.height
+      }
+      
+      // 水平方向避让
+      if (event.pageX + rect.width > viewportWidth) {
+        contextMenu.x = event.pageX - rect.width
+      }
+    }
+  })
 }
 
 const closeContextMenu = () => {
@@ -1090,6 +1110,31 @@ const searchParents = (type) => {
   let suggestions = mice.value.filter(mouse =>
     mouse.sex === (type === 'father' ? 'M' : 'F') &&
     mouse.id.toLowerCase().includes(lowerQuery))
+  
+  suggestions.sort((a, b) => {
+      const aStartsWith = a.id.toLowerCase().startsWith(lowerQuery)
+      const bStartsWith = b.id.toLowerCase().startsWith(lowerQuery)
+      const aIncludes = a.id.toLowerCase().includes(lowerQuery)
+      const bIncludes = b.id.toLowerCase().includes(lowerQuery)
+      
+      // 完全匹配或开头匹配的优先
+      if (aStartsWith && !bStartsWith) return -1
+      if (!aStartsWith && bStartsWith) return 1
+      
+      // 开头匹配的按ID长度排序（较短的优先）
+      if (aStartsWith && bStartsWith) {
+        return a.id.length - b.id.length
+      }
+      
+      // 包含匹配的按匹配位置排序
+      if (aIncludes && bIncludes) {
+        const aIndex = a.id.toLowerCase().indexOf(lowerQuery)
+        const bIndex = b.id.toLowerCase().indexOf(lowerQuery)
+        return aIndex - bIndex
+      }
+      
+      return 0
+    })
   
   if (modalMode.value === 'edit'){
     suggestions.filter(mouse => {
@@ -1676,6 +1721,11 @@ onMounted(async () => {
   border-radius: 4px;
   box-shadow: 0 2px 10px rgba(0, 0, 0, 0.1);
   z-index: 1000;
+  max-height: 300px;
+  overflow-y: auto;
+  /* 确保菜单不会超出视口 */
+  max-width: 100vw;
+  max-height: 100vh;
 }
 
 .context-menu ul {
