@@ -101,7 +101,7 @@ npm run build
 7. 将编译后的 `dist` 文件夹移动到 `backend` 中：
 
 ```bash
-mv -r dist ../backend/
+mv -i dist ../backend/
 ```
 
 6. 运行后端：
@@ -113,10 +113,10 @@ python3 main.py
 
 我一般在 `localhost:5000` 上直接访问，不会使用桌面程序。也可以编译为可执行文件：
 
-打包为可执行文件：
+打包为可执行文件(打包不要使用mac自带的python)：
 
 ```bash
-pyinstaller pyinstaller.spec
+python3 build_mac.py
 ```
 
 ### 安装完成后的运行：
