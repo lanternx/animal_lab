@@ -43,7 +43,9 @@
 
 ✅ 已提供打包好的桌面版，**无需安装任何依赖**，下载后直接运行：
 
-👉 [立即下载最新版本](https://github.com/lanternx/animal_lab/releases/tag/V1.1)
+👉 [立即下载最新版本](https://github.com/lanternx/animal_lab/releases/tag/V2.1)
+
+也可通过[百度网盘](https://pan.baidu.com/s/1UyzEXAiVZlK72dOMXtXZFA?pwd=2333)下载
 
 PS：windows 用户也可以参考 mac 用户的路径进行手动安装。
 
@@ -152,6 +154,8 @@ animal-lab-management/
 - **笼位视图** - 可视化动物笼位安排和管理
 - **小鼠详细页** - 动物个体信息追踪
 - **小鼠列表** - 详细的动物信息管理和搜索
+- **体重列表** - 详细的体重信息管理和搜索
+- **实验模块** - 根据设定的实验自动产生
 - **体重曲线** - 动物体重变化追踪和分析
 - **生存曲线** - 生存率统计和可视化
 - **系统设置** - 应用程序配置和管理
