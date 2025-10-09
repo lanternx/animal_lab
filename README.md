@@ -39,7 +39,7 @@
 
 ## 安装与运行
 
-### windows 用户（推荐）
+### 普通用户（推荐）
 
 ✅ 已提供打包好的桌面版，**无需安装任何依赖**，下载后直接运行：
 
@@ -47,9 +47,73 @@
 
 也可通过[百度网盘](https://pan.baidu.com/s/1UyzEXAiVZlK72dOMXtXZFA?pwd=2333)下载
 
-PS：windows 用户也可以参考 mac 用户的路径进行手动安装。
 
-### mac 用户
+### windows 开发者
+
+1. 克隆源码：
+
+```cmd
+git clone https://github.com/lanternx/animal_lab.git
+```
+
+2. 进入后端目录
+
+```cmd
+cd backend 
+```
+
+3. 创建虚拟环境
+
+``cmd
+# 创建虚拟环境
+python -m venv venv
+
+# 激活虚拟环境
+venv\Scripts\activate.bat
+
+# 安装依赖包
+pip install -r requirements.txt
+```
+
+注意：以后每次运行都需要激活虚拟环境，也即在命令行执行 `venv\Scripts\activate.bat`。
+
+4. 利用 npm 安装前端：
+
+```cmd
+cd ..
+npm install
+```
+
+5. 构建生产版本：
+
+```cmd
+npm run build
+```
+
+6. 将编译后的 `dist` 文件夹移动到 `backend` 中：
+
+7. 运行后端：
+
+```bash
+cd backend
+python main.py
+```
+
+### 安装完成后的运行：
+
+```cmd
+cd backend
+venv\Scripts\activate.bat
+python main.py
+```
+
+8. 打包为可执行文件：
+
+```cmd
+python build.py
+```
+
+### mac 开发者
 
 1. 克隆源码：
 
@@ -104,7 +168,7 @@ npm run build
 mv -i dist ../backend/
 ```
 
-6. 运行后端：
+8. 运行后端：
 
 ```bash
 cd backend
