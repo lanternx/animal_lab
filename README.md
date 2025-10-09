@@ -116,7 +116,7 @@ python3 main.py
 打包为可执行文件(打包不要使用mac自带的python)：
 
 ```bash
-python3 build_mac.py
+python3 build_mac.py --create-dmg --app-name "AL_V2.2"
 ```
 
 ### 安装完成后的运行：
