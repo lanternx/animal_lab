@@ -8,12 +8,14 @@ import socket
 from contextlib import closing
 import logging
 
+script_dir = os.path.dirname(os.path.abspath(__file__))
+log_path = os.path.join(script_dir, "app.log")
 # 配置日志记录
 logging.basicConfig(
     level=logging.INFO,
     format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
     handlers=[
-        logging.FileHandler("app.log"),
+        logging.FileHandler(log_path),
         logging.StreamHandler()
     ]
 )
@@ -152,7 +154,7 @@ def create_save_file_dialog(window):
             else:
                 byte_data = data
             
-            if sys.platform == "Darwin":
+            if sys.platform == "darwin":
                 return mac_save_file(data, filename)
             
             # 创建默认保存路径
