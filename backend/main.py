@@ -19,17 +19,17 @@ logging.basicConfig(
 )
 logger = logging.getLogger("Main")
 
-# 获取屏幕尺寸（使用 tkinter，Python 标准库）
-import tkinter as tk
-root = tk.Tk()
-screen_width = root.winfo_screenwidth()
-screen_height = root.winfo_screenheight()
-root.destroy()
-
-# 计算居中位置
-loading_window_width, loading_window_height = 400, 300
-loading_window_x = (screen_width - loading_window_width) // 2
-loading_window_y = (screen_height - loading_window_height) // 2
+if sys.platform != 'darwin':
+    # 获取屏幕尺寸（使用 tkinter，Python 标准库）
+    import tkinter as tk
+    root = tk.Tk()
+    screen_width = root.winfo_screenwidth()
+    screen_height = root.winfo_screenheight()
+    root.destroy()
+    # 计算居中位置
+    loading_window_width, loading_window_height = 400, 300
+    loading_window_x = (screen_width - loading_window_width) // 2
+    loading_window_y = (screen_height - loading_window_height) // 2
 
 # 创建一个简单的加载动画HTML
 LOADING_HTML = """
@@ -152,6 +152,9 @@ def create_save_file_dialog(window):
             else:
                 byte_data = data
             
+            if sys.platform == "Darwin":
+                return mac_save_file(data, filename)
+            
             # 创建默认保存路径
             default_dir = os.path.join(os.path.expanduser("~"), "Documents")
             if not os.path.exists(default_dir):
@@ -189,6 +192,59 @@ def create_save_file_dialog(window):
     
     return save_file_dialog
 
+def mac_save_file(data, filename):
+    try:
+        import tempfile
+        import subprocess
+        # 完整转义特殊字符
+        escaped_name = filename.replace('\\', '\\\\').replace('"', '\\"')
+        
+        with tempfile.NamedTemporaryFile(delete=False) as temp_file:
+            temp_file.write(data)
+            temp_path = temp_file.name
+
+        # 修复AppleScript路径处理
+        script = f'''
+        set tempPath to "{temp_path}"
+        set saveFile to choose file name with prompt "保存文件" ¬
+            default name "{escaped_name}"
+        if saveFile is not false then
+            set posixPath to POSIX path of saveFile
+            do shell script "cp -f " & quoted form of tempPath & space & quoted form of posixPath
+            return posixPath
+        else
+            return "CANCEL"
+        end if
+        '''
+        
+        result = subprocess.run(
+            ['osascript', '-e', script],
+            capture_output=True,
+            text=True,
+            timeout=60
+        )
+        
+        if result.returncode != 0:
+            logger.error(f"AppleScript 错误: {result.stderr}")
+            return {"success": False, "message": "文件保存失败"}
+        
+        save_path = result.stdout.strip()
+        if save_path == "CANCEL":
+            return {"success": False, "message": "用户取消操作"}
+        
+        # 成功后删除临时文件
+        if os.path.exists(temp_path):
+            os.unlink(temp_path)
+            
+        return {"success": True, "path": save_path}
+    
+    except Exception as e:
+        # 确保异常时也清理临时文件
+        if 'temp_path' in locals() and os.path.exists(temp_path):
+            os.unlink(temp_path)
+        logger.error(f"macOS 保存异常: {str(e)}")
+        return {"success": False, "message": f"macOS 错误: {str(e)}"}
+
 def handle_exception(exctype, value, traceback):
     """全局异常处理"""
     logger.critical(f"未捕获的异常: {exctype.__name__}: {value}")
@@ -202,18 +258,27 @@ sys.excepthook = handle_exception
 if __name__ == '__main__':
     logger.info("应用程序启动")
     
-    # 创建加载窗口
-    loading_window = webview.create_window(
-        "小鼠管理系统 - 启动中", 
-        html=LOADING_HTML,
-        width=loading_window_width, 
-        height=loading_window_height,
-        resizable=False,
-        frameless=True,
-        easy_drag=False,
-        x=loading_window_x,
-        y=loading_window_y
-    )
+    if sys.platform != "darwin":
+        # 创建加载窗口
+        loading_window = webview.create_window(
+            "小鼠管理系统 - 启动中", 
+            html=LOADING_HTML,
+            width=loading_window_width, 
+            height=loading_window_height,
+            resizable=False,
+            frameless=True,
+            easy_drag=False,
+            x=loading_window_x,
+            y=loading_window_y
+        )
+    else:
+        loading_window = webview.create_window(
+            "小鼠管理系统 - 启动中", 
+            html=LOADING_HTML,
+            resizable=False,
+            frameless=True,
+            easy_drag=False
+        )
     
     # 设置定时器，5秒后自动关闭加载窗口（无论初始化是否完成）
     def close_loading_window():

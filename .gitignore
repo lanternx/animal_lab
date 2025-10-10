@@ -7,6 +7,7 @@ backend/**
 !backend/main.py
 !backend/models.py
 !backend/build.py
+!backend/build_mac.py
 !backend/requirement.txt
 
 public
