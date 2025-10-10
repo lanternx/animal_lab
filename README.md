@@ -64,7 +64,7 @@ cd backend
 
 3. 创建虚拟环境
 
-``cmd
+```cmd
 # 创建虚拟环境
 python -m venv venv
 
