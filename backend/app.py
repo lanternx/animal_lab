@@ -1106,6 +1106,8 @@ def import_data():
         import_weights_data(df, result, conflict_resolution)
     elif import_type == 'pedigree':
         import_pedigree_data(df, result, conflict_resolution)
+    elif import_type == 'record':
+        import_record_data(df, result, conflict_resolution)
     else:
         return jsonify({'error': '不支持的导入类型'}), 400
     
@@ -1199,8 +1201,11 @@ def update_existing_mouse(existing, row, result):
         existing.live_status = int(row.get('live_status', 1))
         
         # 处理可选字段
-        if 'death_date' in row and pd.notna(row['death_date']):
-            existing.death_date = datetime.strptime(str(row['death_date'].date()), '%Y-%m-%d').date()
+        if 'death_date' in row and pd.notna(row['death_date']) and existing.live_status != 1:
+            if type(row['death_date']) == str:
+                existing.death_date = datetime.strptime(row['death_date'], '%Y-%m-%d').date()
+            else:
+                existing.death_date = datetime.strptime(str(row['death_date'].date()), '%Y-%m-%d').date()
         
         if 'cage_id' in row and pd.notna(row['cage_id']):
             cage_id = str(row['cage_id'].strip())
@@ -1244,9 +1249,12 @@ def import_weights_data(df, result, conflict_resolution):
     for index, row in df.iterrows():
         try:
             mouse_id = str(row['id'])
-            
+            if type(row['birth_date']) == str:
+                birth_date = datetime.strptime(row['birth_date'], '%Y-%m-%d').date()
+            else:
+                birth_date = datetime.strptime(str(row['birth_date'].date()), '%Y-%m-%d').date()
             # 检查小鼠是否存在
-            mouse = Mouse.query.filter_by(id=mouse_id).filter_by(birth_date=datetime.strptime(str(row['birth_date'].date()), '%Y-%m-%d').date()).first()
+            mouse = Mouse.query.filter_by(id=mouse_id).filter_by(birth_date=birth_date).first()
             if not mouse:
                 result['errors'].append({
                     'row': index + 2,
@@ -1254,21 +1262,92 @@ def import_weights_data(df, result, conflict_resolution):
                 })
                 continue
 
-            record_date = datetime.strptime(str(row['record_date'].date()), '%Y-%m-%d').date()
-
+            if type(row['record_date']) == str:
+                record_date = datetime.strptime(row['record_date'], '%Y-%m-%d').date()
+            else:
+                record_date = datetime.strptime(str(row['record_date'].date()), '%Y-%m-%d').date()
+        
             # 计算生存天数
             birth_date = mouse.birth_date
             living_days = (record_date - birth_date).days
+            existing = WeightRecord.query.filter(WeightRecord.mouse_id==mouse.tid, WeightRecord.record_livingdays==living_days).first()
+            if existing:
+                if conflict_resolution == 'skip':
+                    result['skippedCount'] += 1
+                    continue
+                elif conflict_resolution == 'overwrite':
+                    existing.weight = float(row['weight'])
+                    result['successCount'] += 1
+                    continue
+            else:
+                # 创建体重记录
+                weight_record = WeightRecord(
+                    mouse_id=mouse.tid,
+                    weight=float(row['weight']),
+                    record_date=record_date,
+                    record_livingdays=living_days
+                )
+                
+                db.session.add(weight_record)
+            db.session.commit()
+            result['successCount'] += 1
             
-            # 创建体重记录
-            weight_record = WeightRecord(
-                mouse_id=mouse.tid,
-                weight=float(row['weight']),
-                record_date=record_date,
-                record_livingdays=living_days
-            )
-            
-            db.session.add(weight_record)
+        except Exception as e:
+            result['errors'].append({
+                'row': index + 2,
+                'message': f'导入失败: {str(e)}'
+            })
+
+def import_record_data(df, result, conflict_resolution):
+    """导入记录数据"""
+    required_columns = ['id', 'birth_date', 'record', 'record_date']
+    missing_cols = [col for col in required_columns if col not in df.columns]
+    if missing_cols:
+        result['errors'].append({'row': 0, 'message': f'缺少必要列: {", ".join(missing_cols)}'})
+        return
+    
+    for index, row in df.iterrows():
+        try:
+            mouse_id = str(row['id'])
+            if type(row['birth_date']) == str:
+                birth_date = datetime.strptime(row['birth_date'], '%Y-%m-%d').date()
+            else:
+                birth_date = datetime.strptime(str(row['birth_date'].date()), '%Y-%m-%d').date()
+            # 检查小鼠是否存在
+            mouse = Mouse.query.filter_by(id=mouse_id).filter_by(birth_date=birth_date).first()
+            if not mouse:
+                result['errors'].append({
+                    'row': index + 2,
+                    'message': f'小鼠ID {mouse_id} 不存在'
+                })
+                continue
+
+            if type(row['record_date']) == str:
+                record_date = datetime.strptime(row['record_date'], '%Y-%m-%d').date()
+            else:
+                record_date = datetime.strptime(str(row['record_date'].date()), '%Y-%m-%d').date()
+
+            # 计算生存天数
+            living_days = (record_date - birth_date).days
+            existing = StatusRecord.query.filter(StatusRecord.mouse_id==mouse.tid, StatusRecord.record_livingdays==living_days).first()
+            if existing:
+                if conflict_resolution == 'skip':
+                    result['skippedCount'] += 1
+                    continue
+                elif conflict_resolution == 'overwrite':
+                    existing.status = str(row['record']).strip() if pd.notna(row['record']) else "无"
+                    result['successCount'] += 1
+                    continue
+            else:
+                # 创建记录
+                status_record = StatusRecord(
+                    mouse_id=mouse.tid,
+                    status=str(row['record']).strip() if pd.notna(row['record']) else "无", 
+                    record_date=record_date,
+                    record_livingdays=living_days
+                )
+                
+                db.session.add(status_record)
             db.session.commit()
             result['successCount'] += 1
             

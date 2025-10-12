@@ -123,11 +123,12 @@
     <div class="form-section">
         <h3>数据导出设置</h3>
         <div class="btn-group">
-        <button class="btn btn-primary" @click="exportData('mice')">导出小鼠表</button>
-        <button class="btn btn-primary" @click="exportData('weights')">导出体重表</button>
-        <button class="btn btn-primary" @click="exportData('survival')">导出生存表</button>
-        <button class="btn btn-primary" @click="exportData('records')">导出状态信息表</button>
-        <button class="btn btn-primary" @click="exportData('experiment')">导出实验记录表</button>
+            <button class="btn btn-primary" 
+                v-for="option in exportOptions" 
+                :key="option.id" @click="exportData(option.id)" 
+                :class="{ active: currentExportType === option.id }">
+                    {{ option.title }}
+            </button>
         </div>
         
         <div v-if="exportOptionsVisible" class="export-options">
@@ -190,6 +191,7 @@
                 <select v-model="importType">
                     <option value="mice">小鼠信息</option>
                     <option value="weights">体重数据</option>
+                    <option value="record">小鼠状态记录数据</option>
                     <!-- <option value="pedigree">血统关系</option>功能尚未实现 -->
                 </select>
             </div>
@@ -224,7 +226,7 @@
         <div class="format-hint">
             <h4>
                 <i class="material-icons">info</i>
-                数据格式要求 - {{ importType === 'mice' ? '小鼠信息' : importType === 'weights' ? '体重数据' : '血统关系' }}
+                数据格式要求 - {{ importType === 'mice' ? '小鼠信息' : importType === 'weights' ? '体重数据' : importType === 'record' ? '小鼠状态记录数据' : '血统关系' }}
             </h4>
             
             <!-- 小鼠信息导入格式 -->
@@ -357,6 +359,61 @@
                         <p>3. 体重值应为数值类型，最多保留两位小数</p>
                         <p>4. 记录日期必须晚于出生日期</p>
                         <p>5. 系统会自动计算生存天数 = (记录日期 - 出生日期)</p>
+                    </div>
+                </div>
+            </div>
+
+            <!-- 状态数据导入格式 -->
+            <div v-if="importType === 'record'">
+                <table class="format-table">
+                    <thead>
+                        <tr>
+                            <th>列名</th>
+                            <th>数据类型</th>
+                            <th>是否必填</th>
+                            <th>说明</th>
+                            <th>示例</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        <tr>
+                            <td><span class="required">id</span></td>
+                            <td>字符串</td>
+                            <td><span class="required">是</span></td>
+                            <td>小鼠唯一标识</td>
+                            <td class="example-row">M001</td>
+                        </tr>
+                        <tr>
+                            <td><span class="required">birth_date</span></td>
+                            <td>日期</td>
+                            <td><span class="required">是</span></td>
+                            <td>出生日期（YYYY-MM-DD）</td>
+                            <td class="example-row">2023-05-15</td>
+                        </tr>
+                        <tr>
+                            <td><span class="required">record</span></td>
+                            <td>字符串</td>
+                            <td><span class="required">是</span></td>
+                            <td>每条记录</td>
+                            <td class="example-row">脱毛</td>
+                        </tr>
+                        <tr>
+                            <td><span class="required">record_date</span></td>
+                            <td>日期</td>
+                            <td><span class="required">是</span></td>
+                            <td>记录日期（YYYY-MM-DD）</td>
+                            <td class="example-row">2023-06-15</td>
+                        </tr>
+                    </tbody>
+                </table>
+                
+                <div class="note">
+                    <div class="note-title">重要提示：</div>
+                    <div class="note-content">
+                        <p>1. 列名一定要按照要求填写，否则无法识别</p>
+                        <p>2. 日期格式必须为YYYY-MM-DD（例如：2023-05-15）</p>
+                        <p>3. 记录日期必须晚于出生日期</p>
+                        <p>4. 系统会自动计算生存天数 = (记录日期 - 出生日期)</p>
                     </div>
                 </div>
             </div>
@@ -687,560 +744,530 @@
 </div>
 </template>
 
-<script>
-import axios from 'axios';
+<script setup>
+import { ref, reactive, onMounted } from 'vue'
+import axios from 'axios'
+import { toast } from 'vue3-toastify'
+import 'vue3-toastify/dist/index.css'
 
-export default {
-name: 'SystemSettings',
-data() {
-    return {
-    activeTab: 'genotype',
-    tabs: [
-        { id: 'genotype', title: '基因型设置' },
-        { id: 'location', title: '位置设置' },
-        { id: 'experiment', title: '实验类型设置' },
-        { id: 'export', title: '导出设置' },
-        { id: 'import', title: '导入数据' }
-    ],
-    newGenotype: {
-        name: '',
-        description: ''
-    },
-    genotypes: [],
-    newLocation: {
-        identifier: '',
-        description: ''
-    },
-    locations: [],
-    editingGenotype: {
-        id: null,
-        name: '',
-        description: ''
-    },
-    editGenotypeDialogVisible: false,
-    editingLocation: {
-        id: null,
-        identifier: '',
-        description: ''
-    },
-    editLocationDialogVisible: false,
-    
-    // 导出设置
-    exportOptionsVisible: false,
-    exportStartDate: '',
-    exportEndDate: '',
-    exportFormat: 'xlsx',
-    currentExportType: '',
-    selectedExperiments: [],
-    
-    // 导入设置
-    selectedFile: null,
-    isDragging: false,
-    importType: 'mice',
-    importConflictResolution: 'skip',
-    isImporting: false,
-    importResultDialogVisible: false,
-    importResult: {
-        successCount: 0,
-        skippedCount: 0,
-        errors: []
-    },
+// UI状态
+const activeTab = ref('genotype')
+const tabs = ref([
+{ id: 'genotype', title: '基因型设置' },
+{ id: 'location', title: '位置设置' },
+{ id: 'experiment', title: '实验类型设置' },
+{ id: 'export', title: '导出设置' },
+{ id: 'import', title: '导入数据' }
+])
 
-    // 实验类型相关数据
-    experimentTypes: [],
-    experimentPresets: {},
-    editingExperimentType: {
-        id: null,
-        name: '',
-        description: '',
-        fields: []
-    },
-    selectedPreset: '',
+// 基因型相关状态
+const newGenotype = reactive({ name: '', description: '' })
+const genotypes = ref([])
+const editingGenotype = reactive({ id: null, name: '', description: '' })
+const editGenotypeDialogVisible = ref(false)
 
-    // 详情展开状态
-    expandedExperimentType: null
-    };
-},
-mounted() {
-    this.fetchGenotypes();
-    this.fetchLocations();
-    this.fetchExperimentTypes();
-    this.fetchExperimentPresets();
-},
-methods: {
-    fetchGenotypes() {
-    axios.get('/api/genotypes')
-        .then(response => {
-        this.genotypes = response.data;
-        })
-        .catch(error => {
-        console.error('获取基因型列表失败:', error);
-        alert('获取基因型列表失败');
-        });
-    },
-    
-    addGenotype() {
-    if (!this.newGenotype.name) {
-        alert('请填写基因型名称');
-        return;
-    }
-    
-    axios.post('/api/genotypes', this.newGenotype)
-        .then(response => {
-        this.genotypes.push(response.data);
-        this.newGenotype = { name: '', description: '' };
-        })
-        .catch(error => {
-        console.error('添加基因型失败:', error);
-        alert('添加基因型失败，请重试');
-        });
-    },
-    
-    editGenotype(genotype) {
-    this.editingGenotype = { ...genotype };
-    this.editGenotypeDialogVisible = true;
-    },
-    
-    saveGenotype() {
-    axios.put(`/api/genotypes/${this.editingGenotype.id}`, this.editingGenotype)
-        .then(response => {
-        const index = this.genotypes.findIndex(g => g.id === this.editingGenotype.id);
-        if (index !== -1) {
-            this.genotypes[index] = response.data;
-        }
-        this.editGenotypeDialogVisible = false;
-        })
-        .catch(error => {
-        console.error('更新基因型失败:', error);
-        alert('更新基因型失败，请重试');
-        });
-    },
-    
-    deleteGenotype(id) {
-    if (!confirm('确定要删除这个基因型吗？')) return;
-    
-    axios.delete(`/api/genotypes/${id}`)
-        .then(() => {
-        this.genotypes = this.genotypes.filter(g => g.id !== id);
-        })
-        .catch(error => {
-        console.error('删除基因型失败:', error);
-        alert('删除基因型失败，请重试');
-        });
-    },
-    
-    fetchLocations() {
-    axios.get('/api/locations')
-        .then(response => {
-        this.locations = response.data;
-        })
-        .catch(error => {
-        console.error('获取位置列表失败:', error);
-        alert('获取位置列表失败');
-        });
-    },
-    
-    addLocation() {
-    if (!this.newLocation.identifier) {
-        alert('请填写位置标识');
-        return;
-    }
-    
-    axios.post('/api/locations', this.newLocation)
-        .then(response => {
-        this.locations.push(response.data);
-        this.newLocation = { identifier: '', description: '' };
-        })
-        .catch(error => {
-        console.error('添加位置失败:', error);
-        alert('添加位置失败，请重试');
-        });
-    },
-    
-    editLocation(location) {
-    this.editingLocation = { ...location };
-    this.editLocationDialogVisible = true;
-    },
-    
-    saveLocation() {
-    axios.put(`/api/locations/${this.editingLocation.id}`, this.editingLocation)
-        .then(response => {
-        const index = this.locations.findIndex(l => l.id === this.editingLocation.id);
-        if (index !== -1) {
-            this.locations[index] = response.data;
-        }
-        this.editLocationDialogVisible = false;
-        })
-        .catch(error => {
-        console.error('更新位置失败:', error);
-        alert('更新位置失败，请重试');
-        });
-    },
-    
-    deleteLocation(id) {
-    if (!confirm('确定要删除这个位置吗？')) return;
-    
-    axios.delete(`/api/locations/${id}`)
-        .then(() => {
-        this.locations = this.locations.filter(l => l.id !== id);
-        })
-        .catch(error => {
-        console.error('删除位置失败:', error);
-        alert('删除位置失败，请重试');
-        });
-    },
-    
-    exportData(type) {
-    this.currentExportType = type;
-    this.selectedExperiments = [];
-    this.exportOptionsVisible = true;
-    },
+// 位置相关状态
+const newLocation = reactive({ identifier: '', description: '' })
+const locations = ref([])
+const editingLocation = reactive({ id: null, identifier: '', description: '' })
+const editLocationDialogVisible = ref(false)
 
-    toggleSelect(id) {
-    const index = this.selectedExperiments.indexOf(id);
-    if (index === -1) {
-        this.selectedExperiments.push(id);
-    } else {
-        this.selectedExperiments.splice(index, 1);
-    }
-    },
-    
-    confirmExport() {
-    const params = {
-        start_date: this.exportStartDate,
-        end_date: this.exportEndDate,
-        experiment_ids: this.selectedExperiments,
-        format: this.exportFormat
-    };
-    
-    axios.get(`/api/export/${this.currentExportType}`, { 
-        params,
-        responseType: 'blob'
-    })
-    .then(response => {
-        // 使用 PyWebview 的保存文件对话框
-        if (window.pywebview && window.pywebview.api) {
-            // 创建默认文件名
-            const filename = `${this.currentExportType}_export.${this.exportFormat}`;
-            
-            response.data.arrayBuffer().then(arrayBuffer => {
-                const uint8array = new Uint8Array(arrayBuffer);
-                const dataArray = Array.from(uint8array);
-                // 调用 PyWebview API 保存文件
-                window.pywebview.api.save_file_dialog(dataArray, filename).then(() => {
-                    this.exportOptionsVisible = false;
-                });
-            });
-        } else {
-            const url = window.URL.createObjectURL(new Blob([response.data]));
-            const link = document.createElement('a');
-            link.href = url;
-            link.setAttribute('download', `${this.currentExportType}_export.${this.exportFormat}`);
-            document.body.appendChild(link);
-            link.click();
-            document.body.removeChild(link);
-            
-            this.exportOptionsVisible = false;
-        }
-    })
-    .catch(error => {
-        console.error('导出数据失败:', error);
-        alert('导出数据失败，请重试');
-    });
-    },
-    
-    handleFileUpload(event) {
-    this.selectedFile = event.target.files[0];
-    event.target.value = null; // 重置input，允许再次选择相同文件
-    },
-    
-    handleDrop(event) {
-    event.preventDefault();
-    this.isDragging = false;
-    
-    if (event.dataTransfer.files && event.dataTransfer.files.length > 0) {
-        this.selectedFile = event.dataTransfer.files[0];
-    }
-    },
-    
-    clearFile() {
-    this.selectedFile = null;
-    },
-    
-    formatFileSize(bytes) {
-    if (bytes === 0) return '0 Bytes';
-    const k = 1024;
-    const sizes = ['Bytes', 'KB', 'MB', 'GB'];
-    const i = Math.floor(Math.log(bytes) / Math.log(k));
-    return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i];
-    },
-    
-    importData() {
-        if (!this.selectedFile) {
-            alert('请选择要导入的文件');
-            return;
-        }
-        
-        this.isImporting = true;
-        
-        const formData = new FormData();
-        formData.append('file', this.selectedFile);
-        formData.append('type', this.importType);
-        formData.append('conflict_resolution', this.importConflictResolution);
-        
-        axios.post('/api/import', formData, {
-            headers: {
-            'Content-Type': 'multipart/form-data'
-            }
-        })
-        .then(response => {
-            this.importResult = response.data;
-            this.importResultDialogVisible = true;
-            this.isImporting = false;
-        })
-        .catch(error => {
-            console.error('导入失败:', error);
-            alert(`导入失败: ${error.response?.data?.error || '服务器错误'}`);
-            this.isImporting = false;
-        });
-    },
+// 导出设置相关状态
+const exportOptionsVisible = ref(false)
+const exportStartDate = ref('')
+const exportEndDate = ref('')
+const exportFormat = ref('xlsx')
+const currentExportType = ref('')
+const selectedExperiments = ref([])
+const exportOptions = ref([
+{ id: 'mice', title: '导出小鼠表' },
+{ id: 'weights', title: '导出体重表' },
+{ id: 'survival', title: '导出生存表' },
+{ id: 'records', title: '导出状态信息表' },
+{ id: 'experiment', title: '导出实验记录表' }
+])
 
-    // 实验类型相关方法
-    fetchExperimentTypes() {
-        axios.get('/api/experiment-types')
-        .then(response => {
-            this.experimentTypes = response.data;
-        })
-        .catch(error => {
-            console.error('获取实验类型列表失败:', error);
-            alert('获取实验类型列表失败');
-        });
-    },
+// 导入设置相关状态
+const selectedFile = ref(null)
+const isDragging = ref(false)
+const importType = ref('mice')
+const importConflictResolution = ref('skip')
+const isImporting = ref(false)
+const importResultDialogVisible = ref(false)
+const importResult = reactive({
+successCount: 0,
+skippedCount: 0,
+errors: []
+})
 
-    fetchExperimentPresets() {
-        axios.get('/api/experiment-types/presets')
-        .then(response => {
-            this.experimentPresets = response.data;
-        })
-        .catch(error => {
-            console.error('获取实验预设失败:', error);
-        });
-    },
+// 实验类型相关状态
+const experimentTypes = ref([])
+const experimentPresets = ref({})
+const editingExperimentType = reactive({
+id: null,
+name: '',
+description: '',
+fields: []
+})
+const selectedPreset = ref('')
+const expandedExperimentType = ref(null)
 
-    loadPreset(presetKey) {
-        const preset = this.experimentPresets[presetKey];
-        if (preset) {
-        this.editingExperimentType = {
-            id: null,
-            name: preset.name,
-            description: preset.description,
-            fields: JSON.parse(JSON.stringify(preset.fields))
-        };
-        }
-    },
-
-    addField() {
-        this.editingExperimentType.fields.push({
-        field_name: '',
-        data_type: 'TEXT',
-        unit: '',
-        is_required: false,
-        visualize_type: "",
-        display_order: this.editingExperimentType.fields.length
-        });
-    },
-
-    removeField(index) {
-        this.editingExperimentType.fields.splice(index, 1);
-    },
-
-    saveExperimentType() {
-        if (!this.editingExperimentType.name) {
-        alert('请填写实验类型名称');
-        return;
-        }
-        
-        if (this.editingExperimentType.fields.length === 0) {
-        alert('请至少添加一个字段');
-        return;
-        }
-        
-        this.updateFieldOrders();
-        // 验证字段
-        for (let i = 0; i < this.editingExperimentType.fields.length; i++) {
-        const field = this.editingExperimentType.fields[i];
-        if (!field.field_name) {
-            alert(`第${i + 1}个字段缺少名称`);
-            return;
-        }
-        if (!field.data_type) {
-            alert(`字段"${field.field_name}"缺少数据类型`);
-            return;
-        }
-        }
-
-        if (this.editingExperimentType.id && !confirm('调整属性后，这个实验的分组不受影响，但已有数据会被删除（建议及时导出），是否继续？')) return;
-        
-        const url = this.editingExperimentType.id 
-        ? `/api/experiment-types/${this.editingExperimentType.id}`
-        : '/api/experiment-types';
-        
-        const method = this.editingExperimentType.id ? 'put' : 'post';
-        
-        const dataToSend = {
-            ...this.editingExperimentType,
-            fields: this.editingExperimentType.fields.map((field, index) => ({
-            ...field,
-            display_order: field.display_order !== undefined ? field.display_order : index
-            }))
-        };
-        
-        axios[method](url, dataToSend)
-            .then(response => {
-                alert('保存成功');
-                this.cancelEdit();
-                this.fetchExperimentTypes();
-                window.experimentTypesUpdated = true
-            })
-            .catch(error => {
-                console.error('保存实验类型失败:', error);
-                alert(error.response?.data?.error || '保存实验类型失败');
-            });
-    },
-
-    editExperimentType(experimentType) {
-        // 深拷贝实验类型，字段已经按display_order排序
-        const copy = JSON.parse(JSON.stringify(experimentType));
-        copy.id = experimentType.id;
-        copy.name = experimentType.name;
-        copy.description = experimentType.description;
-        
-        this.editingExperimentType = copy;
-        this.selectedPreset = '';
-        
-        // 滚动到表单顶部
-        this.$nextTick(() => {
-            const formElement = this.$el.querySelector('.form-section');
-            if (formElement) {
-            formElement.scrollIntoView({ behavior: 'smooth' });
-            }
-        });
-    },
-
-    cancelEdit() {
-        this.editingExperimentType = {
-        id: null,
-        name: '',
-        description: '',
-        fields: []
-        };
-    },
-
-    deleteExperimentType(id) {
-        if (!confirm('确定要删除这个实验类型吗？')) return;
-        
-        axios.delete(`/api/experiment-types/${id}`)
-        .then(response => {
-            alert('删除成功');
-            this.fetchExperimentTypes();
-            window.experimentTypesUpdated = true;
-        })
-        .catch(error => {
-            console.error('删除实验类型失败:', error);
-            alert(error.response?.data?.error || '删除实验类型失败');
-        });
-    },
-
-    applyPreset() {
-    if (this.selectedPreset && this.experimentPresets[this.selectedPreset]) {
-        const preset = this.experimentPresets[this.selectedPreset];
-        
-        // 保留当前已编辑的内容，只添加预设的字段
-        const currentFields = this.editingExperimentType.fields || [];
-        const presetFields = JSON.parse(JSON.stringify(preset.fields));
-        
-        // 设置显示顺序，确保新字段排在现有字段后面
-        const maxOrder = currentFields.length > 0 ? 
-        Math.max(...currentFields.map(f => f.display_order)) : -1;
-        
-        presetFields.forEach((field, index) => {
-        field.display_order = maxOrder + index + 1;
-        });
-        
-        // 合并字段
-        this.editingExperimentType.fields = [...currentFields, ...presetFields];
-        
-        // 如果名称和描述为空，则使用预设的值
-        if (!this.editingExperimentType.name) {
-        this.editingExperimentType.name = preset.name;
-        }
-        if (!this.editingExperimentType.description) {
-        this.editingExperimentType.description = preset.description;
-        }
-    }
-    },
-
-    resetForm() {
-    this.editingExperimentType = {
-        id: null,
-        name: '',
-        description: '',
-        fields: []
-    };
-    this.selectedPreset = '';
-    },
-
-    moveFieldUp(index) {
-    if (index > 0) {
-        const fields = this.editingExperimentType.fields;
-        [fields[index], fields[index - 1]] = [fields[index - 1], fields[index]];
-        // 更新显示顺序
-        this.updateFieldOrders();
-    }
-    },
-
-    moveFieldDown(index) {
-    if (index < this.editingExperimentType.fields.length - 1) {
-        const fields = this.editingExperimentType.fields;
-        [fields[index], fields[index + 1]] = [fields[index + 1], fields[index]];
-        // 更新显示顺序
-        this.updateFieldOrders();
-    }
-    },
-
-    updateFieldOrders() {
-    this.editingExperimentType.fields.forEach((field, index) => {
-        field.display_order = index;
-    });
-    },
-
-    duplicateExperimentType(experimentType) {
-        // 深拷贝实验类型
-        const copy = JSON.parse(JSON.stringify(experimentType));
-        copy.id = null;
-        copy.name = copy.name + ' (副本)';
-        
-        this.editingExperimentType = copy;
-        this.selectedPreset = '';
-        
-        // 滚动到表单顶部
-        this.$nextTick(() => {
-            const formElement = this.$el.querySelector('.form-section');
-            if (formElement) {
-            formElement.scrollIntoView({ behavior: 'smooth' });
-            }
-        });
-    },
-
-    toggleDetails(id) {
-        if (this.expandedExperimentType === id) {
-            this.expandedExperimentType = null;
-        } else {
-            this.expandedExperimentType = id;
-        }
-    }
+// 基因型相关方法
+const fetchGenotypes = async () => {
+try {
+const response = await axios.get('/api/genotypes')
+genotypes.value = response.data
+} catch (error) {
+console.error('获取基因型列表失败:', error)
+toast.error('获取基因型列表失败')
 }
-};
+}
+
+const addGenotype = async () => {
+if (!newGenotype.name) {
+toast.info('请填写基因型名称')
+return
+}
+
+try {
+const response = await axios.post('/api/genotypes', newGenotype)
+genotypes.value.push(response.data)
+newGenotype.name = ''
+newGenotype.description = ''
+} catch (error) {
+console.error('添加基因型失败:', error)
+toast.error('添加基因型失败，请重试')
+}
+}
+
+const editGenotype = (genotype) => {
+Object.assign(editingGenotype, { ...genotype })
+editGenotypeDialogVisible.value = true
+}
+
+const saveGenotype = async () => {
+try {
+const response = await axios.put(`/api/genotypes/${editingGenotype.id}`, editingGenotype)
+const index = genotypes.value.findIndex(g => g.id === editingGenotype.id)
+if (index !== -1) {
+    genotypes.value[index] = response.data
+}
+editGenotypeDialogVisible.value = false
+} catch (error) {
+console.error('更新基因型失败:', error)
+toast.error('更新基因型失败，请重试')
+}
+}
+
+const deleteGenotype = async (id) => {
+if (!confirm('确定要删除这个基因型吗？')) return
+
+try {
+await axios.delete(`/api/genotypes/${id}`)
+genotypes.value = genotypes.value.filter(g => g.id !== id)
+} catch (error) {
+console.error('删除基因型失败:', error)
+toast.error('删除基因型失败，请重试')
+}
+}
+
+// 位置相关方法
+const fetchLocations = async () => {
+try {
+const response = await axios.get('/api/locations')
+locations.value = response.data
+} catch (error) {
+console.error('获取位置列表失败:', error)
+toast.error('获取位置列表失败')
+}
+}
+
+const addLocation = async () => {
+if (!newLocation.identifier) {
+toast.info('请填写位置标识')
+return
+}
+
+try {
+const response = await axios.post('/api/locations', newLocation)
+locations.value.push(response.data)
+newLocation.identifier = ''
+newLocation.description = ''
+} catch (error) {
+console.error('添加位置失败:', error)
+toast.error('添加位置失败，请重试')
+}
+}
+
+const editLocation = (location) => {
+Object.assign(editingLocation, { ...location })
+editLocationDialogVisible.value = true
+}
+
+const saveLocation = async () => {
+try {
+const response = await axios.put(`/api/locations/${editingLocation.id}`, editingLocation)
+const index = locations.value.findIndex(l => l.id === editingLocation.id)
+if (index !== -1) {
+    locations.value[index] = response.data
+}
+editLocationDialogVisible.value = false
+} catch (error) {
+console.error('更新位置失败:', error)
+toast.error('更新位置失败，请重试')
+}
+}
+
+const deleteLocation = async (id) => {
+if (!confirm('确定要删除这个位置吗？')) return
+
+try {
+await axios.delete(`/api/locations/${id}`)
+locations.value = locations.value.filter(l => l.id !== id)
+} catch (error) {
+console.error('删除位置失败:', error)
+toast.error('删除位置失败，请重试')
+}
+}
+
+// 导出相关方法
+const exportData = (type) => {
+currentExportType.value = type
+selectedExperiments.value = []
+exportOptionsVisible.value = true
+}
+
+const toggleSelect = (id) => {
+const index = selectedExperiments.value.indexOf(id)
+if (index === -1) {
+selectedExperiments.value.push(id)
+} else {
+selectedExperiments.value.splice(index, 1)
+}
+}
+
+const confirmExport = async () => {
+const params = {
+start_date: exportStartDate.value,
+end_date: exportEndDate.value,
+experiment_ids: selectedExperiments.value,
+format: exportFormat.value
+}
+
+try {
+const response = await axios.get(`/api/export/${currentExportType.value}`, { 
+    params,
+    responseType: 'blob'
+})
+
+// 使用 PyWebview 的保存文件对话框
+if (window.pywebview && window.pywebview.api) {
+    const filename = `${currentExportType.value}_export.${exportFormat.value}`
+    const arrayBuffer = await response.data.arrayBuffer()
+    const uint8array = new Uint8Array(arrayBuffer)
+    const dataArray = Array.from(uint8array)
+    const state = await window.pywebview.api.save_file_dialog(dataArray, filename)
+    if(state.success){
+        toast.success(`导出成功，文件路径：${state.path}`)
+    } else {
+        toast.info(state.message || "导出失败")
+    }
+} else {
+    const url = window.URL.createObjectURL(new Blob([response.data]))
+    const link = document.createElement('a')
+    link.href = url
+    link.setAttribute('download', `${currentExportType.value}_export.${exportFormat.value}`)
+    document.body.appendChild(link)
+    link.click()
+    document.body.removeChild(link)
+    toast.success("导出成功")
+}
+} catch (error) {
+console.error('导出数据失败:', error)
+toast.error('导出数据失败，请重试')
+} finally {
+    exportOptionsVisible.value = false
+    currentExportType.value = ""
+}
+}
+
+// 导入相关方法
+const handleFileUpload = (event) => {
+selectedFile.value = event.target.files[0]
+event.target.value = null
+}
+
+const handleDrop = (event) => {
+event.preventDefault()
+isDragging.value = false
+
+if (event.dataTransfer.files && event.dataTransfer.files.length > 0) {
+selectedFile.value = event.dataTransfer.files[0]
+}
+}
+
+const clearFile = () => {
+selectedFile.value = null
+}
+
+const formatFileSize = (bytes) => {
+if (bytes === 0) return '0 Bytes'
+const k = 1024
+const sizes = ['Bytes', 'KB', 'MB', 'GB']
+const i = Math.floor(Math.log(bytes) / Math.log(k))
+return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i]
+}
+
+const importData = async () => {
+if (!selectedFile.value) {
+toast.info('请选择要导入的文件')
+return
+}
+
+isImporting.value = true
+
+const formData = new FormData()
+formData.append('file', selectedFile.value)
+formData.append('type', importType.value)
+formData.append('conflict_resolution', importConflictResolution.value)
+
+try {
+const response = await axios.post('/api/import', formData, {
+    headers: {
+    'Content-Type': 'multipart/form-data'
+    }
+})
+Object.assign(importResult, response.data)
+importResultDialogVisible.value = true
+} catch (error) {
+console.error('导入失败:', error)
+toast.error(`导入失败: ${error.response?.data?.error || '服务器错误'}`)
+} finally {
+isImporting.value = false
+}
+}
+
+// 实验类型相关方法
+const fetchExperimentTypes = async () => {
+try {
+const response = await axios.get('/api/experiment-types')
+experimentTypes.value = response.data
+} catch (error) {
+console.error('获取实验类型列表失败:', error)
+toast.error('获取实验类型列表失败')
+}
+}
+
+const fetchExperimentPresets = async () => {
+try {
+const response = await axios.get('/api/experiment-types/presets')
+experimentPresets.value = response.data
+} catch (error) {
+console.error('获取实验预设失败:', error)
+}
+}
+
+const addField = () => {
+editingExperimentType.fields.push({
+field_name: '',
+data_type: 'TEXT',
+unit: '',
+is_required: false,
+visualize_type: "",
+display_order: editingExperimentType.fields.length
+})
+}
+
+const removeField = (index) => {
+editingExperimentType.fields.splice(index, 1)
+}
+
+const saveExperimentType = async () => {
+if (!editingExperimentType.name) {
+toast.info('请填写实验类型名称')
+return
+}
+
+if (editingExperimentType.fields.length === 0) {
+toast.info('请至少添加一个字段')
+return
+}
+
+updateFieldOrders()
+
+// 验证字段
+for (let i = 0; i < editingExperimentType.fields.length; i++) {
+const field = editingExperimentType.fields[i]
+if (!field.field_name) {
+    toast.info(`第${i + 1}个字段缺少名称`)
+    return
+}
+if (!field.data_type) {
+    toast.info(`字段"${field.field_name}"缺少数据类型`)
+    return
+}
+}
+
+if (editingExperimentType.id && !confirm('调整属性后，这个实验的分组不受影响，但已有数据会被删除（建议及时导出），是否继续？')) return
+
+const url = editingExperimentType.id 
+? `/api/experiment-types/${editingExperimentType.id}`
+: '/api/experiment-types'
+
+const method = editingExperimentType.id ? 'put' : 'post'
+
+const dataToSend = {
+...editingExperimentType,
+fields: editingExperimentType.fields.map((field, index) => ({
+    ...field,
+    display_order: field.display_order !== undefined ? field.display_order : index
+}))
+}
+
+try {
+await axios[method](url, dataToSend)
+toast.success('保存成功')
+cancelEdit()
+await fetchExperimentTypes()
+window.experimentTypesUpdated = true
+} catch (error) {
+console.error('保存实验类型失败:', error)
+toast.error(error.response?.data?.error || '保存实验类型失败')
+}
+}
+
+const editExperimentType = (experimentType) => {
+// 深拷贝实验类型
+const copy = JSON.parse(JSON.stringify(experimentType))
+copy.id = experimentType.id
+copy.name = experimentType.name
+copy.description = experimentType.description
+
+Object.assign(editingExperimentType, copy)
+selectedPreset.value = ''
+
+// 滚动到表单顶部
+nextTick(() => {
+const formElement = document.querySelector('.form-section')
+if (formElement) {
+    formElement.scrollIntoView({ behavior: 'smooth' })
+}
+})
+}
+
+const cancelEdit = () => {
+editingExperimentType.id = null
+editingExperimentType.name = ''
+editingExperimentType.description = ''
+editingExperimentType.fields = []
+}
+
+const deleteExperimentType = async (id) => {
+if (!confirm('确定要删除这个实验类型吗？')) return
+
+try {
+await axios.delete(`/api/experiment-types/${id}`)
+toast.success('删除成功')
+await fetchExperimentTypes()
+window.experimentTypesUpdated = true
+} catch (error) {
+console.error('删除实验类型失败:', error)
+toast.error(error.response?.data?.error || '删除实验类型失败')
+}
+}
+
+const applyPreset = () => {
+if (selectedPreset.value && experimentPresets.value[selectedPreset.value]) {
+const preset = experimentPresets.value[selectedPreset.value]
+
+// 保留当前已编辑的内容，只添加预设的字段
+const currentFields = editingExperimentType.fields || []
+const presetFields = JSON.parse(JSON.stringify(preset.fields))
+
+// 设置显示顺序
+const maxOrder = currentFields.length > 0 ? 
+    Math.max(...currentFields.map(f => f.display_order)) : -1
+
+presetFields.forEach((field, index) => {
+    field.display_order = maxOrder + index + 1
+})
+
+// 合并字段
+editingExperimentType.fields = [...currentFields, ...presetFields]
+
+// 如果名称和描述为空，则使用预设的值
+if (!editingExperimentType.name) {
+    editingExperimentType.name = preset.name
+}
+if (!editingExperimentType.description) {
+    editingExperimentType.description = preset.description
+}
+}
+}
+
+const resetForm = () => {
+editingExperimentType.id = null
+editingExperimentType.name = ''
+editingExperimentType.description = ''
+editingExperimentType.fields = []
+selectedPreset.value = ''
+}
+
+const moveFieldUp = (index) => {
+if (index > 0) {
+const fields = editingExperimentType.fields
+;[fields[index], fields[index - 1]] = [fields[index - 1], fields[index]]
+updateFieldOrders()
+}
+}
+
+const moveFieldDown = (index) => {
+if (index < editingExperimentType.fields.length - 1) {
+const fields = editingExperimentType.fields
+;[fields[index], fields[index + 1]] = [fields[index + 1], fields[index]]
+updateFieldOrders()
+}
+}
+
+const updateFieldOrders = () => {
+editingExperimentType.fields.forEach((field, index) => {
+field.display_order = index
+})
+}
+
+const duplicateExperimentType = (experimentType) => {
+// 深拷贝实验类型
+const copy = JSON.parse(JSON.stringify(experimentType))
+copy.id = null
+copy.name = copy.name + ' (副本)'
+
+Object.assign(editingExperimentType, copy)
+selectedPreset.value = ''
+
+// 滚动到表单顶部
+nextTick(() => {
+const formElement = document.querySelector('.form-section')
+if (formElement) {
+    formElement.scrollIntoView({ behavior: 'smooth' })
+}
+})
+}
+
+const toggleDetails = (id) => {
+if (expandedExperimentType.value === id) {
+expandedExperimentType.value = null
+} else {
+expandedExperimentType.value = id
+}
+}
+
+// 初始化数据
+onMounted(() => {
+fetchGenotypes()
+fetchLocations()
+fetchExperimentTypes()
+fetchExperimentPresets()
+})
 </script>
 
 <style scoped>
@@ -1445,6 +1472,13 @@ background-color: #e0e0e0;
 display: flex;
 gap: 15px;
 margin-top: 20px;
+}
+
+.btn-group .btn.active {
+    /* 激活状态样式 */
+    background-color: #2ecc71;
+    transform: translateY(-2px);
+    box-shadow: 0 6px 8px rgba(0, 0, 0, 0.15);
 }
 
 .file-upload {

@@ -786,23 +786,28 @@ const exportToPDF = async () => {
     // 等待DOM更新
     await nextTick();
     
-    // 生成PDF文件并保存
-    const arrayBuffer = await generatePDFAsArrayBuffer();
-
-    // 转换为Uint8Array和普通数组
-    const uint8array = new Uint8Array(arrayBuffer);
-    const dataArray = Array.from(uint8array);
-
-    const filename = `${today_formatted} ${activeSection.value}.pdf`;
-
-    // 通过PyWebview保存文件
-    window.pywebview.api.save_file_dialog(dataArray, filename).then(() => {
-      toast.success('PDF保存成功');
-    }).catch(error => {
-      toast.error('保存失败: ' + error);
-    });
-
-    toast.success('PDF导出成功');
+    // 使用 PyWebview 的保存文件对话框
+    if (window.pywebview && window.pywebview.api) {
+      const filename = `${today_formatted} ${activeSection.value}.pdf`;
+      const arrayBuffer = await generatePDFAsArrayBuffer();
+      const uint8array = new Uint8Array(arrayBuffer)
+      const dataArray = Array.from(uint8array)
+      const state = await window.pywebview.api.save_file_dialog(dataArray, filename)
+      if(state.success){
+        toast.success(`导出成功，文件路径：${state.path}`)
+      } else {
+        toast.info(state.message || "导出失败")
+      }
+    } else {
+      const url = window.URL.createObjectURL(new Blob([pdfData], { type: 'application/pdf' }))
+      const link = document.createElement('a')
+      link.href = url
+      link.setAttribute('download', `${today_formatted} ${activeSection.value}.pdf`)
+      document.body.appendChild(link)
+      link.click()
+      document.body.removeChild(link)
+      toast.success('PDF导出成功');
+    }
   } catch (error) {
     console.error('导出PDF失败:', error);
     toast.error('导出PDF失败，请重试');

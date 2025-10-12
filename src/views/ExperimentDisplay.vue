@@ -596,30 +596,38 @@ function resetFilters() {
     }
 }
 
-function exportData() {
+async function exportData () {
     if (tabulatorInstance.value) {
         const params = {
                 experiment_ids: [experimentId.value],
                 format: 'xlsx'
             };
-        axios.get(`/api/export/experiment`, { 
+        response = await axios.get(`/api/export/experiment`, { 
             params,
             responseType: 'blob'
         })
-        .then(response => {
-            // 使用 PyWebview 的保存文件对话框
-            if (window.pywebview && window.pywebview.api) {
-                // 创建默认文件名
-                const filename = `experiment_export.xlsx`;
-                
-                response.data.arrayBuffer().then(arrayBuffer => {
-                    const uint8array = new Uint8Array(arrayBuffer);
-                    const dataArray = Array.from(uint8array);
-                    // 调用 PyWebview API 保存文件
-                    window.pywebview.api.save_file_dialog(dataArray, filename);
-                });
+        // 使用 PyWebview 的保存文件对话框
+        if (window.pywebview && window.pywebview.api) {
+            const filename = `experiment_export.xlsx`
+            const arrayBuffer = await response.data.arrayBuffer()
+            const uint8array = new Uint8Array(arrayBuffer)
+            const dataArray = Array.from(uint8array)
+            const state = await window.pywebview.api.save_file_dialog(dataArray, filename)
+            if(state.success){
+                toast.success(`导出成功，文件路径：${state.path}`)
+            } else {
+                toast.info(state.message || "导出失败")
             }
-        })
+        } else {
+            const url = window.URL.createObjectURL(new Blob([response.data]))
+            const link = document.createElement('a')
+            link.href = url
+            link.setAttribute('download', `experiment_export.xlsx`)
+            document.body.appendChild(link)
+            link.click()
+            document.body.removeChild(link)
+            toast.success("导出成功")
+        }
     }
 }
 

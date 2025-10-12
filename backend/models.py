@@ -71,10 +71,14 @@ class WeightRecord(db.Model):
     weight = db.Column(db.Float, nullable=False)
     record_date = db.Column(db.Date, nullable=False)
     record_livingdays = db.Column(db.Integer, nullable=False)
+
     def to_dict(self):
+        mouse = Mouse.query.get_or_404(self.mouse_id)
         return {
             'weight_id': self.id,
             'mouse_tid': self.mouse_id,
+            'id': mouse.id,
+            'birth_date': mouse.birth_date.isoformat() if mouse.birth_date else None,
             'weight': self.weight,
             'record_date': self.record_date.isoformat(),
             'record_livingdays': self.record_livingdays
@@ -88,11 +92,15 @@ class StatusRecord(db.Model):
     record_livingdays = db.Column(db.Integer, nullable=False)
 
     def to_dict(self):
+        mouse = Mouse.query.get_or_404(self.mouse_id)
         return {
             'record_id': self.id,
-            'mouse_id': self.mouse_id,
+            'mouse_tid': self.mouse_id,
+            'id': mouse.id,
+            'birth_date': mouse.birth_date.isoformat() if mouse.birth_date else None,
             'record_date': self.record_date,
-            'status': self.status
+            'record': self.status,
+            'record_livingdays': self.record_livingdays
         }
 
 # 基因型模型
