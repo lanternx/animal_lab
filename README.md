@@ -43,9 +43,9 @@
 
 ✅ 已提供打包好的桌面版，**无需安装任何依赖**，下载后直接运行：
 
-👉 [立即下载最新版本](https://github.com/lanternx/animal_lab/releases/tag/V2.1)
+👉 [立即下载最新版本](https://github.com/lanternx/animal_lab/releases/tag/V2.2)
 
-也可通过[百度网盘](https://pan.baidu.com/s/1UyzEXAiVZlK72dOMXtXZFA?pwd=2333)下载
+也可通过百度网盘下载[windows版](https://pan.baidu.com/s/1X96DAft2M-Z-92wBAJEXhQ?pwd=2333)、[Mac版（仅限Arm64架构（M系列芯片））](https://pan.baidu.com/s/1c6tQhVSrnOjHwONEj2Mj5w?pwd=2333)（Mac版不能直接在Mac上用网盘下载，应该用windows或者安卓手机下载，然后通过U盘拷到Mac上，这样才能避免隔离！！！！否则会出现文件已损坏的错误！）
 
 
 ### windows 开发者
@@ -180,7 +180,7 @@ python3 main.py
 打包为可执行文件(打包不要使用mac自带的python)：
 
 ```bash
-python3 build_mac.py --create-dmg --app-name "AL_V2.2"
+python3 build_mac.py --disable-console --app-name "AL_V2.2"
 ```
 
 ### 安装完成后的运行：
