@@ -45,7 +45,16 @@
 
 👉 [立即下载最新版本](https://github.com/lanternx/animal_lab/releases/tag/V2.2)
 
-也可通过百度网盘下载[windows版](https://pan.baidu.com/s/1X96DAft2M-Z-92wBAJEXhQ?pwd=2333)、[Mac版（仅限Arm64架构（M系列芯片））](https://pan.baidu.com/s/1c6tQhVSrnOjHwONEj2Mj5w?pwd=2333)（Mac版不能直接在Mac上用网盘下载，应该用windows或者安卓手机下载，然后通过U盘拷到Mac上，这样才能避免隔离！！！！否则会出现文件已损坏的错误！）
+也可通过百度网盘下载[windows版](https://pan.baidu.com/s/1X96DAft2M-Z-92wBAJEXhQ?pwd=2333)、[Mac版（仅限Arm64架构（M系列芯片））](https://pan.baidu.com/s/1c6tQhVSrnOjHwONEj2Mj5w?pwd=2333)
+
+Mac版不能直接在Mac上用网盘下载，应该用windows或者安卓手机下载，然后通过U盘拷到Mac上，这样才能避免隔离！！！！否则会出现文件已损坏的错误！
+
+如果是在Mac上直接下载的软件，需要手动解除隔离：
+
+在terminal中输入
+```bash
+sudo xattr -cr /Applications/AL_V2.2.app
+```
 
 
 ### windows 开发者
