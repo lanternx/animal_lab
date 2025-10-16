@@ -288,8 +288,15 @@
                             <td><span class="optional">cage_id</span></td>
                             <td>字符串</td>
                             <td><span class="optional">否</span></td>
-                            <td>笼位编号</td>
+                            <td>笼位名称</td>
                             <td class="example-row">CAGE-01</td>
+                        </tr>
+                        <tr>
+                            <td><span class="optional">location</span></td>
+                            <td>字符串</td>
+                            <td><span class="optional">否</span></td>
+                            <td>区域名称</td>
+                            <td class="example-row">本部动物房</td>
                         </tr>
                     </tbody>
                 </table>
@@ -302,7 +309,8 @@
                         <p>3. 性别字段只接受'M'（雄性）或'F'（雌性）</p>
                         <p>4. 基因型如果不存在会自动创建新基因型</p>
                         <p>5. 当live_status!=1（不为存活）时，必须提供death_date</p>
-                        <p>6. 新笼位添加到默认第一区域，后续可调整</p>
+                        <p>6. 区域名称只有在存在笼位名称时才生效</p>
+                        <p>7. 若无区域名称，新笼位自动添加到新创建的区域，后续可调整（通过笼位设置）</p>
                     </div>
                 </div>
             </div>
@@ -988,6 +996,8 @@ toast.error('导出数据失败，请重试')
 } finally {
     exportOptionsVisible.value = false
     currentExportType.value = ""
+    exportStartDate.value = ""
+    exportEndDate.value = ""
 }
 }
 

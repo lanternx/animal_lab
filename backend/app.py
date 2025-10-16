@@ -1037,13 +1037,18 @@ def export_data(export_type):
         return export_experiments_to_excel(ids)
     else:
         return jsonify({'error': '无效的导出类型'}), 400
-    
+
     # 应用日期过滤
-    if start_date and end_date:
+    if start_date:
+        start_dt = datetime.strptime(start_date, '%Y-%m-%d').date()
+        if not end_date:
+            end_dt = datetime.max.date()
+    if end_date:
+        end_dt = datetime.strptime(end_date, '%Y-%m-%d').date()
+        if not start_date:
+            start_dt = datetime.min.date()
+    if start_date or end_date:
         try:
-            start_dt = datetime.strptime(start_date, '%Y-%m-%d').date()
-            end_dt = datetime.strptime(end_date, '%Y-%m-%d').date()
-            
             if export_type == 'mice':
                 query = query.filter(Mouse.birth_date.between(start_dt, end_dt))
             elif export_type == 'weights':
@@ -1053,6 +1058,15 @@ def export_data(export_type):
     
     # 获取数据并转换为DataFrame
     data = [row.to_dict() for row in query.all()]
+    for index in range(len(data)):
+        tid = data[index]['cage_id']
+        if tid == "-1" or not tid:
+            data[index]['cage_id'] = ""
+            data[index]['location'] = ""
+        else:
+            cage = Cage.query.get(tid)
+            data[index]['cage_id'] = cage.cage_id
+            data[index]['location'] = cage.section
     df = pd.DataFrame(data)
     
     return create_export_file(df, export_format, filename)
@@ -1132,6 +1146,12 @@ def import_mice_data(df, result, conflict_resolution):
     if missing_cols:
         result['errors'].append({'row': 0, 'message': f'缺少必要列: {", ".join(missing_cols)}'})
         return
+    max_location_order = db.session.query(db.func.max(Location.order)).scalar()
+    new_location_order = max_location_order + 1 if max_location_order is not None else 0
+    new_location = Location.query.filter_by(identifier=str(datetime.now().date())).first()
+    if not new_location:
+        new_location = Location(identifier=str(datetime.now().date()), order=new_location_order)
+    location_key = True
     for index, row in df.iterrows():
         try:
             # 转换出生日期格式
@@ -1140,14 +1160,6 @@ def import_mice_data(df, result, conflict_resolution):
             else:
                 birth_date = datetime.strptime(str(row['birth_date'].date()), '%Y-%m-%d').date()
             
-            existing = Mouse.query.filter_by(id=row['id']).filter_by(birth_date=birth_date).first()
-            if existing:
-                if conflict_resolution == 'skip':
-                    result['skippedCount'] += 1
-                    continue
-                elif conflict_resolution == 'overwrite':
-                    update_existing_mouse(existing, row, result)
-                    continue
             # 处理基因型
             genotype = str(row['genotype']).strip() if pd.notna(row['genotype']) else None
 
@@ -1156,7 +1168,19 @@ def import_mice_data(df, result, conflict_resolution):
                 existing_genotype = Genotype.query.filter_by(name=genotype).first()
                 if not existing_genotype:
                     db.session.add(Genotype(name=genotype))
-            if pd.notna(row['id']):
+
+            mouse = Mouse.query.filter_by(id=row['id']).filter_by(birth_date=birth_date).first()
+            if mouse:
+                if conflict_resolution == 'skip':
+                    result['skippedCount'] += 1
+                    continue
+                elif conflict_resolution == 'overwrite':
+                    # 更新基本字段
+                    mouse.genotype = str(row['genotype']).strip() if pd.notna(row['genotype']) else None
+                    mouse.sex = str(row['sex']).upper()[0]
+                    mouse.live_status = int(row.get('live_status', 1))
+
+            else:
                 # 创建新小鼠
                 mouse = Mouse(
                     id=row['id'],
@@ -1167,8 +1191,7 @@ def import_mice_data(df, result, conflict_resolution):
                     tests_done = [],
                     tests_planned = []
                 )
-            else:
-                continue
+            
             # 可选字段
             if 'death_date' in df.columns and pd.notna(row['death_date']) and mouse.live_status != 1:
                 if type(row['death_date']) == str:
@@ -1176,15 +1199,40 @@ def import_mice_data(df, result, conflict_resolution):
                 else:
                     mouse.death_date = datetime.strptime(str(row['death_date'].date()), '%Y-%m-%d').date()
             if 'cage_id' in df.columns and pd.notna(row['cage_id']):
+                if 'location' in df.columns and pd.notna(row['location']):
+                    location = str(row['location'].strip())
+                    if location and location != "":
+                        existing_location = Location.query.filter_by(identifier=location).first()
+                        if not existing_location:
+                            max_location_order = db.session.query(db.func.max(Location.order)).scalar()
+                            new_location_order = max_location_order + 1 if max_location_order is not None else 0
+                            existing_location = Location(identifier=location, order=new_location_order)
+                            db.session.add(existing_location)
+                            db.session.flush()
+                    else:
+                        if location_key:
+                            location_key = False
+                            db.session.add(new_location)
+                            db.session.flush()
+                        existing_location = new_location
+                else:
+                    if location_key:
+                        location_key = False
+                        db.session.add(new_location)
+                        db.session.flush()
+                    existing_location = new_location
                 cage_id = str(row['cage_id'].strip())
                 if cage_id and cage_id != "":
-                    existing_cage = Cage.query.filter_by(cage_id=cage_id).first()
+                    existing_cage = Cage.query.filter_by(cage_id=cage_id).filter_by(section=existing_location.identifier).first()
                     if not existing_cage:
-                        min_order = db.session.query(db.func.min(Location.order)).scalar()
-                        section_name = Location.query.filter_by(order=min_order).first().identifier
                         max_order = db.session.query(db.func.max(Cage.order)).scalar()
                         new_order = max_order + 1 if max_order is not None else 0
-                        existing_cage = Cage(id=str(cage_id), section=section_name, cage_id=cage_id, order=new_order)
+                        valid_cage_id = str(cage_id)
+                        while True:
+                            valid_cage_id = valid_cage_id+"-"
+                            if not Cage.query.get(valid_cage_id):
+                                break
+                        existing_cage = Cage(id=valid_cage_id, section=existing_location.identifier, cage_id=cage_id, order=new_order)
                         db.session.add(existing_cage)
                         db.session.flush()
                     mouse.cage_id = existing_cage.id
@@ -1200,52 +1248,6 @@ def import_mice_data(df, result, conflict_resolution):
                 'row': index + 2,  # Excel行号从1开始，标题行+1
                 'message': f'导入失败: {str(e)}'
             })
-
-def update_existing_mouse(existing, row, result):
-    """更新现有小鼠记录"""
-    try:
-        # 更新基本字段
-        existing.genotype = str(row['genotype']).strip() if pd.notna(row['genotype']) else None
-        existing.sex = str(row['sex']).upper()[0]
-        existing.live_status = int(row.get('live_status', 1))
-        
-        # 处理可选字段
-        if 'death_date' in row and pd.notna(row['death_date']) and existing.live_status != 1:
-            if type(row['death_date']) == str:
-                existing.death_date = datetime.strptime(row['death_date'], '%Y-%m-%d').date()
-            else:
-                existing.death_date = datetime.strptime(str(row['death_date'].date()), '%Y-%m-%d').date()
-        
-        if 'cage_id' in row and pd.notna(row['cage_id']):
-            cage_id = str(row['cage_id'].strip())
-            if cage_id and cage_id != "":
-                existing_cage = Cage.query.filter_by(cage_id=cage_id).first()
-                if not existing_cage:
-                    min_order = db.session.query(db.func.min(Location.order)).scalar()
-                    section_name = Location.query.filter_by(order=min_order).first().identifier
-                    max_order = db.session.query(db.func.max(Cage.order)).scalar()
-                    new_order = max_order + 1 if max_order is not None else 0
-                    existing_cage = Cage(id=str(cage_id), section=section_name, cage_id=cage_id, order=new_order)
-                    db.session.add(existing_cage)
-                    db.session.flush()
-                existing.cage_id = existing_cage.id
-        else:
-            existing.cage_id = '-1'
-        # 更新基因型关联
-        if existing.genotype:
-            existing_genotype = Genotype.query.filter_by(name=existing.genotype).first()
-            if not existing_genotype:
-                db.session.add(Genotype(name=existing.genotype))
-        
-        db.session.commit()
-        result['successCount'] += 1
-        return True
-    except Exception as e:
-        result['errors'].append({
-            'row': index + 2,
-            'message': f'更新失败: {str(e)}'
-        })
-        return False
     
 def import_weights_data(df, result, conflict_resolution):
     """导入体重数据"""
