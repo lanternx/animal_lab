@@ -480,12 +480,20 @@
               <span class="detail-value">{{ templateMouse.live_status }}</span>
             </div>
             <div class="detail-item">
+              <span class="detail-label">区域</span>
+              <span class="detail-value">{{ templateMouseCage.location }}</span>
+            </div>
+            <div class="detail-item">
+              <span class="detail-label">笼位</span>
+              <span class="detail-value">{{ templateMouseCage.cage_id }}</span>
+            </div>
+            <div class="detail-item">
               <span class="detail-label">父本</span>
-              <span class="detail-value" v-for="(father) in templateMouse.father" :key="father.tid">{{ father.id }} </span>
+              <span class="detail-value" v-for="father in selectedFathers" :key="father.tid">{{ father.id }} </span>
             </div>
             <div class="detail-item">
               <span class="detail-label">母本</span>
-              <span class="detail-value" v-for="(mother) in templateMouse.mother" :key="mother.tid">{{ mother.id }} </span>
+              <span class="detail-value" v-for="mother in selectedMothers" :key="mother.tid">{{ mother.id }} </span>
             </div>
             <div class="detail-item">
               <span class="detail-label">已完成测试</span>
@@ -559,6 +567,7 @@ const batchSelectedTests = ref([])
 const showModal = ref(false)
 const modalMode = ref('') // 'add', 'edit', 'template'
 const templateMouse = ref(null)
+const templateMouseCage = ref([])
 const newMice = ref([])
 
 let clickTimer = ref(null);
@@ -925,10 +934,20 @@ const validateMouse = (mouse) => {
   return true
 }
 
-const openModal = (mode, mouse = null) => {
+const openModal = async (mode, mouse = null) => {
   modalMode.value = mode
+  // 设置父本母本
+  if (mouse.father && mouse.father.length > 0) {
+    selectedFathers.value = mouse.father.map(tid => mice.value.find(m => m.tid === tid)).filter(Boolean)
+  }
+  if (mouse.mother && mouse.mother.length > 0) {
+    selectedMothers.value = mouse.mother.map(tid => mice.value.find(m => m.tid === tid)).filter(Boolean)
+  }
   if (mode === 'template' && mouse) {
     templateMouse.value = { ...mouse }
+    const api = createAxiosInstance()
+    const temCage = await api.get(`/cage_brief/${templateMouse.value.cage_id}`)
+    templateMouseCage.value = temCage.data
     newMice.value = [{ id: '', sex: mouse.sex }]
     return
   }
@@ -961,14 +980,6 @@ const openModal = (mode, mouse = null) => {
     // 填充编辑数据
     Object.assign(formData, { ...mouse })
     
-    // 设置父本母本
-    if (mouse.father && mouse.father.length > 0) {
-      selectedFathers.value = mouse.father.map(tid => mice.value.find(m => m.tid === tid)).filter(Boolean)
-    }
-    if (mouse.mother && mouse.mother.length > 0) {
-      selectedMothers.value = mouse.mother.map(tid => mice.value.find(m => m.tid === tid)).filter(Boolean)
-    }
-    
     // 设置测试
     if (mouse.tests_done && mouse.tests_done.length > 0) {
       selectedTestsDone.value = mouse.tests_done.map(id => experiments.value.find(e => e.id === id)).filter(Boolean)
@@ -983,6 +994,7 @@ const closeModal = () => {
   showModal.value = false
   modalMode.value = ''
   templateMouse.value = null
+  templateMouseCage.value = []
   newMice.value = []
   fatherQuery.value = ''
   motherQuery.value = ''

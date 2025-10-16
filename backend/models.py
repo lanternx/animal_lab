@@ -54,7 +54,7 @@ class Cage(db.Model):
     id = db.Column(db.String(20), primary_key=True)
     section = db.Column(db.String(50), db.ForeignKey('location.identifier'), nullable=False)
     cage_id = db.Column(db.String(10), nullable=False) #这个就是笼位卡上显示的编号
-    location = db.Column(db.String(50)) #可以填写测试项目
+    location = db.Column(db.String(50))
     cage_type = db.Column(db.String(20), default='normal')  # 'normal' or 'breeding' or 'testing'
     order = db.Column(db.Integer, nullable=False)
     # 新增字段：笼内小鼠出生日期、数量及性别、基因型

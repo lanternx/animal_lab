@@ -477,6 +477,12 @@ def batch_experiments_change():
         return jsonify(), 201
     except Exception as e:
         return jsonify({'error': str(e)}), 400
+    
+@app.route('/api/cage_brief/<cid>', methods=['GET'])
+def get_cage_brief(cid):
+    cage = Cage.query.get_or_404(cid)
+    cage_info = {"location": cage.section, "cage_id": cage.cage_id}
+    return jsonify(cage_info), 201
 
 
 ##笼位视图
@@ -956,7 +962,10 @@ def update_location(id):
     location = Location.query.get_or_404(id)
     
     if 'identifier' in data:
+        cages = Cage.query.filter(Cage.section == location.identifier).all()
         location.identifier = data['identifier']
+        for cage in cages:
+            cage.section = location.identifier
     if 'description' in data:
         location.description = data['description']
     
