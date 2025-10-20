@@ -1,7 +1,7 @@
 from flask import Flask, jsonify, request, send_file
 from flask_cors import CORS
 from datetime import datetime, date
-from models import db, Mouse, Cage, WeightRecord, StatusRecord, Pedigree, Genotype, Location, ExperimentType, FieldDefinition, Experiment, ExperimentClass, ExperimentValue
+from models import db, Mouse, Cage, WeightRecord, StatusRecord, Pedigree, GeneLocus, Allele, Genotype, Location, ExperimentType, FieldDefinition, Experiment, ExperimentClass, ExperimentValue
 import os
 import sys
 from pathlib import Path
@@ -107,7 +107,18 @@ with app.app_context():
             db.session.commit()
             print("已自动创建默认位置")
         else:
-            print("默认位置已存在")
+            print("位置已存在")
+
+        if not db.session.query(GeneLocus).first():
+            new_gene_locus = GeneLocus(
+                symbol = "WT",
+                description = "")
+            db.session.add(new_gene_locus)
+            db.session.commit()
+            print("已自动创建默认基因型")
+        else:
+            print("基因型已存在")
+
             
     except Exception as e:
         print(f"数据库初始化失败: {str(e)}")
@@ -764,41 +775,93 @@ def get_survival_data():
         return jsonify({'error': '获取数据失败'}), 500
 
 # 基因型管理API
-@app.route('/api/genotypes', methods=['GET'])
-def get_genotypes():
-    genotypes = Genotype.query.all()
+@app.route('/api/gene', methods=['GET'])
+def get_genes():
+    genotypes = GeneLocus.query.all()
     return jsonify([g.to_dict() for g in genotypes])
 
-@app.route('/api/genotypes', methods=['POST'])
-def add_genotype():
+@app.route('/api/gene', methods=['POST'])
+def add_gene():
     data = request.json
-    if not data.get('name'):
-        return jsonify({'error': '基因型名称不能为空'}), 400
+    if not data.get('symbol'):
+        return jsonify({'error': '基因位点名称不能为空'}), 400
     
-    genotype = Genotype(name=data['name'], description=data.get('description', ''))
-    db.session.add(genotype)
+    locus = GeneLocus(symbol=data['symbol'], description=data.get('description', ''))
+    db.session.add(locus)
+    db.session.flush()
+    a_l = Allele(symbol = "+", locus_id = locus.id, description = "野生型，未修饰", is_wildtype = True)
+    db.session.add(a_l)
     db.session.commit()
-    return jsonify(genotype.to_dict()), 201
+    return jsonify(locus.to_dict()), 201
 
-@app.route('/api/genotypes/<int:id>', methods=['PUT'])
-def update_genotype(id):
+@app.route('/api/<int:id>/gene_allele', methods=['POST'])
+def add_allele(id):
     data = request.json
-    genotype = Genotype.query.get_or_404(id)
+    if not data.get('symbol'):
+        return jsonify({'error': '基因修饰名称不能为空'}), 400
+    locus = GeneLocus.query.get_or_404(id)
+
+    a_l = Allele(symbol = data['symbol'], locus_id = locus.id, description = data.get('description', ''), is_wildtype = data.get('is_wildtype', False))
+    db.session.add(a_l)
+    db.session.commit()
+    return jsonify(a_l.to_dict()), 201
+
+@app.route('/api/gene/<int:id>', methods=['PUT'])
+def update_gene(id):
+    data = request.json
+    gene = GeneLocus.query.get_or_404(id)
     
-    if 'name' in data:
-        genotype.name = data['name']
+    if 'symbol' in data:
+        gene.symbol = data['symbol']
     if 'description' in data:
-        genotype.description = data['description']
+        gene.description = data['description']
     
     db.session.commit()
-    return jsonify(genotype.to_dict())
+    return jsonify(gene.to_dict())
 
-@app.route('/api/genotypes/<int:id>', methods=['DELETE'])
-def delete_genotype(id):
-    genotype = Genotype.query.get_or_404(id)
-    db.session.delete(genotype)
+@app.route('/api/gene_allele/<int:allele_id>', methods=['PUT'])
+def update_allele(allele_id):
+    data = request.json
+    gene = Allele.query.get_or_404(allele_id)
+    
+    if 'symbol' in data:
+        gene.symbol = data['symbol']
+    if 'description' in data:
+        gene.description = data['description']
+    if 'is_wildtype' in data:
+        gene.is_wildtype = data['is_wildtype']
     db.session.commit()
-    return '', 204
+    return jsonify(gene.to_dict())
+
+@app.route('/api/gene/<int:id>', methods=['DELETE'])
+def delete_gene(id):
+    try:
+        gene = GeneLocus.query.get_or_404(id)
+        genotypes = Genotype.query.filter_by(locus_id=gene.id).all()
+        for genotype in genotypes:
+            db.session.delete(genotype)
+        alleles = Allele.query.filter_by(locus_id=gene.id).all()
+        for al in alleles:
+            db.session.delete(al)
+        db.session.delete(gene)
+        db.session.commit()
+        return '', 204
+    except:
+        return 404
+    
+@app.route('/api/gene_allele/<int:id>', methods=['DELETE'])
+def delete_allele(id):
+    try:
+        allele = Allele.query.get_or_404(id)
+        genotypes = Genotype.query.all()
+        for genotype in genotypes:
+            if genotype.contains_allele(allele.id):
+                db.session.delete(genotype)
+        db.session.delete(allele)
+        db.session.commit()
+        return '', 204
+    except:
+        return 404
 
 # 位置管理API
 @app.route('/api/locations', methods=['GET'])
@@ -890,7 +953,7 @@ def export_data(export_type):
             if m.live_status == 0:
                 data.append({
                     'mouse_id': m.id,
-                    'genotype': m.genotype,
+                    'genotype': m.get_full_genotype(),
                     'birth_date': m.birth_date,
                     'death_date': m.death_date,
                     'live_status': m.live_status,
@@ -899,7 +962,7 @@ def export_data(export_type):
             elif m.live_status == 1:
                 data.append({
                     'mouse_id': m.id,
-                    'genotype': m.genotype,
+                    'genotype': m.get_full_genotype(),
                     'birth_date': m.birth_date,
                     'death_date': m.death_date,
                     'live_status': m.live_status,
@@ -1319,7 +1382,7 @@ def get_mouse_brief(mouse_tid):
     return jsonify({
         'id': mouse.id,
         'birth_date': mouse.birth_date,
-        'genotype': mouse.genotype,
+        'genotype': mouse.get_full_genotype(),
         'sex': mouse.sex
     })
 

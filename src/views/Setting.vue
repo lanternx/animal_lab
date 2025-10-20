@@ -19,53 +19,117 @@
     
     <!-- 基因型设置 -->
     <div v-if="activeTab === 'genotype'" class="form-container">
-    <h2 class="section-title">基因型设置</h2>
+    <h2 class="section-title">基因型管理系统</h2>
     
+    <!-- 添加新基因位点 -->
     <div class="form-section">
-        <h3>新增基因型</h3>
-        <form @submit.prevent="addGenotype" class="form-group-row">
+        <h3>添加新基因位点</h3>
+        <form @submit.prevent="addGeneLocus" class="form-group-row">
         <div class="form-group">
-            <label>基因型名称 *</label>
-            <input type="text" v-model="newGenotype.name" placeholder="例如: WT" required>
+            <label>基因组位点 *</label>
+            <input type="text" v-model="newGeneLocus.symbol" placeholder="例如: TP53" required>
         </div>
         
         <div class="form-group">
             <label>描述</label>
-            <input type="text" v-model="newGenotype.description" placeholder="例如: 野生型小鼠">
+            <input type="text" v-model="newGeneLocus.description" placeholder="例如: 该基因编码一种肿瘤抑制蛋白，含有转录激活、DNA结合和寡聚化结构域。编码的蛋白能响应多种细胞应激，调控靶基因的表达，从而诱导细胞周期阻滞、凋亡、衰老、DNA修复或代谢变化。">
         </div>
         
         <div class="form-group">
-            <button type="submit" class="btn btn-primary">添加基因型</button>
+            <button type="submit" class="btn btn-primary">添加基因位点</button>
         </div>
         </form>
     </div>
     
+    <!-- 基因位点与等位基因表格 -->
     <div class="form-section">
-        <h3>基因型列表</h3>
+        <h3>基因位点与等位基因</h3>
         <div class="table-container">
         <table class="settings-table">
             <thead>
             <tr>
-                <th>基因型名称</th>
+                <th>基因符号</th>
                 <th>描述</th>
+                <th>等位基因数量</th>
                 <th>操作</th>
             </tr>
             </thead>
             <tbody>
-            <tr v-for="genotype in genotypes" :key="genotype.id">
-                <td>{{ genotype.name }}</td>
-                <td>{{ genotype.description }}</td>
+            <template v-for="locus in genotypes" :key="locus.id">
+                <!-- 基因位点行 -->
+                <tr class="locus-row">
+                <td>{{ locus.symbol }}</td>
+                <td>{{ locus.description }}</td>
+                <td>{{ locus.alleles.length }}</td>
                 <td class="action-cell">
-                <button class="action-btn" @click="editGenotype(genotype)">编辑</button>
-                <button class="action-btn btn-danger" @click="deleteGenotype(genotype.id)">删除</button>
+                    <button class="action-btn" @click="editGeneLocus(locus)">编辑</button>
+                    <button class="action-btn btn-danger" @click="deleteGeneLocus(locus.id)">删除</button>
+                    <button v-if="locus.symbol !== 'WT'" class="action-btn btn-success" @click="toggleAlleles(locus.id)">
+                    {{ expandedLoci.includes(locus.id) ? '收起' : '展开' }}
+                    </button>
                 </td>
-            </tr>
+                </tr>
+                
+                <!-- 等位基因子表格 -->
+                <tr v-if="expandedLoci.includes(locus.id)" class="alleles-subtable">
+                <td colspan="4">
+                    <div class="subtable-container">
+                    <table class="subtable">
+                        <thead>
+                        <tr>
+                            <th>等位基因符号</th>
+                            <th>描述</th>
+                            <th>是否为野生型</th>
+                            <th>操作</th>
+                        </tr>
+                        </thead>
+                        <tbody>
+                        <tr v-for="allele in locus.alleles" :key="allele.id">
+                            <td>{{ allele.symbol }}</td>
+                            <td>{{ allele.description }}</td>
+                            <td>{{ allele.is_wildtype ? '是' : '否' }}</td>
+                            <td class="action-cell">
+                            <button class="action-btn" @click="editAllele(allele)">编辑</button>
+                            <button class="action-btn btn-danger" @click="deleteAllele(allele.id)">删除</button>
+                            </td>
+                        </tr>
+                        </tbody>
+                    </table>
+                    
+                    <!-- 添加新等位基因表单 -->
+                    <div class="add-allele-form">
+                        <h4>添加新等位基因</h4>
+                        <form @submit.prevent="addAllele(locus.id)" class="form-group-row">
+                        <div class="form-group">
+                            <label>符号 *</label>
+                            <input type="text" v-model="newAllele.symbol" placeholder="例如: KO" required>
+                        </div>
+                        
+                        <div class="form-group">
+                            <label>描述</label>
+                            <input type="text" v-model="newAllele.description" placeholder="例如: 基因敲除">
+                        </div>
+                        
+                        <div class="form-group">
+                            <label>是否为野生型</label>
+                            <input type="checkbox" v-model="newAllele.is_wildtype"> 
+                        </div>
+                        
+                        <div class="form-group">
+                            <button type="submit" class="btn btn-primary">添加</button>
+                        </div>
+                        </form>
+                    </div>
+                    </div>
+                </td>
+                </tr>
+            </template>
             </tbody>
         </table>
         </div>
     </div>
     </div>
-    
+
     <!-- 位置设置 -->
     <div v-if="activeTab === 'location'" class="form-container">
     <h2 class="section-title">位置设置</h2>
@@ -799,21 +863,44 @@
     </div>
     </div>
 
-    <!-- 编辑基因型对话框 -->
-    <div v-if="editGenotypeDialogVisible" class="dialog-overlay">
+    <!-- 编辑基因位点对话框 -->
+    <div v-if="editLocusDialogVisible" class="dialog-overlay">
     <div class="dialog-container">
-        <h2>编辑基因型</h2>
+        <h2>编辑基因位点</h2>
         <div class="form-group">
-        <label>基因型名称</label>
-        <input type="text" v-model="editingGenotype.name" required>
+        <label>基因符号</label>
+        <input type="text" v-model="editingLocus.symbol" required>
         </div>
         <div class="form-group">
         <label>描述</label>
-        <input type="text" v-model="editingGenotype.description">
+        <textarea v-model="editingLocus.description"></textarea>
         </div>
         <div class="dialog-buttons">
-        <button class="btn btn-outline" @click="editGenotypeDialogVisible = false">取消</button>
-        <button class="btn btn-primary" @click="saveGenotype">保存</button>
+        <button class="btn btn-outline" @click="editLocusDialogVisible = false">取消</button>
+        <button class="btn btn-primary" @click="saveGeneLocus">保存</button>
+        </div>
+    </div>
+    </div>
+
+    <!-- 编辑等位基因对话框 -->
+    <div v-if="editAlleleDialogVisible" class="dialog-overlay">
+    <div class="dialog-container">
+        <h2>编辑等位基因</h2>
+        <div class="form-group">
+        <label>符号</label>
+        <input type="text" v-model="editingAllele.symbol" required>
+        </div>
+        <div class="form-group">
+        <label>描述</label>
+        <input type="text" v-model="editingAllele.description">
+        </div>
+        <div class="form-group">
+        <label>是否为野生型</label>
+        <input type="checkbox" v-model="editingAllele.is_wildtype">
+        </div>
+        <div class="dialog-buttons">
+        <button class="btn btn-outline" @click="editAlleleDialogVisible = false">取消</button>
+        <button class="btn btn-primary" @click="saveAllele">保存</button>
         </div>
     </div>
     </div>
@@ -919,10 +1006,14 @@ const tabs = ref([
 ])
 
 // 基因型相关状态
-const newGenotype = reactive({ name: '', description: '' })
+const newGeneLocus = reactive({ symbol: '', description: '' })
+const newAllele = reactive({ symbol: '', description: '', is_wildtype: false })
 const genotypes = ref([])
-const editingGenotype = reactive({ id: null, name: '', description: '' })
-const editGenotypeDialogVisible = ref(false)
+const expandedLoci = ref([])
+const editingLocus = reactive({ id: null, symbol: '', description: '' })
+const editLocusDialogVisible = ref(false)
+const editingAllele = reactive({ id: null, symbol: '', description: '', is_wildtype: false })
+const editAlleleDialogVisible = ref(false)
 
 // 位置相关状态
 const newLocation = reactive({ identifier: '', description: '' })
@@ -970,17 +1061,6 @@ fields: []
 const selectedPreset = ref('')
 const expandedExperimentType = ref(null)
 
-// 基因型相关方法
-const fetchGenotypes = async () => {
-try {
-const response = await axios.get('/api/genotypes')
-genotypes.value = response.data
-} catch (error) {
-console.error('获取基因型列表失败:', error)
-toast.error('获取基因型列表失败')
-}
-}
-
 // 数据库管理相关状态
 const selectedDbFile = ref(null)
 const isDbDragging = ref(false)
@@ -1017,52 +1097,121 @@ watch(deleteConfirmation, (newValue) => {
   }
 })
 
-const addGenotype = async () => {
-if (!newGenotype.name) {
-toast.info('请填写基因型名称')
-return
-}
-
+// 基因型相关方法
+const fetchGenotypes = async () => {
 try {
-const response = await axios.post('/api/genotypes', newGenotype)
-genotypes.value.push(response.data)
-newGenotype.name = ''
-newGenotype.description = ''
+const response = await axios.get('/api/gene')
+genotypes.value = response.data
 } catch (error) {
-console.error('添加基因型失败:', error)
-toast.error('添加基因型失败，请重试')
+console.error('获取基因型列表失败:', error)
+toast.error('获取基因型列表失败')
 }
 }
 
-const editGenotype = (genotype) => {
-Object.assign(editingGenotype, { ...genotype })
-editGenotypeDialogVisible.value = true
+const toggleAlleles = (id) => {
+    const index = expandedLoci.value.indexOf(id)
+    if (index === -1) {
+    expandedLoci.value.push(id)
+    } else {
+    expandedLoci.value.splice(index, 1)
+    }
 }
 
-const saveGenotype = async () => {
+const addGeneLocus = async () => {
+    if (!newGeneLocus.symbol) {
+    toast.info('请填写基因位点名称')
+    return
+    }
+
+    try {
+    const response = await axios.post('/api/gene', newGeneLocus)
+    genotypes.value.push(response.data)
+    newGeneLocus.symbol = ''
+    newGeneLocus.description = ''
+    toast.success('添加基因位点成功')
+    } catch (error) {
+    console.error('添加基因位点失败:', error)
+    toast.error('添加基因位点失败，请重试')
+    }
+}
+
+const addAllele = async (locus_id) => {
+    if (!newAllele.symbol) {
+    toast.info('请填写基因位点修饰名称')
+    return
+    }
+
+    try {
+    await axios.post(`/api/${locus_id}/gene_allele`, newAllele)
+    await fetchGenotypes()
+    newAllele.symbol = ''
+    newAllele.description = ''
+    newAllele.is_wildtype = false
+    toast.success('添加基因位点编辑方式成功')
+    } catch (error) {
+    console.error('添加基因位点修饰失败:', error)
+    toast.error('添加基因位点修饰失败，请重试')
+    }
+}
+
+const editGeneLocus = (genotype) => {
+Object.assign(editingLocus, { ...genotype })
+editLocusDialogVisible.value = true
+}
+
+const editAllele = (genotype) => {
+Object.assign(editingAllele, { ...genotype })
+editAlleleDialogVisible.value = true
+}
+
+const saveGeneLocus = async () => {
 try {
-const response = await axios.put(`/api/genotypes/${editingGenotype.id}`, editingGenotype)
-const index = genotypes.value.findIndex(g => g.id === editingGenotype.id)
-if (index !== -1) {
-    genotypes.value[index] = response.data
-}
-editGenotypeDialogVisible.value = false
+await axios.put(`/api/gene/${editingLocus.id}`, editingLocus)
+await fetchGenotypes()
+editLocusDialogVisible.value = false
+toast.success('修改基因位点成功')
 } catch (error) {
-console.error('更新基因型失败:', error)
-toast.error('更新基因型失败，请重试')
+console.error('更新基因位点失败:', error)
+toast.error('更新基因位点失败，请重试')
 }
 }
 
-const deleteGenotype = async (id) => {
-if (!confirm('确定要删除这个基因型吗？')) return
+const saveAllele = async () => {
+try {
+await axios.put(`/api/gene_allele/${editingAllele.id}`, editingAllele)
+await fetchGenotypes()
+editAlleleDialogVisible.value = false
+toast.success('修改基因位点编辑方式成功')
+} catch (error) {
+console.error('更新等位基因失败:', error)
+toast.error('更新等位基因失败，请重试')
+}
+}
+
+const deleteGeneLocus = async (id) => {
+if (!confirm('确定要删除这个基因位点吗？')) return
 
 try {
-await axios.delete(`/api/genotypes/${id}`)
+await axios.delete(`/api/gene/${id}`)
 genotypes.value = genotypes.value.filter(g => g.id !== id)
+toast.success('删除基因位点成功')
 } catch (error) {
 console.error('删除基因型失败:', error)
 toast.error('删除基因型失败，请重试')
 }
+}
+
+const deleteAllele = async (id) => {
+    if (!confirm('确定要删除这个基因型吗？')) return
+
+    try {
+    await axios.delete(`/api/gene_allele/${id}`)
+    await fetchGenotypes()
+    toast.success('删除基因位点编辑方式成功')
+    } catch (error) {
+    console.error('删除基因型失败:', error)
+    toast.error('删除基因型失败，请重试')
+    }
 }
 
 // 位置相关方法
@@ -2131,9 +2280,6 @@ border: 1px solid #ddd;
 border-radius: 3px;
 }
 
-.settings-table input[type="checkbox"] {
-transform: scale(1.2);
-}
 
 .btn-outline:disabled {
 opacity: 0.5;
@@ -2375,4 +2521,54 @@ background-color: #c62828;
   margin-top: 5px;
 }
 
+/* 基因位点行样式 */
+.locus-row {
+  background-color: #f8f9fa;
+  font-weight: bold;
+}
+
+/* 等位基因子表格容器 */
+.alleles-subtable {
+  background-color: #f0f8ff;
+}
+
+.subtable-container {
+  padding: 15px;
+  background-color: #fff;
+  border: 1px solid #dee2e6;
+  border-radius: 5px;
+  margin: 10px 0;
+}
+
+/* 子表格样式 */
+.subtable {
+  width: 100%;
+  margin-bottom: 15px;
+}
+
+.subtable th {
+  background-color: #e9ecef;
+}
+
+.subtable tr:nth-child(even) {
+  background-color: #f8f9fa;
+}
+
+/* 添加等位基因表单 */
+.add-allele-form {
+  background-color: #f8f9fa;
+  padding: 15px;
+  border-radius: 5px;
+  border: 1px dashed #ced4da;
+}
+
+.add-allele-form h4 {
+  margin-top: 0;
+  color: #495057;
+}
+
+.btn-success {
+  background-color: #28a745;
+  color: white;
+}
 </style>

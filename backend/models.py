@@ -7,7 +7,6 @@ class Mouse(db.Model):
 
     tid = db.Column(db.Integer, primary_key=True)
     id = db.Column(db.String(10), nullable=False)
-    genotype = db.Column(db.String(50))
     sex = db.Column(db.String(1))  # 'M' or 'F'
     live_status = db.Column(db.Integer, default=1)  # 1 for '活', 0 for '死', 2 for '解剖', 3 for '意外消失', 4 for '丢弃'
     birth_date = db.Column(db.Date)
@@ -19,12 +18,21 @@ class Mouse(db.Model):
 
     # 关系
     cage = db.relationship('Cage', backref=db.backref('mice', lazy=True))
+    genotypes = db.relationship('Genotype', backref='mouse', lazy='dynamic')
     
+    def get_full_genotype(self):
+        """获取完整的基因型描述"""
+        loci = []
+        for gt in self.genotypes:
+            desc = f"{gt.locus.symbol}<sup>{gt.get_genotype_description()}</sup>"
+            loci.append(desc)
+        return "; ".join(loci)
+
     def to_dict(self):
         return {
             'tid': self.tid,
             'id': self.id,
-            'genotype': self.genotype,
+            'genotype': self.get_full_genotype(),
             'sex': self.sex,
             'live_status': self.live_status,
             'birth_date': self.birth_date.isoformat() if self.birth_date else None,
@@ -34,7 +42,6 @@ class Mouse(db.Model):
             'tests_done': self.tests_done,
             'tests_planned': self.tests_planned
         }
-
 class Pedigree(db.Model):
     __tablename__ = 'pedigree'
 
@@ -103,17 +110,80 @@ class StatusRecord(db.Model):
             'record_livingdays': self.record_livingdays
         }
 
-# 基因型模型
-class Genotype(db.Model):
+# 等位基因定义
+class Allele(db.Model):
     id = db.Column(db.Integer, primary_key=True)
-    name = db.Column(db.String(50), unique=True, nullable=False)
+    symbol = db.Column(db.String(50), nullable=False)  # 等位基因符号，如 "S46A", "flox", "KO", "+"
+    locus_id = db.Column(db.Integer, db.ForeignKey('gene_locus.id'), nullable=False)
     description = db.Column(db.String(200))
-
+    is_wildtype = db.Column(db.Boolean, default=False)  # 标记是否为野生型
+    
     def to_dict(self):
         return {
             'id': self.id,
-            'name': self.name,
-            'description': self.description
+            'symbol': self.symbol,
+            'description': self.description,
+            'is_wildtype': self.is_wildtype
+        }
+    
+# 基因位点定义
+class GeneLocus(db.Model):
+    id = db.Column(db.Integer, primary_key=True)
+    symbol = db.Column(db.String(50), unique=True, nullable=False)  # 基因符号
+    description = db.Column(db.String(200))
+    alleles = db.relationship('Allele', backref='locus', lazy=True)
+    
+    def to_dict(self):
+        return {
+            'id': self.id,
+            'symbol': self.symbol,
+            'description': self.description,
+            'alleles': [a.to_dict() for a in self.alleles]
+        }
+    
+# 小鼠基因型定义
+class Genotype(db.Model):
+    id = db.Column(db.Integer, primary_key=True)
+    mouse_id = db.Column(db.Integer, db.ForeignKey('mouse.tid'), nullable=False)
+    locus_id = db.Column(db.Integer, db.ForeignKey('gene_locus.id'), nullable=False)
+    
+    # 精确到等位基因
+    allele1_id = db.Column(db.Integer, db.ForeignKey('allele.id'))
+    allele2_id = db.Column(db.Integer, db.ForeignKey('allele.id'))
+    
+    # 关系
+    locus = db.relationship('GeneLocus')
+    allele1 = db.relationship('Allele', foreign_keys=[allele1_id])
+    allele2 = db.relationship('Allele', foreign_keys=[allele2_id])
+    
+    def contains_allele(self, al_id):
+        if self.allele1_id == al_id or self.allele2_id == al_id:
+            return True
+        else:
+            return False
+
+    def get_zygosity(self):
+        """计算纯合状态"""
+        if not self.allele1 or not self.allele2:
+            return "未知"
+        
+        if self.allele1_id == self.allele2_id:
+            return "纯合"
+        return "杂合"
+    
+    def get_genotype_description(self):
+        """获取详细的基因型描述"""
+        alleles = sorted([self.allele1.symbol, self.allele2.symbol])
+        return f"{alleles[0]}/{alleles[1]}"
+    
+    def to_dict(self):
+        return {
+            'id': self.id,
+            'locus': self.locus.symbol,
+            'allele1': self.allele1.symbol if self.allele1 else None,
+            'allele2': self.allele2.symbol if self.allele2 else None,
+            'zygosity': self.get_zygosity(),
+            'description': self.get_genotype_description()
         }
 
 # 位置模型
