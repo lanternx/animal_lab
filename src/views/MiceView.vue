@@ -936,20 +936,22 @@ const validateMouse = (mouse) => {
 
 const openModal = async (mode, mouse = null) => {
   modalMode.value = mode
-  // 设置父本母本
-  if (mouse.father && mouse.father.length > 0) {
-    selectedFathers.value = mouse.father.map(tid => mice.value.find(m => m.tid === tid)).filter(Boolean)
-  }
-  if (mouse.mother && mouse.mother.length > 0) {
-    selectedMothers.value = mouse.mother.map(tid => mice.value.find(m => m.tid === tid)).filter(Boolean)
-  }
-  if (mode === 'template' && mouse) {
-    templateMouse.value = { ...mouse }
-    const api = createAxiosInstance()
-    const temCage = await api.get(`/cage_brief/${templateMouse.value.cage_id}`)
-    templateMouseCage.value = temCage.data
-    newMice.value = [{ id: '', sex: mouse.sex }]
-    return
+  if (mouse){
+    // 设置父本母本
+    if (mouse.father && mouse.father.length > 0) {
+      selectedFathers.value = mouse.father.map(tid => mice.value.find(m => m.tid === tid)).filter(Boolean)
+    }
+    if (mouse.mother && mouse.mother.length > 0) {
+      selectedMothers.value = mouse.mother.map(tid => mice.value.find(m => m.tid === tid)).filter(Boolean)
+    }
+    if (mode === 'template') {
+      templateMouse.value = { ...mouse }
+      const api = createAxiosInstance()
+      const temCage = await api.get(`/cage_brief/${templateMouse.value.cage_id}`)
+      templateMouseCage.value = temCage.data
+      newMice.value = [{ id: '', sex: mouse.sex }]
+      return
+    }
   }
   
   showModal.value = true

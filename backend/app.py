@@ -50,6 +50,11 @@ def apply_socket_patch():
 # 应用补丁
 apply_socket_patch()
 
+import logging
+# 获取主日志记录器
+logger = logging.getLogger("Main")
+
+
 app = Flask(__name__, static_folder='dist', static_url_path='')
 CORS(app)  # 允许跨域请求
 
@@ -90,136 +95,7 @@ with app.app_context():
         # 测试数据库连接
         db.session.execute(text('SELECT 1'))
         print("数据库连接测试成功")
-        # 轻量迁移：为缺失字段添加列
-        def column_exists(table_name, column_name):
-            """检查表中是否存在某列"""
-            inspector = inspect(db.engine)
-            columns = inspector.get_columns(table_name)
-            return any(col['name'] == column_name for col in columns)
 
-        def table_exists(table_name):
-            """检查表是否存在"""
-            inspector = inspect(db.engine)
-            return table_name in inspector.get_table_names()
-
-        def migrate_database():
-            """执行数据库迁移"""
-            try:
-                # 添加Mouse表的新列
-                mouse_new_columns = [
-                    ("strain", "TEXT"),
-                    ("tests_done", "JSON"),
-                    ("tests_planned", "JSON")
-                ]
-                for col, coltype in mouse_new_columns:
-                    if not column_exists('mouse', col):
-                        try:
-                            db.session.execute(text(f"ALTER TABLE mouse ADD COLUMN {col} {coltype}"))
-                            db.session.commit()
-                            print(f"已添加列 mouse.{col}")
-                        except Exception as e:
-                            db.session.rollback()
-                            print(f"添加列 mouse.{col} 失败: {e}")
-
-                # 添加Cage表的新列
-                cage_new_columns = [
-                    ("mice_birth_date", "DATE"),
-                    ("mice_count", "INTEGER"),
-                    ("mice_sex", "TEXT"),
-                    ("mice_genotype", "TEXT")
-                ]
-                for col, coltype in cage_new_columns:
-                    if not column_exists('cage', col):
-                        try:
-                            db.session.execute(text(f"ALTER TABLE cage ADD COLUMN {col} {coltype}"))
-                            db.session.commit()
-                            print(f"已添加列 cage.{col}")
-                        except Exception as e:
-                            db.session.rollback()
-                            print(f"添加列 cage.{col} 失败: {e}")
-
-                # 创建新表
-                new_tables = [
-                    'experiment_type',
-                    'field_definition',
-                    'experiment',
-                    'experiment_value',
-                    'experiment_class'
-                ]
-                
-                for table in new_tables:
-                    if not table_exists(table):
-                        try:
-                            db.create_all()  # 这会创建所有定义的表
-                            print(f"已创建表 {table}")
-                        except Exception as e:
-                            print(f"创建极速 {table} 失败: {e}")
-                print("数据库迁移完成！")
-                return True, "数据库迁移成功完成"
-                
-            except Exception as e:
-                db.session.rollback()
-                print(f"迁移过程中出错: {str(e)}")
-                return False, f"迁移失败: {str(e)}"
-            
-        def migrate_schema():
-            """修改数据库表结构"""
-            try:
-                # 修改 mouse 表的 tests_done 和 tests_planned 列类型为 JSON
-                # 注意：在 SQLite 中，JSON 实际上是作为 TEXT 存储的
-                # 但使用 JSON 类型可以让 SQLAlchemy 自动处理序列化和反序列化
-                
-                # 由于 SQLite 不支持直接修改列类型，我们需要使用更复杂的方法
-                # 这里我们创建一个新表，复制数据，然后删除旧表
-                
-                # 1. 创建临时表
-                temp_table_sql = """
-                CREATE TABLE mouse_temp (
-                    tid INTEGER PRIMARY KEY,
-                    id TEXT NOT NULL,
-                    genotype TEXT,
-                    sex TEXT,
-                    live_status INTEGER DEFAULT 1,
-                    birth_date DATE,
-                    death_date DATE,
-                    cage_id TEXT,
-                    strain TEXT,
-                    tests_done JSON,
-                    tests_planned JSON,
-                    FOREIGN KEY (cage_id) REFERENCES cage (id)
-                )
-                """
-                db.session.execute(text(temp_table_sql))
-                
-                # 2. 复制数据到临时表
-                copy_data_sql = """
-                INSERT INTO mouse_temp 
-                SELECT tid, id, genotype, sex, live_status, birth_date, death_date, cage_id, strain, 
-                    CASE WHEN tests_done IS NULL OR tests_done = '' THEN '[]' ELSE tests_done END,
-                    CASE WHEN tests_planned IS NULL OR tests_planned = '' THEN '[]' ELSE tests_planned END
-                FROM mouse
-                """
-                db.session.execute(text(copy_data_sql))
-                
-                # 3. 删除原表
-                drop_table_sql = "DROP TABLE mouse"
-                db.session.execute(text(drop_table_sql))
-                
-                # 4. 重命名临时表
-                rename_table_sql = "ALTER TABLE mouse_temp RENAME TO mouse"
-                db.session.execute(text(rename_table_sql))
-                
-                db.session.commit()
-                print("已成功修改 mouse 表的列类型")
-                
-                return True, "数据库表结构修改成功"
-                
-            except Exception as e:
-                db.session.rollback()
-                print(f"修改数据库表结构过程中出错: {str(e)}")
-                return False, f"修改失败: {str(e)}"
-        migrate_schema()
-        migrate_database()
         # 自动创建默认位置（如果不存在）
         if not db.session.query(Location).first():
             new_location = Location(
@@ -2357,6 +2233,399 @@ def add_summary_sheet(writer, experiment_dfs):
     worksheet = writer.sheets['汇总']
     auto_adjust_column_widths(worksheet)
     worksheet.freeze_panes = 'A2'
+
+@app.route('/api/database/clear', methods=['POST'])
+def clear_database():
+    """
+    清空数据库所有数据
+    需要前端确认文字 "DELETE ALL DATA"
+    """
+    try:
+        # 获取清空前的记录数
+        total_records_before = get_total_records_count()
+        
+        # 清空所有表数据但保留表结构
+        cleared_tables = clear_all_tables()
+        
+        # 获取清空后的记录数
+        total_records_after = get_total_records_count()
+        
+        # 记录清空操作
+        log_entry = {
+            'timestamp': datetime.now().isoformat(),
+            'operation': 'database_clear',
+            'records_before': total_records_before,
+            'records_after': total_records_after,
+            'tables_cleared': cleared_tables
+        }
+        
+        logger.info(f"数据库清空操作: {log_entry}")
+
+        return jsonify({
+            'success': True,
+            'message': '数据库清空成功',
+            'deleted_records': total_records_before - total_records_after,
+            'cleared_tables': cleared_tables,
+            'timestamp': datetime.now().isoformat()
+        })
+        
+    except Exception as e:
+        logger.error(f"清空数据库失败: {str(e)}")
+        return jsonify({
+            'error': '清空数据库失败',
+            'details': str(e)
+        }), 500
+
+def get_total_records_count():
+    """获取数据库中所有表的记录总数"""
+    try:
+        # 获取数据库引擎
+        engine = db.engine
+        
+        # 获取所有表名
+        inspector = inspect(engine)
+        tables = inspector.get_table_names()
+        
+        # 过滤掉 SQLite 系统表
+        user_tables = [table for table in tables if not table.startswith('sqlite_')]
+        
+        total_count = 0
+        
+        # 对每个表执行 COUNT 查询
+        for table in user_tables:
+            # 使用 SQLAlchemy 的 text() 函数执行原始 SQL
+            result = db.session.execute(text(f"SELECT COUNT(*) FROM {table}"))
+            count = result.scalar()
+            total_count += count
+        
+        return total_count
+    except Exception as e:
+        logger.error(f"获取记录总数失败: {str(e)}")
+        return 0
+
+def clear_all_tables():
+    """清空所有表的数据但保留表结构"""
+    try:
+        # 获取数据库引擎
+        engine = db.engine
+        
+        # 获取所有表名
+        inspector = inspect(engine)
+        tables = inspector.get_table_names()
+        
+        # 过滤掉 SQLite 系统表
+        user_tables = [table for table in tables if not table.startswith('sqlite_')]
+        
+        cleared_tables = []
+        
+        # 开始事务
+        db.session.begin_nested()
+        
+        try:
+            # 禁用外键约束（SQLite 特定）
+            db.session.execute(text("PRAGMA foreign_keys = OFF"))
+            
+            # 清空每个表
+            for table in user_tables:
+                db.session.execute(text(f"DELETE FROM {table}"))
+                cleared_tables.append(table)
+                logger.info(f"清空表: {table}")
+            
+            # 提交事务
+            db.session.commit()
+            
+            # 重新启用外键约束
+            db.session.execute(text("PRAGMA foreign_keys = ON"))
+            
+            logger.info(f"成功清空 {len(cleared_tables)} 个表")
+            return cleared_tables
+            
+        except Exception as e:
+            # 回滚事务
+            db.session.rollback()
+            # 确保重新启用外键约束
+            db.session.execute(text("PRAGMA foreign_keys = ON"))
+            logger.error(f"清空表时出错: {str(e)}")
+            raise e
+            
+    except Exception as e:
+        logger.error(f"清空数据库失败: {str(e)}")
+        raise e
+    
+@app.route('/api/database/info', methods=['GET'])
+def get_database_info():
+    """获取数据库信息"""
+    try:
+        if not os.path.exists(db_path):
+            return jsonify({
+                'fileName': 'mice.db',
+                'fileSize': 0,
+                'lastModified': '文件不存在',
+                'recordCount': 0
+            })
+
+        total_records = get_total_records_count()
+
+        # 获取数据库文件信息
+        if os.path.exists(db_path):
+            stat = os.stat(db_path)
+            file_size = stat.st_size
+            last_modified = datetime.fromtimestamp(stat.st_mtime)
+        else:
+            file_size = 0
+            last_modified = None
+
+        info = {
+            'fileSize': file_size,
+            'lastModified': last_modified,
+            'totalRecords': total_records
+        }
+        return jsonify(info)
+        
+    except Exception as e:
+        logger.error(f"获取数据库信息失败: {str(e)}")
+        return jsonify({
+            'error': '获取数据库信息失败',
+            'details': str(e)
+        }), 500
+
+@app.route('/api/database/export', methods=['GET'])
+def export_database():
+    """导出数据库文件"""
+    try:
+        if not os.path.exists(db_path):
+            return jsonify({'error': '数据库文件不存在'}), 404
+        
+        return send_file(
+            db_path,
+            as_attachment=True,
+            download_name=f'mice_backup_{datetime.now().strftime("%Y%m%d_%H%M%S")}.db',
+            mimetype='application/x-sqlite3'
+        )
+        
+    except Exception as e:
+        logging.error(f"导出数据库失败: {str(e)}")
+        return jsonify({'error': '导出数据库失败'}), 500
+
+@app.route('/api/database/export-log', methods=['GET'])
+def export_log_file():
+    """导出日志文件"""
+    try:
+        log_path = os.path.join(base_dir, 'app.log')
+        
+        if not os.path.exists(log_path):
+            return jsonify({'error': '日志文件不存在'}), 404
+        
+        return send_file(
+            log_path,
+            as_attachment=True,
+            download_name=f'app_log_{datetime.now().strftime("%Y%m%d_%H%M%S")}.log',
+            mimetype='text/plain'
+        )
+        
+    except Exception as e:
+        logging.error(f"导出日志文件失败: {str(e)}")
+        return jsonify({'error': '导出日志文件失败'}), 500
+
+@app.route('/api/database/import', methods=['POST'])
+def import_database():
+    """导入数据库文件"""
+    try:
+        if 'file' not in request.files:
+            return jsonify({'error': '没有选择文件'}), 400
+        
+        file = request.files['file']
+        if file.filename == '':
+            return jsonify({'error': '没有选择文件'}), 400
+        
+        if not file.filename.endswith('.db'):
+            return jsonify({'error': '请选择.db格式的数据库文件'}), 400
+    
+        # 保存上传的文件
+        file.save(db_path)
+
+        # 轻量迁移：为缺失字段添加列
+        def column_exists(table_name, column_name):
+            """检查表中是否存在某列"""
+            inspector = inspect(db.engine)
+            columns = inspector.get_columns(table_name)
+            return any(col['name'] == column_name for col in columns)
+
+        def table_exists(table_name):
+            """检查表是否存在"""
+            inspector = inspect(db.engine)
+            return table_name in inspector.get_table_names()
+
+        def migrate_database():
+            """执行数据库迁移"""
+            try:
+                # 添加Mouse表的新列
+                mouse_new_columns = [
+                    ("strain", "TEXT"),
+                    ("tests_done", "JSON"),
+                    ("tests_planned", "JSON")
+                ]
+                for col, coltype in mouse_new_columns:
+                    if not column_exists('mouse', col):
+                        try:
+                            db.session.execute(text(f"ALTER TABLE mouse ADD COLUMN {col} {coltype}"))
+                            db.session.commit()
+                            print(f"已添加列 mouse.{col}")
+                        except Exception as e:
+                            db.session.rollback()
+                            print(f"添加列 mouse.{col} 失败: {e}")
+
+                # 添加Cage表的新列
+                cage_new_columns = [
+                    ("mice_birth_date", "DATE"),
+                    ("mice_count", "INTEGER"),
+                    ("mice_sex", "TEXT"),
+                    ("mice_genotype", "TEXT")
+                ]
+                for col, coltype in cage_new_columns:
+                    if not column_exists('cage', col):
+                        try:
+                            db.session.execute(text(f"ALTER TABLE cage ADD COLUMN {col} {coltype}"))
+                            db.session.commit()
+                            print(f"已添加列 cage.{col}")
+                        except Exception as e:
+                            db.session.rollback()
+                            print(f"添加列 cage.{col} 失败: {e}")
+
+                # 创建新表
+                new_tables = [
+                    'experiment_type',
+                    'field_definition',
+                    'experiment',
+                    'experiment_value',
+                    'experiment_class'
+                ]
+                
+                for table in new_tables:
+                    if not table_exists(table):
+                        try:
+                            db.create_all()  # 这会创建所有定义的表
+                            print(f"已创建表 {table}")
+                        except Exception as e:
+                            print(f"创建极速 {table} 失败: {e}")
+                print("数据库迁移完成！")
+                return True, "数据库迁移成功完成"
+                
+            except Exception as e:
+                db.session.rollback()
+                print(f"迁移过程中出错: {str(e)}")
+                return False, f"迁移失败: {str(e)}"
+            
+        def migrate_schema():
+            """修改数据库表结构"""
+            try:
+                # 修改 mouse 表的 tests_done 和 tests_planned 列类型为 JSON
+                # 注意：在 SQLite 中，JSON 实际上是作为 TEXT 存储的
+                # 但使用 JSON 类型可以让 SQLAlchemy 自动处理序列化和反序列化
+                
+                # 由于 SQLite 不支持直接修改列类型，我们需要使用更复杂的方法
+                # 这里我们创建一个新表，复制数据，然后删除旧表
+                
+                mice = Mouse.query
+                mouse = mice.first()
+                if mouse:
+                    if isinstance(mouse.cage_id, str):
+                        cage_mouse = {}
+                        for m in mice.all():
+                            cage = Cage.query.get(m.cage_id).first()
+                            if cage:
+                                cage_mouse[m.tid] = [cage.cage_id, cage.section]
+                # 1. 创建临时表
+                temp_table_sql = """
+                CREATE TABLE mouse_temp (
+                    tid INTEGER PRIMARY KEY,
+                    id TEXT NOT NULL,
+                    genotype TEXT,
+                    sex TEXT,
+                    live_status INTEGER DEFAULT 1,
+                    birth_date DATE,
+                    death_date DATE,
+                    cage_id INTEGER,
+                    strain TEXT,
+                    tests_done JSON,
+                    tests_planned JSON,
+                    FOREIGN KEY (cage_id) REFERENCES cage (id)
+                )
+                """
+                db.session.execute(text(temp_table_sql))
+                temp_table_sql = """
+                    CREATE TABLE cage_temp (
+                        id INTEGER PRIMARY KEY AUTOINCREMENT,
+                        section TEXT NOT NULL,
+                        cage_id TEXT NOT NULL,
+                        location TEXT,
+                        cage_type TEXT DEFAULT 'normal',
+                        "order" INTEGER NOT NULL,
+                        mice_birth_date DATE,
+                        mice_count INTEGER,
+                        mice_sex TEXT,
+                        mice_genotype TEXT,
+                        FOREIGN KEY (section) REFERENCES location (identifier)
+                    )
+                """
+                db.session.execute(text(temp_table_sql))
+                
+                # 2. 复制数据到临时表
+                copy_data_sql = """
+                    INSERT INTO cage_temp (section, cage_id, location, cage_type, "order", 
+                                        mice_birth_date, mice_count, mice_sex, mice_genotype)
+                    SELECT section, cage_id, location, cage_type, "order", 
+                        mice_birth_date, mice_count, mice_sex, mice_genotype
+                    FROM cage
+                """
+                db.session.execute(text(copy_data_sql))
+                copy_data_sql = """
+                INSERT INTO mouse_temp 
+                SELECT tid, id, genotype, sex, live_status, birth_date, death_date, strain, 
+                    CASE WHEN tests_done IS NULL OR tests_done = '' THEN '[]' ELSE tests_done END,
+                    CASE WHEN tests_planned IS NULL OR tests_planned = '' THEN '[]' ELSE tests_planned END
+                FROM mouse
+                """
+                db.session.execute(text(copy_data_sql))
+                
+                # 3. 删除原表
+                drop_table_sql = "DROP TABLE mouse"
+                db.session.execute(text(drop_table_sql))
+                drop_table_sql = "DROP TABLE cage"
+                db.session.execute(text(drop_table_sql))
+                
+                # 4. 重命名临时表
+                rename_table_sql = "ALTER TABLE mouse_temp RENAME TO mouse"
+                db.session.execute(text(rename_table_sql))
+                rename_table_sql = "ALTER TABLE cage_temp RENAME TO cage"
+                db.session.execute(text(rename_table_sql))
+                
+                db.session.commit()
+                print("已成功修改 mouse/cage 表的列类型")
+
+                for tid, cage_info in cage_mouse:
+                    mouse = Mouse.query.get(tid)
+                    mouse.cage_id = Cage.query.filter_by(cage_id=cage_info[0]).filter_by(section=cage_info[1]).first().id
+                db.session.commit()
+                return True, "数据库表结构修改成功"
+                
+            except Exception as e:
+                db.session.rollback()
+                print(f"修改数据库表结构过程中出错: {str(e)}")
+                return False, f"修改失败: {str(e)}"
+        migrate_schema()
+        migrate_database()
+        logger.info("数据库导入成功")
+        
+        return jsonify({
+            'success': True,
+            'message': '数据库导入成功',
+            'timestamp': datetime.now().isoformat()
+        })
+        
+    except Exception as e:
+        logging.error(f"导入数据库失败: {str(e)}")
+        return jsonify({'error': '导入数据库失败', 'details': str(e)}), 500
 
 if __name__ == '__main__':
     with app.app_context():

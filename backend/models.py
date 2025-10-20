@@ -12,7 +12,7 @@ class Mouse(db.Model):
     live_status = db.Column(db.Integer, default=1)  # 1 for '活', 0 for '死', 2 for '解剖', 3 for '意外消失', 4 for '丢弃'
     birth_date = db.Column(db.Date)
     death_date = db.Column(db.Date)
-    cage_id = db.Column(db.String(20), db.ForeignKey('cage.id'))
+    cage_id = db.Column(db.Integer, db.ForeignKey('cage.id'))
     strain = db.Column(db.String(50))
     tests_done = db.Column(db.JSON)     #储存实验id的列表
     tests_planned = db.Column(db.JSON)  #储存实验id的列表
@@ -51,7 +51,7 @@ class Pedigree(db.Model):
 class Cage(db.Model):
     __tablename__ = 'cage'
     
-    id = db.Column(db.String(20), primary_key=True)
+    id = db.Column(db.Integer, primary_key=True)
     section = db.Column(db.String(50), db.ForeignKey('location.identifier'), nullable=False)
     cage_id = db.Column(db.String(10), nullable=False) #这个就是笼位卡上显示的编号
     location = db.Column(db.String(50))

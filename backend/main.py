@@ -7,19 +7,38 @@ import os
 import socket
 from contextlib import closing
 import logging
+from logging.handlers import RotatingFileHandler
 
 script_dir = os.path.dirname(os.path.abspath(__file__))
 log_path = os.path.join(script_dir, "app.log")
 # 配置日志记录
-logging.basicConfig(
-    level=logging.INFO,
-    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
-    handlers=[
-        logging.FileHandler(log_path),
-        logging.StreamHandler()
-    ]
-)
-logger = logging.getLogger("Main")
+def setup_logging():
+    # 创建日志记录器
+    logger = logging.getLogger("Main")
+    logger.setLevel(logging.INFO)
+    
+    # 创建格式化器
+    formatter = logging.Formatter('%(asctime)s - %(name)s - %(levelname)s - %(message)s')
+    
+    # 创建文件处理器（带轮转功能）
+    file_handler = RotatingFileHandler(
+        log_path,
+        maxBytes=1024 * 1024,  # 1MB
+        encoding='utf-8'
+    )
+    file_handler.setFormatter(formatter)
+    
+    # 创建控制台处理器
+    console_handler = logging.StreamHandler()
+    console_handler.setFormatter(formatter)
+    
+    # 添加处理器到记录器
+    logger.addHandler(file_handler)
+    logger.addHandler(console_handler)
+    
+    return logger
+# 初始化日志记录器
+logger = setup_logging()
 
 if sys.platform != 'darwin':
     # 获取屏幕尺寸（使用 tkinter，Python 标准库）

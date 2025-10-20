@@ -679,6 +679,126 @@
         </div>
     </div>
 
+    <!-- 数据库管理 -->
+    <div v-if="activeTab === 'database'" class="form-container">
+    <h2 class="section-title">数据库管理</h2>
+    <p class="section-description">管理数据库文件和程序日志</p>
+    
+    <!-- 数据库信息 -->
+    <div class="form-section">
+        <h3>数据库信息</h3>
+        <div class="info-container">
+        <div class="info-item">
+            <span class="info-label">数据库文件:</span>
+            <span class="info-value">{{ dbInfo.fileName || 'mice.db' }}</span>
+        </div>
+        <div class="info-item">
+            <span class="info-label">文件大小:</span>
+            <span class="info-value">{{ formatFileSize(dbInfo.fileSize) }}</span>
+        </div>
+        <div class="info-item">
+            <span class="info-label">最后修改:</span>
+            <span class="info-value">{{ dbInfo.lastModified || '未知' }}</span>
+        </div>
+        <div class="info-item">
+            <span class="info-label">记录数量:</span>
+            <span class="info-value">{{ dbInfo.totalRecords }} 条</span>
+        </div>
+        </div>
+        
+        <div class="form-group">
+        <button class="btn btn-outline" @click="refreshDbInfo">
+            <i class="material-icons">refresh</i> 刷新信息
+        </button>
+        </div>
+    </div>
+
+    <!-- 数据库导入 -->
+    <div class="form-section">
+        <h3>导入数据库</h3>
+        <div class="import-options">
+        <div class="file-upload" @dragover.prevent @drop="handleDbDrop">
+            <input type="file" accept=".db" @change="handleDbFileUpload">
+            <div class="upload-area" :class="{ 'dragover': isDbDragging }">
+            <i class="material-icons">cloud_upload</i>
+            <p v-if="!selectedDbFile">点击或拖拽数据库文件(.db)到此处上传</p>
+            <p v-else class="file-info">
+                <span>{{ selectedDbFile.name }}</span>
+                <span>({{ formatFileSize(selectedDbFile.size) }})</span>
+            </p>
+            <button v-if="selectedDbFile" class="btn btn-outline" @click="clearDbFile">清除</button>
+            </div>
+        </div>
+        
+        <div v-if="selectedDbFile" class="warning-message">
+            <i class="material-icons">warning</i>
+            <span>警告：导入数据库将覆盖当前所有数据，请谨慎操作！</span>
+        </div>
+        
+        <div v-if="selectedDbFile" class="form-group">
+            <button class="btn btn-primary" @click="importDatabase" :disabled="isImportingDb">
+            <span v-if="isImportingDb">导入中...</span>
+            <span v-else>确认导入数据库</span>
+            </button>
+        </div>
+        </div>
+    </div>
+    
+    <!-- 数据库导出 -->
+    <div class="form-section">
+        <h3>导出数据库</h3>
+        <div class="export-options">
+        <p>导出当前工作目录的数据库文件</p>
+        <div class="form-group">
+            <button class="btn btn-primary" @click="exportDatabase" :disabled="isExportingDb">
+            <span v-if="isExportingDb">导出中...</span>
+            <span v-else>导出数据库文件</span>
+            </button>
+        </div>
+        </div>
+    </div>
+
+    <!-- 数据库清空 -->
+    <div class="form-section">
+    <h3>清空数据库</h3>
+    <div class="export-options">
+        <p class="warning-text">警告：此操作将删除所有数据，包括小鼠信息、基因型、位置、实验记录等，且无法恢复！</p>
+        
+        <div class="form-group">
+        <div class="confirmation-input">
+            <label>请输入确认文字 "<strong>DELETE ALL DATA</strong>" 以继续：</label>
+            <input type="text" v-model="deleteConfirmation" placeholder="DELETE ALL DATA" 
+                class="confirmation-field" :class="{ 'error': deleteConfirmationError }">
+            <div v-if="deleteConfirmationError" class="error-message">
+            {{ deleteConfirmationError }}
+            </div>
+        </div>
+        </div>
+        
+        <div class="form-group">
+        <button class="btn btn-danger" @click="clearDatabase" :disabled="!isDeleteConfirmed || isClearingDb">
+            <span v-if="isClearingDb">清空中...</span>
+            <span v-else>清空数据库</span>
+        </button>
+        </div>
+    </div>
+    </div>
+    
+    <!-- 日志导出 -->
+    <div class="form-section">
+        <h3>导出程序日志</h3>
+        <div class="export-options">
+        <p>导出当前工作目录的程序日志文件</p>
+        <div class="form-group">
+            <button class="btn btn-outline" @click="exportLogFile" :disabled="isExportingLog">
+            <span v-if="isExportingLog">导出中...</span>
+            <span v-else>导出日志文件</span>
+            </button>
+        </div>
+        </div>
+    </div>
+    </div>
+
     <!-- 编辑基因型对话框 -->
     <div v-if="editGenotypeDialogVisible" class="dialog-overlay">
     <div class="dialog-container">
@@ -749,11 +869,40 @@
         </div>
     </div>
     </div>
+
+    <!-- 数据库导入结果对话框 -->
+    <div v-if="dbImportResultDialogVisible" @click.self="dbImportResultDialogVisible=false" class="dialog-overlay">
+    <div class="dialog-container">
+        <h2>数据库结果</h2>
+        <div class="import-result">
+        <div v-if="dbImportResult.success" class="result-item success">
+            <i class="material-icons">check_circle</i>
+            <span>数据库成功！</span>
+        </div>
+        <div v-else class="result-item error">
+            <i class="material-icons">error</i>
+            <span>数据库失败</span>
+        </div>
+        
+        <div v-if="dbImportResult.message" class="result-message">
+            {{ dbImportResult.message }}
+        </div>
+        
+        <div v-if="dbImportResult.details" class="error-details">
+            <h4>详细信息:</h4>
+            <pre>{{ dbImportResult.details }}</pre>
+        </div>
+        </div>
+        <div class="dialog-buttons">
+        <button class="btn btn-primary" @click="handleDbImportComplete">确定</button>
+        </div>
+    </div>
+    </div>
 </div>
 </template>
 
 <script setup>
-import { ref, reactive, onMounted } from 'vue'
+import { ref, reactive, onMounted, watch, computed } from 'vue'
 import axios from 'axios'
 import { toast } from 'vue3-toastify'
 import 'vue3-toastify/dist/index.css'
@@ -765,7 +914,8 @@ const tabs = ref([
 { id: 'location', title: '位置设置' },
 { id: 'experiment', title: '实验类型设置' },
 { id: 'export', title: '导出设置' },
-{ id: 'import', title: '导入数据' }
+{ id: 'import', title: '导入数据' },
+{ id: 'database', title: '数据库管理' } 
 ])
 
 // 基因型相关状态
@@ -830,6 +980,42 @@ console.error('获取基因型列表失败:', error)
 toast.error('获取基因型列表失败')
 }
 }
+
+// 数据库管理相关状态
+const selectedDbFile = ref(null)
+const isDbDragging = ref(false)
+const isImportingDb = ref(false)
+const isExportingDb = ref(false)
+const isExportingLog = ref(false)
+const dbImportResultDialogVisible = ref(false)
+const dbImportResult = reactive({
+success: false,
+message: '',
+details: ''
+})
+const dbInfo = ref({
+fileName: '',
+fileSize: 0,
+lastModified: '',
+recordCount: 0
+})
+const deleteConfirmation = ref('')
+const deleteConfirmationError = ref('')
+const isClearingDb = ref(false)
+
+// 计算属性：检查是否确认删除
+const isDeleteConfirmed = computed(() => {
+  return deleteConfirmation.value === 'DELETE ALL DATA'
+})
+
+// 监听确认输入框的变化
+watch(deleteConfirmation, (newValue) => {
+  if (newValue && newValue !== 'DELETE ALL DATA') {
+    deleteConfirmationError.value = '确认文字不匹配'
+  } else {
+    deleteConfirmationError.value = ''
+  }
+})
 
 const addGenotype = async () => {
 if (!newGenotype.name) {
@@ -1271,12 +1457,220 @@ expandedExperimentType.value = id
 }
 }
 
+// 数据库管理相关方法
+const handleDbFileUpload = (event) => {
+  selectedDbFile.value = event.target.files[0]
+  event.target.value = null
+}
+
+const handleDbDrop = (event) => {
+  event.preventDefault()
+  isDbDragging.value = false
+
+  if (event.dataTransfer.files && event.dataTransfer.files.length > 0) {
+    const file = event.dataTransfer.files[0]
+    if (file.name.endsWith('.db')) {
+      selectedDbFile.value = file
+    } else {
+      toast.error('请选择.db格式的数据库文件')
+    }
+  }
+}
+
+const clearDbFile = () => {
+  selectedDbFile.value = null
+}
+
+const importDatabase = async () => {
+  if (!selectedDbFile.value) {
+    toast.info('请选择要导入的数据库文件')
+    return
+  }
+
+  if (!confirm('警告：此操作将覆盖当前所有数据，且不可恢复！确定要继续吗？')) {
+    return
+  }
+
+  isImportingDb.value = true
+
+  const formData = new FormData()
+  formData.append('file', selectedDbFile.value)
+
+  try {
+    const response = await axios.post('/api/database/import', formData, {
+      headers: {
+        'Content-Type': 'multipart/form-data'
+      }
+    })
+    
+    Object.assign(dbImportResult, {
+      success: true,
+      message: response.data.message,
+      details: response.data.details
+    })
+    
+    dbImportResultDialogVisible.value = true
+    toast.success('数据库导入成功')
+  } catch (error) {
+    console.error('数据库导入失败:', error)
+    Object.assign(dbImportResult, {
+      success: false,
+      message: error.response?.data?.error || '数据库导入失败',
+      details: error.response?.data?.details || ''
+    })
+    dbImportResultDialogVisible.value = true
+    toast.error('数据库导入失败')
+  } finally {
+    isImportingDb.value = false
+  }
+}
+
+const exportDatabase = async () => {
+  isExportingDb.value = true
+
+  try {
+    const response = await axios.get('/api/database/export', {
+      responseType: 'blob'
+    })
+
+    // 使用 PyWebview 的保存文件对话框
+    if (window.pywebview && window.pywebview.api) {
+      const filename = `mice_backup_${new Date().toISOString().split('T')[0]}.db`
+      const arrayBuffer = await response.data.arrayBuffer()
+      const uint8array = new Uint8Array(arrayBuffer)
+      const dataArray = Array.from(uint8array)
+      const state = await window.pywebview.api.save_file_dialog(dataArray, filename)
+      if(state.success){
+        toast.success(`数据库导出成功，文件路径：${state.path}`)
+      } else {
+        toast.info(state.message || "导出失败")
+      }
+    } else {
+      const url = window.URL.createObjectURL(new Blob([response.data]))
+      const link = document.createElement('a')
+      link.href = url
+      link.setAttribute('download', `mice_backup_${new Date().toISOString().split('T')[0]}.db`)
+      document.body.appendChild(link)
+      link.click()
+      document.body.removeChild(link)
+      toast.success("数据库导出成功")
+    }
+  } catch (error) {
+    console.error('导出数据库失败:', error)
+    toast.error('导出数据库失败，请重试')
+  } finally {
+    isExportingDb.value = false
+  }
+}
+
+const exportLogFile = async () => {
+  isExportingLog.value = true
+
+  try {
+    const response = await axios.get('/api/database/export-log', {
+      responseType: 'blob'
+    })
+
+    // 使用 PyWebview 的保存文件对话框
+    if (window.pywebview && window.pywebview.api) {
+      const filename = `app_log_${new Date().toISOString().split('T')[0]}.log`
+      const arrayBuffer = await response.data.arrayBuffer()
+      const uint8array = new Uint8Array(arrayBuffer)
+      const dataArray = Array.from(uint8array)
+      const state = await window.pywebview.api.save_file_dialog(dataArray, filename)
+      if(state.success){
+        toast.success(`日志文件导出成功，文件路径：${state.path}`)
+      } else {
+        toast.info(state.message || "导出失败")
+      }
+    } else {
+      const url = window.URL.createObjectURL(new Blob([response.data]))
+      const link = document.createElement('a')
+      link.href = url
+      link.setAttribute('download', `app_log_${new Date().toISOString().split('T')[0]}.log`)
+      document.body.appendChild(link)
+      link.click()
+      document.body.removeChild(link)
+      toast.success("日志文件导出成功")
+    }
+  } catch (error) {
+    console.error('导出日志文件失败:', error)
+    toast.error('导出日志文件失败，请重试')
+  } finally {
+    isExportingLog.value = false
+  }
+}
+
+const refreshDbInfo = async () => {
+  try {
+    const response = await axios.get('/api/database/info')
+    dbInfo.value = response.data
+  } catch (error) {
+    console.error('获取数据库信息失败:', error)
+    toast.error('获取数据库信息失败')
+  }
+}
+
+const handleDbImportComplete = () => {
+  dbImportResultDialogVisible.value = false
+  selectedDbFile.value = null
+  // 刷新数据库信息
+  refreshDbInfo()
+}
+
+// 清空数据库方法
+const clearDatabase = async () => {
+  if (!isDeleteConfirmed.value) {
+    deleteConfirmationError.value = '请正确输入确认文字'
+    return
+  }
+  
+  if (!confirm('最后确认：这将永久删除所有数据，此操作不可逆！确定要继续吗？')) {
+    return
+  }
+  
+  isClearingDb.value = true
+  deleteConfirmationError.value = ''
+  
+  try {
+    const response = await axios.post('/api/database/clear')
+    toast.success('数据库清空成功')
+    deleteConfirmation.value = ''
+    
+    // 刷新数据库信息
+    await refreshDbInfo()
+    
+    // 显示清空结果
+    Object.assign(dbImportResult, {
+      success: true,
+      message: '数据库已成功清空，所有数据已被删除',
+      details: `清空时间: ${new Date().toLocaleString()}\n删除记录数: ${response.data.deleted_records || '未知'}`
+    })
+    dbImportResultDialogVisible.value = true
+    
+  } catch (error) {
+    console.error('清空数据库失败:', error)
+    const errorMsg = error.response?.data?.error || '清空数据库失败'
+    toast.error(errorMsg)
+    
+    Object.assign(dbImportResult, {
+      success: false,
+      message: errorMsg,
+      details: error.response?.data?.details || ''
+    })
+    dbImportResultDialogVisible.value = true
+  } finally {
+    isClearingDb.value = false
+  }
+}
+
 // 初始化数据
 onMounted(() => {
 fetchGenotypes()
 fetchLocations()
 fetchExperimentTypes()
 fetchExperimentPresets()
+refreshDbInfo()
 })
 </script>
 
@@ -1844,8 +2238,13 @@ background-color: #e53935;
 color: white;
 }
 
-.btn-danger:hover {
+.btn-danger:hover:not(:disabled) {
 background-color: #c62828;
+}
+
+.btn-danger:disabled {
+  background-color: #f5b7b1;
+  cursor: not-allowed;
 }
 
 /* 可视化徽章样式 */
@@ -1866,4 +2265,114 @@ background-color: #c62828;
     font-size: 0.8rem;
     margin-left: 8px;
 }
+
+/* 数据库管理特定样式 */
+.warning-message {
+  display: flex;
+  align-items: center;
+  padding: 10px;
+  background-color: #fff3cd;
+  border: 1px solid #ffeaa7;
+  border-radius: 4px;
+  margin: 15px 0;
+  color: #856404;
+}
+
+.warning-message i {
+  margin-right: 10px;
+  color: #f39c12;
+}
+
+.info-container {
+  background-color: #f8f9fa;
+  padding: 15px;
+  border-radius: 4px;
+  margin-bottom: 15px;
+}
+
+.info-item {
+  display: flex;
+  justify-content: space-between;
+  padding: 8px 0;
+  border-bottom: 1px solid #e9ecef;
+}
+
+.info-item:last-child {
+  border-bottom: none;
+}
+
+.info-label {
+  font-weight: 500;
+  color: #495057;
+}
+
+.info-value {
+  color: #6c757d;
+}
+
+.result-message {
+  margin: 15px 0;
+  padding: 10px;
+  background-color: #f8f9fa;
+  border-radius: 4px;
+  border-left: 4px solid #007bff;
+}
+
+.error-details pre {
+  background-color: #f8f9fa;
+  padding: 10px;
+  border-radius: 4px;
+  overflow-x: auto;
+  font-size: 12px;
+  white-space: pre-wrap;
+  word-wrap: break-word;
+}
+
+.warning-text {
+  color: #e74c3c;
+  font-weight: 500;
+  background-color: #fdedec;
+  padding: 10px;
+  border-radius: 4px;
+  border-left: 4px solid #e74c3c;
+}
+
+.confirmation-input {
+  margin-bottom: 15px;
+}
+
+.confirmation-field {
+  width: 100%;
+  padding: 10px;
+  border: 2px solid #ddd;
+  border-radius: 4px;
+  font-size: 14px;
+  margin-top: 5px;
+}
+
+.confirmation-field.error {
+  border-color: #e74c3c;
+  background-color: #fdedec;
+}
+
+.confirmation-field:focus {
+  outline: none;
+  border-color: #3498db;
+}
+
+.confirmation-input label {
+  font-weight: 500;
+  color: #2c3e50;
+}
+
+.confirmation-input label strong {
+  color: #e74c3c;
+}
+
+.error-message {
+  color: #e74c3c;
+  font-size: 12px;
+  margin-top: 5px;
+}
+
 </style>
