@@ -38,7 +38,7 @@
         </div>
           <div class="info-row">
             <span class="info-label">基因型:</span>
-            <span class="info-value">{{ mouseData.genotype }}</span>
+            <span class="info-value" v-html="mouseData.genotype"></span>
           </div>
           <div class="info-row">
             <span class="info-label">笼位位置:</span>

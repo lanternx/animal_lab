@@ -142,7 +142,7 @@
                 </div>
                 <div class="mouse-info">
                   <div class="mouse-id">{{ mouse.id }}</div>
-                  <div class="mouse-genotype">{{ mouse.genotype }}</div>
+                  <div class="mouse-genotype" v-html="mouse.genotype"></div>
                 </div>
                 <div class="mouse-info">
                   <div class="mouse-days">{{ !mouse.days || mouse.days === 'none' ? 'NA天数' : `当前${mouse.days}天` }}</div>
@@ -179,7 +179,7 @@
             </div>
             <div class="mouse-info">
               <div class="mouse-id">{{ mouse.id }}</div>
-              <div class="mouse-genotype">{{ mouse.genotype }}</div>
+              <div class="mouse-genotype" v-html="mouse.genotype"></div>
             </div>
             <div class="mouse-info">
               <div class="mouse-days">{{ !mouse.days || mouse.days === 'none' ? 'NA天数' : `当前${mouse.days}天` }}</div>
@@ -879,7 +879,7 @@ const renderPDFContent = (cages, sectionName) => {
           
           const mouseGenotype = document.createElement('div');
           mouseGenotype.className = 'pdf-mouse-genotype';
-          mouseGenotype.textContent = mouse.genotype;
+          mouseGenotype.innerHTML = mouse.genotype;
           
           mouseInfo.appendChild(mouseId);
           mouseInfo.appendChild(mouseGenotype);

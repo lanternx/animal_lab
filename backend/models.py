@@ -20,11 +20,21 @@ class Mouse(db.Model):
     cage = db.relationship('Cage', backref=db.backref('mice', lazy=True))
     genotypes = db.relationship('Genotype', backref='mouse', lazy='dynamic')
     
+    def get_genotypes(self):
+        genes = []
+        gene_en = []
+        for g in self.genotypes:
+            gd = {"genotypeLocus": g.locus.symbol, "genotypeAllele": g.get_allele(), "genotypeHomo": g.get_zygosis()}
+            genes.append(gd)
+            ge = {"allele1": g.allele1_id, "allele2": g.allele2_id, "locus": g.locus.symbol}
+            gene_en.append(ge)
+        return {"symbol": self.get_full_genotype(), "genes": genes, "geneEntity": gene_en}
+
     def get_full_genotype(self):
         """获取完整的基因型描述"""
         loci = []
         for gt in self.genotypes:
-            desc = f"{gt.locus.symbol}<sup>{gt.get_genotype_description()}</sup>"
+            desc = gt.get_genotype_description()
             loci.append(desc)
         return "; ".join(loci)
 
@@ -133,6 +143,39 @@ class GeneLocus(db.Model):
     description = db.Column(db.String(200))
     alleles = db.relationship('Allele', backref='locus', lazy=True)
     
+    def get_combination(self):
+        inter_alleles = []
+        wild_type = []
+        result = []
+        key = False
+        for a in self.alleles:
+            if a.symbol != "+":
+                if a.is_wildtype:
+                    wild_type.append(a)
+                else:
+                    inter_alleles.append(a)
+            else:
+                key = True
+        if key:
+            for i in inter_alleles:
+                result.append(i.symbol+"/+")
+                result.append(i.symbol+"/"+i.symbol)
+            for w in wild_type:
+                for i in inter_alleles:
+                    result.append(i.symbol+"/"+w.symbol)
+        else:
+            for w in wild_type:
+                result.append(w.symbol+"/"+w.symbol)
+                for i in inter_alleles:
+                    result.append(i.symbol+"/"+w.symbol)
+                    result.append(i.symbol+"/"+i.symbol)
+        for index, i in enumerate(inter_alleles):
+            t_index = index+1
+            while t_index < len(inter_alleles):
+                result.append(i.symbol+"/"+inter_alleles[t_index].symbol)
+                t_index += 1
+        return result
+
     def to_dict(self):
         return {
             'id': self.id,
@@ -161,20 +204,34 @@ class Genotype(db.Model):
             return True
         else:
             return False
-
-    def get_zygosity(self):
-        """计算纯合状态"""
-        if not self.allele1 or not self.allele2:
-            return "未知"
         
+    def get_zygosis(self):
+        if not self.allele1_id or not self.allele2_id:
+            return None
         if self.allele1_id == self.allele2_id:
-            return "纯合"
-        return "杂合"
+            return 'homo'
+        else:
+            return 'hetero'
+        
+    def get_allele(self):
+        if not self.allele1_id or not self.allele2_id:
+            return None
+        if self.allele1_id == self.allele2_id:
+            return [self.allele1.symbol]
+        else:
+            return [self.allele1.symbol, self.allele2.symbol]
     
     def get_genotype_description(self):
         """获取详细的基因型描述"""
-        alleles = sorted([self.allele1.symbol, self.allele2.symbol])
-        return f"{alleles[0]}/{alleles[1]}"
+        if self.locus.symbol == "WT":
+            return "WT"
+        if self.allele1.symbol == "+":
+            alleles = [self.allele2.symbol, self.allele1.symbol]
+        elif self.allele2.symbol == "+":
+            alleles = [self.allele1.symbol, self.allele2.symbol]
+        else:
+            alleles = sorted([self.allele1.symbol, self.allele2.symbol])
+        return f"{self.locus.symbol}<sup>{alleles[0]}/{alleles[1]}</sup>"
     
     def to_dict(self):
         return {
@@ -182,7 +239,6 @@ class Genotype(db.Model):
             'locus': self.locus.symbol,
             'allele1': self.allele1.symbol if self.allele1 else None,
             'allele2': self.allele2.symbol if self.allele2 else None,
-            'zygosity': self.get_zygosity(),
             'description': self.get_genotype_description()
         }
 

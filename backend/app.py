@@ -157,7 +157,7 @@ def get_all_mice():
             mouse_dict = {
                 'tid': m.tid,
                 'id': m.id,
-                'genotype': m.genotype,
+                'genotype': m.get_genotypes(),
                 'sex': m.sex,
                 'birth_date': m.birth_date.strftime('%Y-%m-%d') if m.birth_date else None,
                 'death_date': m.death_date.strftime('%Y-%m-%d') if m.death_date else None,
@@ -187,8 +187,6 @@ def add_mouse():
             mouse.id = data['id']
         else:
             return jsonify({'error': 'Mouse ID is required'}), 400
-        if data['genotype']:
-            mouse.genotype = data['genotype']
         if data['sex']:
             mouse.sex = data['sex']
         if data['birth_date']:
@@ -201,6 +199,17 @@ def add_mouse():
         mouse.tests_planned = data.get('tests_planned')
         db.session.add(mouse)
         db.session.flush()
+        if data['genotype']:
+            genotypes = data['genotype']
+            for g in genotypes:
+                locus_id = GeneLocus.query.filter_by(g["locus"]).first()
+                if locus_id:
+                    gene = Genotype(
+                        mouse_id = mouse.tid,
+                        locus_id = locus_id,
+                        allele1_id = g["allele1"],
+                        allele2_id = g["allele2"])
+                    db.session.add(gene)
         if data['father']:
             for t in data['father']:
                 parent = Pedigree(
@@ -218,7 +227,7 @@ def add_mouse():
         db.session.commit()
         return jsonify({
             'id': mouse.id,
-            'genotype': mouse.genotype,
+            'genotype': mouse.get_genotypes(),
             'sex': mouse.sex,
             'birth_date': mouse.birth_date.strftime('%Y-%m-%d') if mouse.birth_date else None,
             'live_status': mouse.live_status,
@@ -236,9 +245,22 @@ def update_mouse(mouse_tid):
     mouse = Mouse.query.get(mouse_tid)
     if not mouse:
         return jsonify({'error': 'Mouse not found'}), 404
-    
     try:
-        mouse.genotype = data.get('genotype', mouse.genotype)
+        savepoint = db.session.begin_nested()
+        old_genes = Genotype.query.filter_by(mouse_id=mouse.tid).all()
+        for g_o in old_genes:
+            db.session.delete(g_o)
+        if data['genotype']:
+            genotypes = data['genotype']
+            for g in genotypes:
+                locus = GeneLocus.query.filter_by(symbol=g["locus"]).first()
+                if locus:
+                    gene = Genotype(
+                        mouse_id = mouse.tid,
+                        locus_id = locus.id,
+                        allele1_id = g["allele1"],
+                        allele2_id = g["allele2"])
+                    db.session.add(gene)
         mouse.sex = data.get('sex', mouse.sex)
         mouse.live_status = data.get('live_status', mouse.live_status)
         if data['birth_date']:
@@ -274,7 +296,7 @@ def update_mouse(mouse_tid):
         return jsonify({
             'tid': mouse.tid,
             'id': mouse.id,
-            'genotype': mouse.genotype,
+            'genotype': mouse.get_genotypes(),
             'sex': mouse.sex,
             'birth_date': mouse.birth_date.strftime('%Y-%m-%d') if mouse.birth_date else None,
             'father': data.get('father'),
@@ -284,6 +306,7 @@ def update_mouse(mouse_tid):
             'tests_planned': mouse.tests_planned
         })
     except Exception as e:
+        savepoint.rollback()
         return jsonify({'error': str(e)}), 400
 
 @app.route('/api/mice/<mouse_tid>', methods=['DELETE'])
@@ -292,7 +315,9 @@ def delete_mouse(mouse_tid):
     if not mouse:
         return jsonify({'error': 'Mouse not found'}), 404
     try:
+        savepoint = db.session.begin_nested()
         db.session.delete(mouse)
+        Genotype.query.filter_by(mouse_id=mouse_tid).delete()
         StatusRecord.query.filter_by(mouse_id=mouse_tid).delete()
         Pedigree.query.filter_by(mouse_id=mouse_tid).delete()
         Pedigree.query.filter_by(parent_id=mouse_tid).delete()
@@ -301,6 +326,7 @@ def delete_mouse(mouse_tid):
         db.session.commit()
         return jsonify({'message': 'Mouse deleted successfully'})
     except Exception as e:
+        savepoint.rollback()
         return jsonify({'error': str(e)}), 500
 
 # 批量添加小鼠
@@ -308,8 +334,10 @@ def delete_mouse(mouse_tid):
 def add_mice_from_template(mouse_tid):
     data = request.json
     try:
+        savepoint = db.session.begin_nested()
         template_mouse = Mouse.query.get(mouse_tid)
         template_mouse_parent = Pedigree.query.filter_by(mouse_id=mouse_tid).all()
+        genes = Genotype.query.filter_by(mouse_id=mouse_tid).all()
         for m in data:
             new_mouse_data = template_mouse.to_dict()
             # 移除不需要继承的字段（如主键、创建时间等）
@@ -323,6 +351,14 @@ def add_mice_from_template(mouse_tid):
             new_mouse = Mouse(**new_mouse_data)
             db.session.add(new_mouse)
             db.session.flush()
+            for g in genes:
+                new_gene = Genotype(
+                    mouse_id=new_mouse.tid,
+                    locus_id=g.locus_id,
+                    allele1_id=g.allele1_id,
+                    allele2_id=g.allele2_id
+                )
+                db.session.add(new_gene)
             for p in template_mouse_parent:
                 new_parent = Pedigree(
                     mouse_id=new_mouse.tid,
@@ -332,6 +368,7 @@ def add_mice_from_template(mouse_tid):
         db.session.commit()
         return jsonify(), 201
     except Exception as e:
+        savepoint.rollback()
         return jsonify({'error': str(e)}), 400
 
 # 批量修改实验小鼠
@@ -385,7 +422,7 @@ def get_all_cages():
                 mice_info.append({
                     'tid': mouse.tid,
                     'id': mouse.id,
-                    'genotype': mouse.genotype,
+                    'genotype': mouse.get_full_genotype(),
                     'sex': mouse.sex,
                     'days': (datetime.now().date() - mouse.birth_date).days if mouse.birth_date else None
                 })
@@ -413,7 +450,7 @@ def get_undetermined_mice():
             undetermined_mice.append({
                 'tid': mouse.tid,
                 'id': mouse.id,
-                'genotype': mouse.genotype,
+                'genotype': mouse.get_full_genotype(),
                 'sex': mouse.sex,
                 'days': (datetime.now().date() - mouse.birth_date).days if mouse.birth_date else None
             })
@@ -541,7 +578,7 @@ def get_mice_info(mouse_tid):
         c_cage = Cage.query.get(mouse.cage_id)
     if mouse:
         content['id'] = mouse.id
-        content['genotype'] = mouse.genotype
+        content['genotype'] = mouse.get_full_genotype()
         content['sex'] = mouse.sex
         content['live_status'] = mouse.live_status
         if c_cage:
@@ -696,7 +733,6 @@ def get_lived_mice():
         mice = db.session.query(
             Mouse.tid,
             Mouse.id,
-            Mouse.genotype,
             Mouse.sex,
             Mouse.cage_id,
             Cage.section,
@@ -730,7 +766,7 @@ def get_lived_mice():
             mice_data.append({
                 'tid': mouse.tid,
                 'id': mouse.id,
-                'genotype': mouse.genotype,
+                'genotype': mouse.get_full_genotype(),
                 'sex': mouse.sex,
                 'cage_name': cage_name,
                 'section': section
@@ -1453,7 +1489,7 @@ def get_weight_record_with_filter():
                 'record_livingdays': weight_record.record_livingdays,
                 'mouse_info': {
                     'id': mouse.id,
-                    'genotype': mouse.genotype,
+                    'genotype': mouse.get_full_genotype(),
                     'sex': mouse.sex,
                     'birth_date': mouse.birth_date.isoformat() if mouse.birth_date else None
                 }

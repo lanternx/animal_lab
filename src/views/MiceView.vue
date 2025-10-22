@@ -103,12 +103,27 @@
           <tr class="filter-row">
             <th><input v-model="filters.id" @input="applyFilters" placeholder="筛选ID"></th>
             <th>
-              <select v-model="filters.genotype" @change="applyFilters">
-                <option value="">全部</option>
-                <option v-for="genotype in genotypes" :key="genotype.id" :value="genotype.name">
-                  {{ genotype.name }}
-                </option>
-              </select>
+              <!-- 基因型筛选 -->
+              <div class="genotype-filter">
+                <select v-model="filters.genotypeLocus" @change="onLocusChange">
+                  <option value="">所有位点</option>
+                  <option v-for="locus in genotypes" :key="locus.id" :value="locus.symbol">
+                    {{ locus.symbol }}
+                  </option>
+                </select>
+                
+                <select v-if="filters.genotypeLocus && filters.genotypeLocus !== 'WT'" v-model="filters.genotypeAllele" @change="onAlleleChange" :disabled="!filters.genotypeLocus">
+                  <option value="">所有等位基因</option>
+                  <option v-for="allele in filteredAlleles" :key="allele.id" :value="allele.symbol">
+                    {{ allele.symbol }}
+                  </option>
+                </select>
+
+                <select v-if="filters.genotypeLocus && filters.genotypeLocus !== 'WT' && filters.genotypeAllele" v-model="filters.genotypeHomo" @change="applyFilters" :disabled="!filters.genotypeLocus || !filters.genotypeAllele" >
+                  <option value="homo">纯合</option>
+                  <option value="hetero">杂合</option>
+                </select>
+              </div>
             </th>
             <th><input v-model="filters.strain" @input="applyFilters" placeholder="筛选品系"></th>
             <th>
@@ -156,7 +171,7 @@
               'selected-multiple': selectedMice.length > 1 && isSelected(mouse.tid)
           }">
             <td>{{ mouse.id }}</td>
-            <td>{{ mouse.genotype }}</td>
+            <td v-html="mouse.genotype.symbol"></td>
             <td>{{ mouse.strain }}</td>
             <td>
               <div class="mouse-sex" :class="mouse.sex === 'F' ? 'sex-female' : 'sex-male'">
@@ -245,14 +260,53 @@
           </div>          
           <!-- 基因型选择 -->
           <div class="form-group">
-            <label>基因型:</label>
-            <div class="genotype-select-container">
-              <select v-model="formData.genotype">
-                <option v-for="genotype in genotypes" :key="genotype.id" :value="genotype.name">
-                  {{ genotype.name }}
-                </option>
-              </select>
+            <div class="form-header">
+              <label>基因型:
+                <span class="selected-gene" v-html="selectedGeneName"></span>
+              </label>
+              <button class="primary-btn btn-add-top" @click="addGene" :disabled="!addable">
+                <i class="material-icons">add</i>
+                添加
+              </button>
             </div>
+
+            <div v-for="(gene, index) in selectedGenes" class="genotype-select-container" :key="gene">
+              <div class="locus-control">
+                <div class="locus-select">
+                <select v-model="gene.locus" @change="onFormLocusChange(index, gene.locus)">
+                  <option v-for="locus in locusSuggestions[index]" :key="locus.id" :value="locus.symbol">
+                    {{ locus.symbol }}
+                  </option>
+                </select>
+                </div>
+                <button class="btn-remove" @click="deleteGene(index)">
+                  <i class="material-icons">delete</i>
+                </button>
+              </div>
+
+              <div class="allele-controls">
+                <div class="allele-group" v-if="gene.locus && gene.locus !== 'WT'">
+                  <label>等位基因 1</label>
+                <select v-model="gene.allele1" :disabled="!gene.locus" @change="onFormAlleleChange(true, index, gene.allele1)">
+                  <option v-for="allele in alleleSuggestions[index][0]" :key="allele.id" :value="allele.id">
+                    {{ allele.symbol }}
+                  </option>
+                </select>
+                </div>
+                <div class="allele-group" v-if="gene.locus && gene.locus !== 'WT'">
+                  <label>等位基因 2</label>
+                <select v-model="gene.allele2" :disabled="!gene.locus" @change="onFormAlleleChange(false, index, gene.allele2)">
+                  <option v-for="allele in alleleSuggestions[index][1]" :key="allele.id" :value="allele.id">
+                    {{ allele.symbol }}
+                  </option>
+                </select>
+                </div>
+              </div>
+            </div>
+            <button v-if="selectedGenes.length>0" class="primary-btn btn-clear-all" @click="deleteGenes">
+              <i class="material-icons">delete_forever</i>
+              全部删除
+            </button>
           </div>
 
           <div class="form-group">
@@ -308,13 +362,13 @@
                   :key="mouse.tid"
                   @click="selectParent('father', mouse)"
                 >
-                  {{ mouse.id }} ({{ formatDate(mouse.birth_date) }}) - {{ mouse.genotype }}
+                  {{ mouse.id }} ({{ formatDate(mouse.birth_date) }}) - {{ mouse.genotype.symbol }}
                 </li>
               </ul>
             </div>
             <div class="selected-parents" v-if="selectedFathers.length">
               <div class="selected-parent" v-for="(father, index) in selectedFathers" :key="father.tid">
-                <span>{{ father.id }} ({{ formatDate(father.birth_date) }}) - {{ father.genotype }}</span>
+                <span>{{ father.id }} ({{ formatDate(father.birth_date) }}) - {{ father.genotype.symbol }}</span>
                 <button type="button" class="remove-btn" @click="removeParent('father', index)">移除</button>
               </div>
             </div>
@@ -339,13 +393,13 @@
                   :key="mouse.tid"
                   @click="selectParent('mother', mouse)"
                 >
-                  {{ mouse.id }} ({{ formatDate(mouse.birth_date) }}) - {{ mouse.genotype }}
+                  {{ mouse.id }} ({{ formatDate(mouse.birth_date) }}) - {{ mouse.genotype.symbol }}
                 </li>
               </ul>
             </div>
             <div class="selected-parents" v-if="selectedMothers.length">
               <div class="selected-parent" v-for="(mother, index) in selectedMothers" :key="mother.tid">
-                <span>{{ mother.id }} ({{ formatDate(mother.birth_date) }}) - {{ mother.genotype }}</span>
+                <span>{{ mother.id }} ({{ formatDate(mother.birth_date) }}) - {{ mother.genotype.symbol }}</span>
                 <button type="button" class="remove-btn" @click="removeParent('mother', index)">移除</button>
               </div>
             </div>
@@ -461,7 +515,7 @@
             </div>
             <div class="detail-item">
               <span class="detail-label">基因型</span>
-              <span class="detail-value">{{ templateMouse.genotype }}</span>
+              <span class="detail-value">{{ templateMouse.genotype.symbol }}</span>
             </div>
             <div class="detail-item">
               <span class="detail-label">品系</span>
@@ -576,7 +630,7 @@ const delay = 250;
 // 表单数据
 const formData = reactive({
   id: '',
-  genotype: '',
+  genotype: {},
   sex: 'M',
   birth_date: '',
   death_date: '',
@@ -595,7 +649,9 @@ const sortField = ref(null)
 const sortDirection = ref('asc')
 const filters = reactive({
   id: '',
-  genotype: '',
+  genotypeLocus: '',
+  genotypeAllele: '',
+  genotypeHomo: '',
   strain: '',
   sex: '',
   birth_date: '',
@@ -607,6 +663,51 @@ const filters = reactive({
   tests_done: null,
   tests_planned: null
 })
+const filteredAlleles = ref([])
+
+// 基因型选择
+const selectedGenes = ref([])
+const selectedGeneName = computed(() => {
+  return selectedGenes.value.map(g => {
+    // 处理野生型情况
+    if (g.locus === "WT") {
+      return "WT"
+    }
+    if (g.locus) {
+      const alleles = genotypes.value.find(gt => gt.symbol === g.locus).alleles
+      const allele1 = g.allele1 ? alleles.find(a => a.id === g.allele1)?.symbol : ""
+      const allele2 = g.allele2 ? alleles.find(a => a.id === g.allele2)?.symbol : ""
+      return `${g.locus}<sup>${allele1}/${allele2}</sup>`
+    } else {
+      return ''
+    }
+  }).join(";")
+})
+const locusSuggestions = computed(() => {
+  const hasWT = selectedGenes.value.some(g => g.locus === "WT");
+  return selectedGenes.value.map((gene, index) => {
+    
+    const selectedLoci = selectedGenes.value
+      .filter((_, i) => i !== index)
+      .map(g => g.locus);
+    
+    if (hasWT) {
+      if (gene.locus === "WT") {
+        return genotypes.value.filter(genotype => 
+          !selectedLoci.includes(genotype.symbol)
+        );
+      } else {
+        return [genotypes.value.find(genotype => genotype.symbol === "WT")];
+      }
+    } else {
+      return genotypes.value.filter(genotype => 
+          !selectedLoci.includes(genotype.symbol)
+        );
+    }
+  });
+});
+const alleleSuggestions = ref([])
+const addable = ref(true)
 
 // 父本母本选择
 const fatherQuery = ref('')
@@ -658,7 +759,7 @@ const modalTitle = computed(() => {
 const createAxiosInstance = () => {
   return axios.create({
     baseURL: '/api',
-    timeout: 10000,
+    timeout: 60000,
     headers: {
       'Content-Type': 'application/json',
       'X-Requested-With': 'XMLHttpRequest'
@@ -711,7 +812,7 @@ const loadMice = async () => {
 const loadGenotypes = async () => {
   try {
     const api = createAxiosInstance()
-    const response = await api.get('/genotypes')
+    const response = await api.get('/gene')
     genotypes.value = response.data
   } catch (error) {
     console.error('加载基因型失败:', error)
@@ -744,7 +845,10 @@ const resetSearch = () => {
   searchTerm.value = ''
   Object.assign(filters, {
     id: '',
-    genotype: '',
+    genotypeLocus: '',
+    genotypeAllele: '',
+    genotypeHomo: '',
+    strain:'',
     sex: '',
     birth_date: '',
     days_old_min: null,
@@ -765,6 +869,26 @@ const sortIcon = (field) => {
     : 'material-icons rotated-icon'
 }
 
+const onLocusChange = () => {
+  // 重置下级筛选条件
+  filters.genotypeAllele = '';
+  filters.genotypeHomo = '';
+  
+  // 更新可选的等位基因列表
+  if (filters.genotypeLocus) {
+    filteredAlleles.value = genotypes.value.filter(g => g.symbol === filters.genotypeLocus).alleles
+  } else {
+    filteredAlleles.value = []
+  }
+  applyFilters()
+}
+
+const onAlleleChange = () => {
+  // 重置下级筛选条件
+  filters.genotypeHomo = '';
+  applyFilters()
+}
+
 const applyFilters = () => {
   let result = [...mice.value]
   
@@ -773,7 +897,7 @@ const applyFilters = () => {
     const lowerTerm = searchTerm.value.toLowerCase()
     result = result.filter(mouse => 
       (mouse.id && String(mouse.id).toLowerCase().includes(lowerTerm)) || 
-      (mouse.genotype && mouse.genotype.toLowerCase().includes(lowerTerm))
+      (mouse.genotype.symbol && mouse.genotype.symbol.toLowerCase().includes(lowerTerm))
     )
   }
   
@@ -781,8 +905,14 @@ const applyFilters = () => {
   if (filters.id) {
     result = result.filter(m => m.id.includes(filters.id))
   }
-  if (filters.genotype) {
-    result = result.filter(m => m.genotype === filters.genotype)
+  if (filters.genotypeLocus) {
+    result = result.filter(m => m.genotype.genes.some(g => g.genotypeLocus === filters.genotypeLocus))
+    if (filters.genotypeAllele) {
+      result = result.filter(m => m.genotype.genes.some(g => g.genotypeAllele === filters.genotypeAllele))
+      if (filters.genotypeHomo) {
+        result = result.filter(m => m.genotype.genes.some(g => g.genotypeHomo === filters.genotypeHomo))
+      }
+    }
   }
   if (filters.strain) {
     result = result.filter(m => (m.strain || '').includes(filters.strain))
@@ -937,6 +1067,17 @@ const validateMouse = (mouse) => {
 const openModal = async (mode, mouse = null) => {
   modalMode.value = mode
   if (mouse){
+    if (mouse.genotype.symbol && mouse.genotype.genes.length > 0) {
+      selectedGenes.value = mouse.genotype.geneEntity
+      alleleSuggestions.value = selectedGenes.value.map(sg => {
+        const matchedLocus = genotypes.value.find(g => g.symbol === sg.locus)
+        if (matchedLocus) {
+          return [matchedLocus.alleles, matchedLocus.alleles]
+        } else{
+          return [[], []]
+        }
+      })
+    }
     // 设置父本母本
     if (mouse.father && mouse.father.length > 0) {
       selectedFathers.value = mouse.father.map(tid => mice.value.find(m => m.tid === tid)).filter(Boolean)
@@ -959,7 +1100,7 @@ const openModal = async (mode, mouse = null) => {
   // 重置表单数据
   Object.assign(formData, {
     id: '',
-    genotype: '',
+    genotype: {},
     sex: 'M',
     birth_date: '',
     death_date: '',
@@ -972,11 +1113,6 @@ const openModal = async (mode, mouse = null) => {
     tests_done: [],
     tests_planned: []
   })
-  
-  selectedFathers.value = []
-  selectedMothers.value = []
-  selectedTestsDone.value = []
-  selectedTestsPlanned.value = []
   
   if (mode === 'edit' && mouse) {
     // 填充编辑数据
@@ -1000,14 +1136,42 @@ const closeModal = () => {
   newMice.value = []
   fatherQuery.value = ''
   motherQuery.value = ''
+  alleleSuggestions.value = []
+  selectedGenes.value = []
+  selectedFathers.value = []
+  selectedMothers.value = []
+  selectedTestsDone.value = []
+  selectedTestsPlanned.value = []
 }
 
 const saveMouse = async () => {
   if (!validateMouse(formData)) return
   
+  if (selectedGenes.value.length > 1 && selectedGenes.value.some(g => g.locus === "WT")) {
+    toast.error("野生型不能添加基因型")
+    return
+  }
+
+  let existingLocus = []
+  // 检查必填字段
+  for (const gene of selectedGenes.value) {
+    if (existingLocus.includes(gene.locus)) {
+      toast.error(`基因位点 ${gene.locus} 出现重复`)
+      return false
+    } else {
+      existingLocus.push(gene.locus)
+    }
+    if (gene.locus && gene.locus !== "WT") {
+      if (!gene.allele1 || !gene.allele2) {
+        toast.error(`基因 ${gene.locus} 的等位基因必须完整`)
+        return false
+      }
+    }
+  }
   // 准备提交数据
   const submitData = {
     ...formData,
+    genotype: selectedGenes.value,
     father: selectedFathers.value.map(t => t.tid),
     mother: selectedMothers.value.map(t => t.tid),
     tests_done: selectedTestsDone.value.map(e => e.id),
@@ -1110,6 +1274,71 @@ const showContextMenu = (event, mouse) => {
 
 const closeContextMenu = () => {
   contextMenu.visible = false
+}
+
+const onFormLocusChange = (index, locus) => {
+  // 查找匹配的基因位点
+  const matchedLocus = genotypes.value.find(g => g.symbol === locus);
+  // 更新等位基因建议
+  alleleSuggestions.value[index] = matchedLocus ? [matchedLocus.alleles, matchedLocus.alleles] : [[], []];
+  selectedGenes.value[index].allele1 = null
+  selectedGenes.value[index].allele2 = null
+  if (locus === "WT") {
+    selectedGenes.value = [{'locus': 'WT', 'allele1': null, 'allele2': null}]
+    addable.value = false
+  } else {
+    addable.value = true
+  }
+};
+
+const onFormAlleleChange = (isFirstAllele, index, allele) => {
+  const locus = genotypes.value.find(g => g.symbol === selectedGenes.value[index].locus)
+  if (!locus) {
+    return
+  }
+  const selectedAllele = locus.alleles.find(a => a.id === allele);
+  if (!selectedAllele) {
+    return
+  }
+  const targetArray = isFirstAllele 
+    ? alleleSuggestions.value[index][1] 
+    : alleleSuggestions.value[index][0];
+  if (selectedAllele.symbol === '+') {
+    const newArray = targetArray.filter(a => a.id !== selectedAllele.id);
+    if (isFirstAllele) {
+      alleleSuggestions.value[index][1] = newArray;
+    } else {
+      alleleSuggestions.value[index][0] = newArray;
+    }
+  } else {
+    const alls = locus.alleles
+    if (isFirstAllele) {
+      alleleSuggestions.value[index][1] = alls
+    } else {
+      alleleSuggestions.value[index][0] = alls
+    }
+  }
+
+  if (isFirstAllele && alleleSuggestions.value[index][1].length === 1) {
+    selectedGenes.value[index].allele2 = alleleSuggestions.value[index][1][0].id
+  }
+}
+
+const deleteGene = (index) => {
+  if ( selectedGenes.value[index].locus === "WT") {
+    addable.value = true
+  }
+  selectedGenes.value.splice(index, 1)
+}
+
+const addGene = () => {
+  selectedGenes.value.push({"locus":'', "allele1":null, "allele2":null})
+  alleleSuggestions.value.push([])
+}
+
+const deleteGenes = () => {
+  selectedGenes.value = []
+  addable.value = true
 }
 
 const searchParents = (type) => {
@@ -1770,42 +1999,22 @@ onMounted(async () => {
 }
 
 .genotype-select-container {
+  background: white;
+  border-radius: 10px;
+  padding: 15px;
+  margin-bottom: 15px;
+  box-shadow: 0 3px 10px rgba(0, 0, 0, 0.05);
+  border: 1px solid #e1e8f0;
+  transition: all 0.3s ease;
   display: flex;
+  flex-wrap: wrap;
+  gap: 15px;
   align-items: center;
-  gap: 8px;
 }
 
-.genotype-select-container select {
-  flex: 1;
-  padding: 12px;
-  border: 1px solid #e2e8f0;
-  border-radius: 6px;
-  font-size: 1rem;
-  transition: all 0.3s;
-  background-color: white;
-}
-
-.genotype-select-container select:focus {
-  border-color: #4a9bff;
-  outline: none;
-  box-shadow: 0 0 0 2px rgba(74, 155, 255, 0.2);
-}
-
-.add-genotype-btn {
-  padding: 8px 12px;
-  background: #4a9bff;
-  color: white;
-  border: none;
-  border-radius: 6px;
-  cursor: pointer;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  transition: background 0.3s;
-}
-
-.add-genotype-btn:hover {
-  background: #3a8beb;
+.genotype-select-container:hover {
+  box-shadow: 0 5px 15px rgba(0, 0, 0, 0.08);
+  border-color: #c5d5e6;
 }
 
 /* 父本母本选择样式 */
@@ -1906,21 +2115,6 @@ onMounted(async () => {
   font-weight: 500;
   font-size: 0.95rem;
   color: #2d3748;
-}
-
-.form-group button {
-  background: #4a9bff;
-  color: white;
-  border: none;
-  padding: 8px 16px;
-  border-radius: 6px;
-  cursor: pointer;
-  font-size: 0.9rem;
-  transition: background 0.2s;
-}
-
-.form-group button:hover {
-  background: #3a8bef;
 }
 
 .input-row {
@@ -2098,4 +2292,180 @@ onMounted(async () => {
   background-color: #2196f3;
 }
 
+.genotype-filter {
+  display: contents;
+  gap: 5px;
+  margin-bottom: 20px;
+  background-color: #f8f9fa;
+  border-radius: 8px;
+}
+
+.form-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 20px;
+  flex-wrap: wrap;
+  gap: 15px;
+}
+
+.form-header label {
+  font-size: 1.2rem;
+  font-weight: 600;
+  color: #2c3e50;
+  display: flex;
+  align-items: center;
+}
+
+.selected-gene {
+  display: inline-block;
+  background: #e3f2fd;
+  color: #1976d2;
+  padding: 8px 15px;
+  border-radius: 50px;
+  font-weight: 600;
+  margin-left: 15px;
+  font-size: 1rem;
+  box-shadow: 0 2px 5px rgba(25, 118, 210, 0.1);
+}
+
+.btn-remove {
+    background: #f44336;
+    color: white;
+    padding: 10px 10px;
+    border-radius: 8px;
+    font-weight: 600;
+    font-size: 0.95rem;
+    cursor: pointer;
+    transition: all 0.2s ease;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    border: none;
+    min-width: 50px;
+}
+
+.btn-remove i {
+    margin-right: 5px;
+    font-size: 0.9rem;
+}
+
+.btn-remove:hover {
+    background: #e53935 !important;
+    transform: translateY(-2px);
+    box-shadow: 0 4px 8px rgba(244, 67, 54, 0.3);
+}
+
+.btn-clear-all {
+  background: #ff9800;
+}
+
+.btn-clear-all i {
+  margin-right: 8px;
+  font-size: 0.9rem;
+}
+
+.btn-clear-all:hover {
+  background: #f57c00 !important;
+  transform: translateY(-2px);
+  box-shadow: 0 4px 8px rgba(255, 152, 0, 0.3);
+}
+
+.btn-add-top {
+  background: #4caf50;
+}
+
+.btn-add-top i {
+  margin-right: 8px;
+  font-size: 0.9rem;
+}
+
+.btn-add-top:hover {
+  background: #43a047 !important;
+  transform: translateY(-2px);
+  box-shadow: 0 4px 8px rgba(76, 175, 80, 0.3);
+}
+
+.allele-group {
+  flex: 1;
+}
+
+.allele-group select {
+  width: 100%;
+  padding: 10px 15px;
+  border-radius: 8px;
+  border: 1px solid #c5d5e6;
+  background: white;
+  font-size: 1rem;
+  color: #2c3e50;
+  appearance: none;
+  background-position: right 15px center;
+  background-size: 16px;
+  transition: all 0.2s;
+}
+
+.allele-group select:focus {
+  outline: none;
+  border-color: #4a6fa5;
+  box-shadow: 0 0 0 3px rgba(74, 111, 165, 0.2);
+}
+
+.allele-group select:disabled {
+  background-color: #f5f7fa;
+  color: #90a4ae;
+  cursor: not-allowed;
+}
+
+.allele-group label {
+  display: block;
+  margin-bottom: 8px;
+  font-size: 0.9rem;
+  color: #546e7a;
+  font-weight: 500;
+}
+
+.allele-controls {
+  display: flex;
+  flex: 2;
+  gap: 15px;
+  min-width: 300px;
+}
+
+.locus-control {
+  display: flex;
+  flex: 1;
+  min-width: 150px;
+  gap: 10px;
+}
+
+.locus-select {
+  display: flex;
+  flex: 1;
+  min-width: 90px;
+}
+
+.locus-select select {
+  width: 100%;
+  padding: 10px 15px;
+  border-radius: 8px;
+  border: 1px solid #c5d5e6;
+  background: white;
+  font-size: 1rem;
+  color: #2c3e50;
+  background-position: right 15px center;
+  background-size: 16px;
+  transition: all 0.2s;
+}
+
+.locus-select select:focus {
+  outline: none;
+  border-color: #4a6fa5;
+  box-shadow: 0 0 0 3px rgba(74, 111, 165, 0.2);
+}
+
+.locus-select select:disabled {
+  background-color: #f5f7fa;
+  color: #90a4ae;
+  cursor: not-allowed;
+}
 </style>
