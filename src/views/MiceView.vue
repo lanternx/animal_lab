@@ -120,6 +120,7 @@
                 </select>
 
                 <select v-if="filters.genotypeLocus && filters.genotypeLocus !== 'WT' && filters.genotypeAllele" v-model="filters.genotypeHomo" @change="applyFilters" :disabled="!filters.genotypeLocus || !filters.genotypeAllele" >
+                  <option value="">所有形式</option>
                   <option value="homo">纯合</option>
                   <option value="hetero">杂合</option>
                 </select>
@@ -598,6 +599,11 @@ import axios from 'axios'
 import { toast } from 'vue3-toastify'
 import 'vue3-toastify/dist/index.css'
 import MouseDetailModal from './MouseDetailView.vue'
+import { useGeneStore } from '@/stores'
+import { storeToRefs } from 'pinia'
+
+const geneStore = useGeneStore()
+const {genotypes} = storeToRefs(geneStore)
 
 // 响应式数据
 const mice = ref([])
@@ -742,7 +748,7 @@ const availableTestsDone = computed(() => {
 })
 
 // 数据列表
-const genotypes = ref([])
+
 const experiments = ref([])
 
 // 计算属性
@@ -809,17 +815,6 @@ const loadMice = async () => {
   }
 }
 
-const loadGenotypes = async () => {
-  try {
-    const api = createAxiosInstance()
-    const response = await api.get('/gene')
-    genotypes.value = response.data
-  } catch (error) {
-    console.error('加载基因型失败:', error)
-    toast.error(`加载基因型失败: ${error.message || '请检查网络连接'}`)
-  }
-}
-
 const loadExperiments = async () => {
   try {
     const api = createAxiosInstance()
@@ -876,7 +871,7 @@ const onLocusChange = () => {
   
   // 更新可选的等位基因列表
   if (filters.genotypeLocus) {
-    filteredAlleles.value = genotypes.value.filter(g => g.symbol === filters.genotypeLocus).alleles
+    filteredAlleles.value = genotypes.value.find(g => g.symbol === filters.genotypeLocus).alleles
   } else {
     filteredAlleles.value = []
   }
@@ -908,7 +903,7 @@ const applyFilters = () => {
   if (filters.genotypeLocus) {
     result = result.filter(m => m.genotype.genes.some(g => g.genotypeLocus === filters.genotypeLocus))
     if (filters.genotypeAllele) {
-      result = result.filter(m => m.genotype.genes.some(g => g.genotypeAllele === filters.genotypeAllele))
+      result = result.filter(m => m.genotype.genes.some(g => g.genotypeAllele.includes(filters.genotypeAllele)))
       if (filters.genotypeHomo) {
         result = result.filter(m => m.genotype.genes.some(g => g.genotypeHomo === filters.genotypeHomo))
       }
@@ -1281,8 +1276,13 @@ const onFormLocusChange = (index, locus) => {
   const matchedLocus = genotypes.value.find(g => g.symbol === locus);
   // 更新等位基因建议
   alleleSuggestions.value[index] = matchedLocus ? [matchedLocus.alleles, matchedLocus.alleles] : [[], []];
-  selectedGenes.value[index].allele1 = null
-  selectedGenes.value[index].allele2 = null
+  if (matchedLocus.alleles.length == 1) {
+    selectedGenes.value[index].allele1 = matchedLocus.alleles[0].id
+    selectedGenes.value[index].allele2 = matchedLocus.alleles[0].id
+  } else {
+    selectedGenes.value[index].allele1 = null
+    selectedGenes.value[index].allele2 = null
+  }
   if (locus === "WT") {
     selectedGenes.value = [{'locus': 'WT', 'allele1': null, 'allele2': null}]
     addable.value = false
@@ -1303,8 +1303,8 @@ const onFormAlleleChange = (isFirstAllele, index, allele) => {
   const targetArray = isFirstAllele 
     ? alleleSuggestions.value[index][1] 
     : alleleSuggestions.value[index][0];
-  if (selectedAllele.symbol === '+') {
-    const newArray = targetArray.filter(a => a.id !== selectedAllele.id);
+  if (selectedAllele.is_wildtype) {
+    const newArray = targetArray.filter(a => !a.is_wildtype);
     if (isFirstAllele) {
       alleleSuggestions.value[index][1] = newArray;
     } else {
@@ -1540,7 +1540,6 @@ watch(searchTerm, (newVal) => {
 // 生命周期
 onMounted(async () => {
   await loadMice()
-  await loadGenotypes()
   await loadExperiments()
   document.addEventListener('click', closeContextMenu)
   document.addEventListener('click', handleClickOutside)

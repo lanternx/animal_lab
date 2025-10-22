@@ -994,6 +994,13 @@ import axios from 'axios'
 import { toast } from 'vue3-toastify'
 import 'vue3-toastify/dist/index.css'
 
+import { useGeneStore } from '@/stores'
+import { storeToRefs } from 'pinia'
+
+const geneStore = useGeneStore()
+const {genotypes} = storeToRefs(geneStore)
+const {loadGenotypes} = geneStore
+
 // UI状态
 const activeTab = ref('genotype')
 const tabs = ref([
@@ -1008,7 +1015,6 @@ const tabs = ref([
 // 基因型相关状态
 const newGeneLocus = reactive({ symbol: '', description: '' })
 const newAllele = reactive({ symbol: '', description: '', is_wildtype: false })
-const genotypes = ref([])
 const expandedLoci = ref([])
 const editingLocus = reactive({ id: null, symbol: '', description: '' })
 const editLocusDialogVisible = ref(false)
@@ -1097,17 +1103,6 @@ watch(deleteConfirmation, (newValue) => {
   }
 })
 
-// 基因型相关方法
-const fetchGenotypes = async () => {
-try {
-const response = await axios.get('/api/gene')
-genotypes.value = response.data
-} catch (error) {
-console.error('获取基因型列表失败:', error)
-toast.error('获取基因型列表失败')
-}
-}
-
 const toggleAlleles = (id) => {
     const index = expandedLoci.value.indexOf(id)
     if (index === -1) {
@@ -1143,7 +1138,7 @@ const addAllele = async (locus_id) => {
 
     try {
     await axios.post(`/api/${locus_id}/gene_allele`, newAllele)
-    await fetchGenotypes()
+    await loadGenotypes()
     newAllele.symbol = ''
     newAllele.description = ''
     newAllele.is_wildtype = false
@@ -1167,7 +1162,7 @@ editAlleleDialogVisible.value = true
 const saveGeneLocus = async () => {
 try {
 await axios.put(`/api/gene/${editingLocus.id}`, editingLocus)
-await fetchGenotypes()
+await loadGenotypes()
 editLocusDialogVisible.value = false
 toast.success('修改基因位点成功')
 } catch (error) {
@@ -1179,7 +1174,7 @@ toast.error('更新基因位点失败，请重试')
 const saveAllele = async () => {
 try {
 await axios.put(`/api/gene_allele/${editingAllele.id}`, editingAllele)
-await fetchGenotypes()
+await loadGenotypes()
 editAlleleDialogVisible.value = false
 toast.success('修改基因位点编辑方式成功')
 } catch (error) {
@@ -1206,7 +1201,7 @@ const deleteAllele = async (id) => {
 
     try {
     await axios.delete(`/api/gene_allele/${id}`)
-    await fetchGenotypes()
+    await loadGenotypes()
     toast.success('删除基因位点编辑方式成功')
     } catch (error) {
     console.error('删除基因型失败:', error)
@@ -1815,7 +1810,6 @@ const clearDatabase = async () => {
 
 // 初始化数据
 onMounted(() => {
-fetchGenotypes()
 fetchLocations()
 fetchExperimentTypes()
 fetchExperimentPresets()

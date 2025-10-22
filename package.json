@@ -14,20 +14,18 @@
     "d3": "^7.9.0",
     "html2canvas": "^1.4.1",
     "jspdf": "^3.0.2",
+    "pinia": "^3.0.3",
     "register-service-worker": "^1.7.2",
     "regression": "^2.0.1",
     "tabulator-tables": "^6.3.1",
     "vue": "^3.2.13",
     "vue-router": "^4.0.3",
     "vue3-toastify": "^0.2.8",
-    "vuedraggable": "^4.1.0",
-    "vuex": "^4.0.0"
+    "vuedraggable": "^4.1.0"
   },
   "devDependencies": {
     "@vue/cli-plugin-babel": "~5.0.0",
-    "@vue/cli-plugin-pwa": "~5.0.0",
     "@vue/cli-plugin-router": "~5.0.0",
-    "@vue/cli-plugin-vuex": "~5.0.0",
     "@vue/cli-service": "~5.0.0",
     "sass": "^1.32.7",
     "sass-loader": "^12.0.0"
