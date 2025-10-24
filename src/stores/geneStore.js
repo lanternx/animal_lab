@@ -24,7 +24,6 @@ export const useGeneStore = defineStore('genotype', () => {
             genotypes.value = response.data
         } catch (error) {
             console.error('加载基因型失败:', error)
-            toast.error(`加载基因型失败: ${error.message || '请检查网络连接'}`)
         }
     }
 

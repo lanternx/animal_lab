@@ -164,14 +164,14 @@
         <div 
           class="mouse-list"
           @dragover.prevent
-          @drop="handleDrop($event, '-1')"
+          @drop="handleDrop($event, -1)"
         >
           <div 
             v-for="mouse in temporaryMice" 
             :key="mouse.id" 
             class="mouse-card"
             draggable="true"
-            @dragstart="handleDragStart($event, mouse.tid, '-1')"
+            @dragstart="handleDragStart($event, mouse.tid, -1)"
             @dblclick="openMouseDetail(mouse.tid)"
           >
             <div class="mouse-sex" :class="mouse.sex === 'F' ? 'sex-female' : 'sex-male'">
@@ -234,7 +234,7 @@
       <div class="form-group">
         <label>区域 *</label>
         <select v-model="currentCage.section">
-          <option v-for="section in availableSections" :key="section" :value="section.identifier">
+          <option v-for="section in locations" :key="section" :value="section.identifier">
             {{ section.identifier }}
           </option>
         </select>
@@ -342,8 +342,14 @@ defineOptions({
   name: 'AnimalLabDashboard'
 })
 
+import { useCageStore } from '@/stores'
+import { storeToRefs } from 'pinia'
+
+const cageStore = useCageStore()
+const {locations, activeSection, cages, section_key} = storeToRefs(cageStore)
+const {fetchCages} = cageStore
+
 // 响应式状态
-const cages = ref([])
 const temporaryMice = ref([])
 const dragData = ref(null)
 const showMouseDetail = ref(false)
@@ -367,9 +373,6 @@ const cageContextMenu = reactive({
   y: 0,
   cage: null
 })
-const activeSection = ref('')
-const availableSections = ref([])
-const section_key = ref(false)
 
 // 搜索相关状态
 const searchTerm = ref('')
@@ -399,14 +402,14 @@ const filteredCages = computed(() => {
 
 // 计算属性 - 按 order 排序后的部分
 const sortedSections = computed({
-  get: () => [...availableSections.value],
+  get: () => [...locations.value],
   set: (value) => {
     // 更新本地顺序（不直接修改原始数据）
     const updated = value.map((section, index) => ({
       ...section,
       order: index
     }))
-    availableSections.value = updated
+    locations.value = updated
   }
 })
 
@@ -421,52 +424,11 @@ onMounted(async () => {
   // 延迟0.1秒再开始加载，确保所有依赖都准备好
   setTimeout(async () => {
     console.log('开始延迟加载数据...')
-    await fetchCages()
     await fetchTemporaryMice()
   }, 100)
   
   console.log('DashBoard组件初始化完成')
 })
-
-// 获取所有笼位数据
-async function fetchCages() {
-  try {
-    console.log('开始获取笼位数据...')
-    
-    // 强制不使用缓存的axios配置
-    const axiosConfig = {
-      headers: {
-        'Cache-Control': 'no-cache',
-        'Pragma': 'no-cache'
-      },
-      timeout: 10000
-    }
-    
-    const lresponse = await axios.get('/api/locations', axiosConfig)
-    console.log('获取到locations数据:', lresponse.data)
-    availableSections.value = lresponse.data
-    
-    const response = await axios.get('/api/cages', axiosConfig)
-    console.log('获取到cages数据:', response.data)
-    cages.value = response.data
-    
-    // 设置默认选中的section为第一个
-    if (availableSections.value.length > 0 && section_key.value) {
-      activeSection.value = availableSections.value[0].identifier
-      currentCage.section = availableSections.value[0].identifier
-      section_key.value = false
-      console.log('设置默认section为:', activeSection.value)
-    }
-    console.log('笼位数据获取完成')
-  } catch (error) {
-    console.error('获取笼位信息失败:', error)
-    console.log('尝试重新连接...')
-    // 延迟重试
-    setTimeout(() => {
-      fetchCages()
-    }, 2000)
-  }
-}
 
 // 获取临时区小鼠数据
 async function fetchTemporaryMice() {
@@ -495,7 +457,8 @@ async function handleDrop(event, targetCageId) {
     
     try {
       // 更新数据库
-      await axios.put(`/api/cage/${targetCageId || '-1'}`, {
+      await axios.put(`/api/cage`, {
+        cage_id: targetCageId,
         mouse_id: mouseId
       })
       // 更新本地数据
@@ -503,7 +466,7 @@ async function handleDrop(event, targetCageId) {
       addMouseToTarget(mouse, targetCageId)
     } catch (error) {
       console.error('移动小鼠失败:', error)
-      alert('移动小鼠失败，请重试')
+      toast.error('移动小鼠失败，请重试')
     }
     
     dragData.value = null
@@ -513,7 +476,7 @@ async function handleDrop(event, targetCageId) {
 // 更新本地数据：从源位置移除小鼠
 function removeMouseFromSource(mouseId, sourceCageId) {
   // 从临时区移除
-  if (sourceCageId === '-1') {
+  if (sourceCageId === -1) {
     const mouse = temporaryMice.value.find(mouse => mouse.tid === mouseId)
     temporaryMice.value = temporaryMice.value.filter(mouse => mouse.tid !== mouseId)
     return mouse
@@ -530,7 +493,7 @@ function removeMouseFromSource(mouseId, sourceCageId) {
 // 更新本地数据：添加到目标位置
 function addMouseToTarget(mouse, targetCageId) {
   try {
-    if (targetCageId === '-1') {
+    if (targetCageId === -1) {
       // 添加到临时区
       if (!temporaryMice.value) temporaryMice.value = []
       temporaryMice.value.push({...mouse})
@@ -597,7 +560,7 @@ function closeCageModal(){
 // 添加新笼位
 async function addNewCage() {
   if (!currentCage.cage_id || !currentCage.section) {
-    alert('请填写笼位ID和区域')
+    toast.info('请填写笼位ID和区域')
     return
   }
   
@@ -607,7 +570,7 @@ async function addNewCage() {
     closeCageModal()
   } catch (error) {
     console.error('添加笼位失败:', error)
-    alert('添加笼位失败，请重试')
+    toast.error('添加笼位失败，请重试')
   }
 }
 
@@ -674,7 +637,7 @@ async function updateCage() {
     closeCageModal()
   } catch (error) {
     console.error('修改笼位失败:', error)
-    alert('修改笼位失败，请重试')
+    toast.error('修改笼位失败，请重试')
   }
 }
 
@@ -689,7 +652,7 @@ async function deleteCage(cage) {
     closeContextMenu()
   } catch (error) {
     console.error('删除笼位失败:', error)
-    alert('删除笼位失败，请重试')
+    toast.error('删除笼位失败，请重试')
   }
 }
 
@@ -998,7 +961,7 @@ function performSearch() {
         searchResults.value.push({
           mouse: mouse,
           cage: { 
-            id: '-1', 
+            id: -1, 
             cage_id: '临时区', 
             section: '临时存放区' 
           }
@@ -1047,7 +1010,7 @@ function highlightSearchResult(result) {
   highlightedCageId.value = result.cage.id
   
   // 如果结果在临时区，确保临时区可见
-  if (result.cage.id === '-1') {
+  if (result.cage.id === -1) {
     showTemporaryArea.value = true
   } else {
     // 切换到正确的section

@@ -52,6 +52,7 @@ class Mouse(db.Model):
             'tests_done': self.tests_done,
             'tests_planned': self.tests_planned
         }
+    
 class Pedigree(db.Model):
     __tablename__ = 'pedigree'
 
@@ -63,7 +64,6 @@ class Pedigree(db.Model):
     # 关系
     mouse = db.relationship('Mouse', foreign_keys=[mouse_id], backref=db.backref('pedigree_records', lazy=True))
     parent = db.relationship('Mouse', foreign_keys=[parent_id], backref=db.backref('offspring', lazy=True))
-
 
 class Cage(db.Model):
     __tablename__ = 'cage'

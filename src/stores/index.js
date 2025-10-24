@@ -1,7 +1,8 @@
 import { useGeneStore } from './geneStore'
+import { useCageStore } from './cageStore'
 
 // 统一导出所有 Store
-export { useGeneStore }
+export { useGeneStore, useCageStore }
 
 // // 工具函数
 // export const resetAllStores = () => {
@@ -14,6 +15,7 @@ export class StoreUtils {
     // 初始化所有 store 的预加载数据
     const stores = [
       useGeneStore,
+      useCageStore,
     ]
   
     for (const Store of stores) {

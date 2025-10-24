@@ -994,12 +994,16 @@ import axios from 'axios'
 import { toast } from 'vue3-toastify'
 import 'vue3-toastify/dist/index.css'
 
-import { useGeneStore } from '@/stores'
+import { useGeneStore, useCageStore } from '@/stores'
 import { storeToRefs } from 'pinia'
 
 const geneStore = useGeneStore()
+const cageStore = useCageStore()
+
 const {genotypes} = storeToRefs(geneStore)
 const {loadGenotypes} = geneStore
+
+const {locations} = storeToRefs(cageStore)
 
 // UI状态
 const activeTab = ref('genotype')
@@ -1023,7 +1027,6 @@ const editAlleleDialogVisible = ref(false)
 
 // 位置相关状态
 const newLocation = reactive({ identifier: '', description: '' })
-const locations = ref([])
 const editingLocation = reactive({ id: null, identifier: '', description: '' })
 const editLocationDialogVisible = ref(false)
 
@@ -1207,17 +1210,6 @@ const deleteAllele = async (id) => {
     console.error('删除基因型失败:', error)
     toast.error('删除基因型失败，请重试')
     }
-}
-
-// 位置相关方法
-const fetchLocations = async () => {
-try {
-const response = await axios.get('/api/locations')
-locations.value = response.data
-} catch (error) {
-console.error('获取位置列表失败:', error)
-toast.error('获取位置列表失败')
-}
 }
 
 const addLocation = async () => {
@@ -1810,7 +1802,6 @@ const clearDatabase = async () => {
 
 // 初始化数据
 onMounted(() => {
-fetchLocations()
 fetchExperimentTypes()
 fetchExperimentPresets()
 refreshDbInfo()

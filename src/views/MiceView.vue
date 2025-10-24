@@ -480,6 +480,30 @@
             </div>
           </div>
         </div>
+
+        <!-- 笼位选择 -->
+        <div class="form-group">
+          <label>笼位名称:</label>
+          <div class="autocomplete">
+            <input
+              type="text"
+              v-model="cageQuery"
+              @input="searchCage()"
+              placeholder="输入笼位名称搜索..."
+              @focus="showCageSuggestions = true"
+              @blur="onBlur"
+            />
+            <ul v-if="showCageSuggestions && cageSuggestions.length" class="suggestions">
+              <li
+                v-for="cage in cageSuggestions"
+                :key="cage.id"
+                @click="selectCage(cage)"
+              >
+                {{ cage.cage_id }} - {{ cage.section }}
+              </li>
+            </ul>
+          </div>
+        </div>
         
         <div class="button-group">
           <button @click="saveMouse" :disabled="saving" class="primary-btn">
@@ -536,7 +560,7 @@
             </div>
             <div class="detail-item">
               <span class="detail-label">区域</span>
-              <span class="detail-value">{{ templateMouseCage.location }}</span>
+              <span class="detail-value">{{ templateMouseCage.section }}</span>
             </div>
             <div class="detail-item">
               <span class="detail-label">笼位</span>
@@ -599,11 +623,15 @@ import axios from 'axios'
 import { toast } from 'vue3-toastify'
 import 'vue3-toastify/dist/index.css'
 import MouseDetailModal from './MouseDetailView.vue'
-import { useGeneStore } from '@/stores'
+import { useGeneStore, useCageStore } from '@/stores'
 import { storeToRefs } from 'pinia'
 
 const geneStore = useGeneStore()
-const {genotypes} = storeToRefs(geneStore)
+const { genotypes } = storeToRefs(geneStore)
+
+const cageStore = useCageStore()
+const { cages } = storeToRefs(cageStore)
+const { fetchCages } = cageStore
 
 // 响应式数据
 const mice = ref([])
@@ -627,7 +655,7 @@ const batchSelectedTests = ref([])
 const showModal = ref(false)
 const modalMode = ref('') // 'add', 'edit', 'template'
 const templateMouse = ref(null)
-const templateMouseCage = ref([])
+const templateMouseCage = ref({})
 const newMice = ref([])
 
 let clickTimer = ref(null);
@@ -647,7 +675,8 @@ const formData = reactive({
   live_status: null,
   strain: '',
   tests_done: [],
-  tests_planned: []
+  tests_planned: [],
+  cage_id: null
 })
 
 // 筛选和排序
@@ -731,6 +760,10 @@ const showTestsPlanDropdown = ref(false)
 
 const selectedTestsDone = ref([])
 const selectedTestsPlanned = ref([])
+
+const cageQuery = ref('')
+const showCageSuggestions = ref(false)
+const cageSuggestions = ref([])
 
 // 计算可用的测试（过滤掉已选的计划测试和已完成测试）
 const availableTestsPlan = computed(() => {
@@ -1082,9 +1115,7 @@ const openModal = async (mode, mouse = null) => {
     }
     if (mode === 'template') {
       templateMouse.value = { ...mouse }
-      const api = createAxiosInstance()
-      const temCage = await api.get(`/cage_brief/${templateMouse.value.cage_id}`)
-      templateMouseCage.value = temCage.data
+      templateMouseCage.value = templateMouse.value.cage_id ? cages.value.find(cage => cage.id === templateMouse.value.cage_id) : {'section':'', 'cage_id':''}
       newMice.value = [{ id: '', sex: mouse.sex }]
       return
     }
@@ -1106,8 +1137,10 @@ const openModal = async (mode, mouse = null) => {
     live_status: null,
     strain: '',
     tests_done: [],
-    tests_planned: []
+    tests_planned: [],
+    cage_id: null
   })
+  cageSuggestions.value = []
   
   if (mode === 'edit' && mouse) {
     // 填充编辑数据
@@ -1120,6 +1153,11 @@ const openModal = async (mode, mouse = null) => {
     if (mouse.tests_planned && mouse.tests_planned.length > 0) {
       selectedTestsPlanned.value = mouse.tests_planned.map(id => experiments.value.find(e => e.id === id)).filter(Boolean)
     }
+
+    if (mouse.cage_id) {
+      const ctemp = cages.value.find(cage => cage.id === mouse.cage_id)
+      cageQuery.value = `${ctemp.cage_id} - ${ctemp.section}`
+    }
   }
 }
 
@@ -1127,7 +1165,7 @@ const closeModal = () => {
   showModal.value = false
   modalMode.value = ''
   templateMouse.value = null
-  templateMouseCage.value = []
+  templateMouseCage.value = {}
   newMice.value = []
   fatherQuery.value = ''
   motherQuery.value = ''
@@ -1137,6 +1175,7 @@ const closeModal = () => {
   selectedMothers.value = []
   selectedTestsDone.value = []
   selectedTestsPlanned.value = []
+  cageQuery.value = ''
 }
 
 const saveMouse = async () => {
@@ -1203,6 +1242,7 @@ const saveMouse = async () => {
     }
   } finally {
     saving.value = false
+    fetchCages()
   }
 }
 
@@ -1465,6 +1505,49 @@ const removeTest = (type, index) => {
   else if (type === 'batch') {batchSelectedTests.value.splice(index, 1)}
 }
 
+const searchCage = () => {
+  formData.cage_id = null
+  const thisQuery = cageQuery.value.split(" - ")[0]
+  if (thisQuery.length < 1) {
+    cageSuggestions.value = []
+    return
+  }
+  
+  let suggestions = cages.value.filter(cage =>
+    cage.cage_id.includes(thisQuery))
+  
+  cageSuggestions.value = suggestions.sort((a, b) => {
+      const aStartsWith = a.cage_id.startsWith(thisQuery)
+      const bStartsWith = b.cage_id.startsWith(thisQuery)
+      const aIncludes = a.cage_id.includes(thisQuery)
+      const bIncludes = b.cage_id.includes(thisQuery)
+      
+      // 完全匹配或开头匹配的优先
+      if (aStartsWith && !bStartsWith) return -1
+      if (!aStartsWith && bStartsWith) return 1
+      
+      // 开头匹配的按ID长度排序（较短的优先）
+      if (aStartsWith && bStartsWith) {
+        return a.id.length - b.id.length
+      }
+      
+      // 包含匹配的按匹配位置排序
+      if (aIncludes && bIncludes) {
+        const aIndex = a.cage_id.indexOf(thisQuery)
+        const bIndex = b.cage_id.indexOf(thisQuery)
+        return aIndex - bIndex
+      }
+      
+      return 0
+    }).slice(0, 10)
+}
+
+const selectCage = (cage) => {
+  formData.cage_id = cage.id
+  cageQuery.value = `${cage.cage_id} - ${cage.section}`
+  showCageSuggestions.value = false
+}
+
 // 点击外部关闭下拉框
 const handleClickOutside = (event) => {
   if (!event.target.closest('.custom-select')) {
@@ -1477,6 +1560,7 @@ const onBlur = () => {
   setTimeout(() => {
     showFatherSuggestions.value = false
     showMotherSuggestions.value = false
+    showCageSuggestions.value = false
   }, 200)
 }
 
@@ -1513,6 +1597,7 @@ const saveTemplateMice = async () => {
     toast.success(`添加${newMice.value.length}只小鼠！`)
     await loadMice()
     closeModal()
+    fetchCages()
   } catch (error) {
     console.error('批量添加小鼠失败:', error)
     

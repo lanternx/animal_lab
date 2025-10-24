@@ -192,7 +192,7 @@ def add_mouse():
         if data['birth_date']:
             mouse.birth_date = datetime.strptime(data['birth_date'], '%Y-%m-%d').date()
         mouse.live_status = 1  # 默认新添加的小鼠状态为'活'
-        mouse.cage_id = '-1'
+        mouse.cage_id = data.get('cage_id', None)
         # 新增字段
         mouse.strain = data.get('strain')
         mouse.tests_done = data.get('tests_done')
@@ -239,7 +239,7 @@ def add_mouse():
     except Exception as e:
         return jsonify({'error': str(e)}), 400
 
-@app.route('/api/mice/<mouse_tid>', methods=['PUT'])
+@app.route('/api/mice/<int:mouse_tid>', methods=['PUT'])
 def update_mouse(mouse_tid):
     data = request.json
     mouse = Mouse.query.get(mouse_tid)
@@ -274,6 +274,8 @@ def update_mouse(mouse_tid):
             mouse.tests_done = data.get('tests_done')
         if 'tests_planned' in data:
             mouse.tests_planned = data.get('tests_planned')
+        if 'cage_id' in data:
+            mouse.cage_id = data.get('cage_id')
         Pedigree.query.filter_by(mouse_id=mouse.tid, parent_type='father').delete()
         if data['father']:
             for t in data['father']:
@@ -309,7 +311,7 @@ def update_mouse(mouse_tid):
         savepoint.rollback()
         return jsonify({'error': str(e)}), 400
 
-@app.route('/api/mice/<mouse_tid>', methods=['DELETE'])
+@app.route('/api/mice/<int:mouse_tid>', methods=['DELETE'])
 def delete_mouse(mouse_tid):
     mouse = Mouse.query.get(mouse_tid)
     if not mouse:
@@ -330,7 +332,7 @@ def delete_mouse(mouse_tid):
         return jsonify({'error': str(e)}), 500
 
 # 批量添加小鼠
-@app.route('/api/mice/<mouse_tid>', methods=['POST'])
+@app.route('/api/mice/<int:mouse_tid>', methods=['POST'])
 def add_mice_from_template(mouse_tid):
     data = request.json
     try:
@@ -401,12 +403,7 @@ def batch_experiments_change():
         return jsonify(), 201
     except Exception as e:
         return jsonify({'error': str(e)}), 400
-    
-@app.route('/api/cage_brief/<cid>', methods=['GET'])
-def get_cage_brief(cid):
-    cage = Cage.query.get_or_404(cid)
-    cage_info = {"location": cage.section, "cage_id": cage.cage_id}
-    return jsonify(cage_info), 201
+
 
 
 ##笼位视图
@@ -444,7 +441,7 @@ def get_all_cages():
 def get_undetermined_mice():
     # 查找未分配笼子的小鼠
     undetermined_mice = []
-    undetermined_mice_query = Mouse.query.filter(Mouse.cage_id == '-1').all()
+    undetermined_mice_query = Mouse.query.filter(Mouse.cage_id == None).all()
     for mouse in undetermined_mice_query:
         if mouse.live_status == 1:
             undetermined_mice.append({
@@ -486,21 +483,24 @@ def add_cage():
     except Exception as e:
         return jsonify({'error': str(e)}), 400
 
-@app.route('/api/cage/<cage_id>', methods=['PUT'])
-def move_mouse(cage_id):
+@app.route('/api/cage', methods=['PUT'])
+def move_mouse():
     data = request.json
     mouse = Mouse.query.get(data['mouse_id'])
     if not mouse:
         return jsonify({'error': 'Mouse not found'}), 404
     try:
-        mouse.cage_id = cage_id
+        if data['cage_id'] == -1:
+            mouse.cage_id = None
+        else:
+            mouse.cage_id = data['cage_id']
         db.session.commit()
-        return jsonify({'message': f'Mouse {data["mouse_id"]} moved to cage {cage_id}'})
+        return jsonify({'message': f'Mouse {data["mouse_id"]} moved to cage {data["cage_id"]}'})
     except Exception as e:
         return jsonify({'error': str(e)}), 500
 
 # 删除笼位API
-@app.route('/api/cages/<cage_id>', methods=['DELETE'])
+@app.route('/api/cages/<int:age_id>', methods=['DELETE'])
 def delete_cage(cage_id):
     cage = Cage.query.get(cage_id)
     if not cage:
@@ -509,7 +509,7 @@ def delete_cage(cage_id):
         # 将该笼位中的所有小鼠移动到临时区
         mice = Mouse.query.filter_by(cage_id=cage_id).all()
         for mouse in mice:
-            mouse.cage_id = '-1'
+            mouse.cage_id = None
         db.session.delete(cage)
         db.session.commit()
         return jsonify({'message': f'Cage {cage_id} deleted successfully'})
@@ -517,7 +517,7 @@ def delete_cage(cage_id):
         return jsonify({'error': str(e)}), 500
 
 # 更新笼位API
-@app.route('/api/cages/<cage_id>', methods=['PUT'])
+@app.route('/api/cages/<int:cage_id>', methods=['PUT'])
 def update_cage(cage_id):
     cage = Cage.query.get(cage_id)
     if not cage:
@@ -568,11 +568,11 @@ def update_cage_order():
 
 #小鼠视图
 #显示谱系图、体重变化图、状态记录
-@app.route('/api/mice/<mouse_tid>', methods=['GET'])
+@app.route('/api/mice/<int:mouse_tid>', methods=['GET'])
 def get_mice_info(mouse_tid):
     content = {}
     mouse = Mouse.query.get(mouse_tid)
-    if mouse.cage_id == '-1' or mouse.cage_id is None:
+    if mouse.cage_id is None:
         c_cage = None
     else:
         c_cage = Cage.query.get(mouse.cage_id)
@@ -744,8 +744,7 @@ def get_lived_mice():
             Mouse.live_status == 1
         ).order_by(
             db.case(
-                (Cage.section.is_(None), 2),  # 没有区域的放最后
-                (Mouse.cage_id == '-1', 1),   # 临时区放中间
+                (Cage.section.is_(None), 1),  # 没有区域的放最后
                 else_=0
             ),
             Cage.section.asc(),     # 区域升序排序
@@ -756,7 +755,7 @@ def get_lived_mice():
         mice_data = []
         for mouse in mice:
             # 处理临时区小鼠
-            if mouse.cage_id == '-1' or mouse.cage_id is None:
+            if mouse.cage_id is None:
                 section = "临时区"
                 cage_name = None
             else:
@@ -956,7 +955,7 @@ def delete_location(id):
         # 将该笼位中的所有小鼠移动到临时区
         mice = Mouse.query.filter_by(cage_id=cage.id).all()
         for mouse in mice:
-            mouse.cage_id = '-1'
+            mouse.cage_id = None
         db.session.delete(cage)
     db.session.commit()
     return '', 204
@@ -1035,7 +1034,7 @@ def export_data(export_type):
     data = [row.to_dict() for row in query.all()]
     for index in range(len(data)):
         tid = data[index]['cage_id']
-        if tid == "-1" or not tid:
+        if not tid:
             data[index]['cage_id'] = ""
             data[index]['location'] = ""
         else:
@@ -1212,7 +1211,7 @@ def import_mice_data(df, result, conflict_resolution):
                         db.session.flush()
                     mouse.cage_id = existing_cage.id
             else:
-                mouse.cage_id = '-1'
+                mouse.cage_id = None
 
             db.session.add(mouse)
             db.session.commit()
@@ -1409,7 +1408,7 @@ def import_pedigree_data(df, result, conflict_resolution):
             })
 
 # 添加获取小鼠简要信息的API
-@app.route('/api/mice/<mouse_tid>/brief', methods=['GET'])
+@app.route('/api/mice/<int:mouse_tid>/brief', methods=['GET'])
 def get_mouse_brief(mouse_tid):
     mouse = Mouse.query.get(mouse_tid)
     if not mouse:
