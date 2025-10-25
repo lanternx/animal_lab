@@ -398,3 +398,96 @@ class ExperimentClass(db.Model):
             'experiment_id': self.experiment_id,
             'mouse_info': self.mouse.to_dict() if self.mouse else None
         }
+    
+
+class PredefinedGroup(db.Model):
+    __tablename__ = 'group_rule'
+    
+    id = db.Column(db.Integer, primary_key=True)
+    name = db.Column(db.String(100), unique=True, nullable=False)
+    description = db.Column(db.String(200))
+    rules = db.Column(db.JSON)  # 存储复杂分组规则
+
+    def to_dict(self):
+        return {
+            'id': self.id,
+            'name': self.name,
+            'description': self.description,
+            'rules': self.rules or []
+        }
+    
+    def match_mouse(self, mouse):
+        """检查小鼠是否符合该分组规则"""
+        if not self.rules:
+            return False
+            
+        for rule in self.rules:
+            # 检查基因型规则
+            if rule.get('type') == 'genotype':
+                locus_symbol = rule.get('locus')
+                required_alleles = rule.get('alleles', [])
+                required_zygosity = rule.get('zygosity')
+                min_count = rule.get('min_count', 1)
+                
+                # 查找小鼠在该位点的基因型
+                gt = next((g for g in mouse.genotypes if g.locus.symbol == locus_symbol), None)
+                
+                if not gt:
+                    if rule.get('required', True):
+                        return False
+                    continue
+                    
+                # 检查等位基因要求
+                if required_alleles:
+                    allele_count = 0
+                    for allele in required_alleles:
+                        if gt.allele1.symbol == allele or gt.allele2.symbol == allele:
+                            allele_count += 1
+                    
+                    if allele_count < min_count:
+                        return False
+                
+                # 检查纯合状态要求
+                if required_zygosity:
+                    actual_zygosity = 'homozygous' if gt.allele1_id == gt.allele2_id else 'heterozygous'
+                    if required_zygosity != actual_zygosity:
+                        return False
+            
+            # 检查性别规则
+            elif rule.get('type') == 'sex':
+                required_sex = rule.get('value')
+                if mouse.sex != required_sex:
+                    return False
+            
+            # 检查品系规则
+            elif rule.get('type') == 'strain':
+                required_strain = rule.get('value')
+                if mouse.strain != required_strain:
+                    return False
+            
+            # 检查笼位规则
+            elif rule.get('type') == 'cage':
+                cage_identifier = rule.get('value')
+                if mouse.cage and mouse.cage.identifier != cage_identifier:
+                    return False
+            
+            # 检查存活状态规则
+            elif rule.get('type') == 'live_status':
+                required_status = rule.get('value')
+                if mouse.live_status != required_status:
+                    return False
+            
+            # 检查年龄范围规则
+            elif rule.get('type') == 'age_range':
+                if not mouse.birth_date:
+                    return False
+                    
+                age_days = (datetime.now().date() - mouse.birth_date).days
+                min_age = rule.get('min_days', 0)
+                max_age = rule.get('max_days', float('inf'))
+                
+                if not (min_age <= age_days <= max_age):
+                    return False
+        
+        return True
+

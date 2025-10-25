@@ -174,7 +174,7 @@ def get_all_mice():
         mice_data.sort(key=lambda x: x['tid'], reverse=True)
         return jsonify(mice_data)
     except Exception as e:
-        app.logger.error(f"获取小鼠列表失败: {str(e)}")
+        logger.error(f"获取小鼠列表失败: {str(e)}")
         return jsonify({'error': '获取数据失败'}), 500
 
 @app.route('/api/mice', methods=['POST'])
@@ -237,6 +237,7 @@ def add_mouse():
             'tests_planned': mouse.tests_planned
         }), 201
     except Exception as e:
+        logger.error(f"添加小鼠失败: {str(e)}")
         return jsonify({'error': str(e)}), 400
 
 @app.route('/api/mice/<int:mouse_tid>', methods=['PUT'])
@@ -246,7 +247,6 @@ def update_mouse(mouse_tid):
     if not mouse:
         return jsonify({'error': 'Mouse not found'}), 404
     try:
-        savepoint = db.session.begin_nested()
         old_genes = Genotype.query.filter_by(mouse_id=mouse.tid).all()
         for g_o in old_genes:
             db.session.delete(g_o)
@@ -308,7 +308,8 @@ def update_mouse(mouse_tid):
             'tests_planned': mouse.tests_planned
         })
     except Exception as e:
-        savepoint.rollback()
+        db.session.rollback()
+        logger.error(f"更新小鼠失败: {str(e)}")
         return jsonify({'error': str(e)}), 400
 
 @app.route('/api/mice/<int:mouse_tid>', methods=['DELETE'])
@@ -317,7 +318,6 @@ def delete_mouse(mouse_tid):
     if not mouse:
         return jsonify({'error': 'Mouse not found'}), 404
     try:
-        savepoint = db.session.begin_nested()
         db.session.delete(mouse)
         Genotype.query.filter_by(mouse_id=mouse_tid).delete()
         StatusRecord.query.filter_by(mouse_id=mouse_tid).delete()
@@ -328,7 +328,8 @@ def delete_mouse(mouse_tid):
         db.session.commit()
         return jsonify({'message': 'Mouse deleted successfully'})
     except Exception as e:
-        savepoint.rollback()
+        db.session.rollback()
+        logger.error(f"删除小鼠失败: {str(e)}")
         return jsonify({'error': str(e)}), 500
 
 # 批量添加小鼠
@@ -336,7 +337,6 @@ def delete_mouse(mouse_tid):
 def add_mice_from_template(mouse_tid):
     data = request.json
     try:
-        savepoint = db.session.begin_nested()
         template_mouse = Mouse.query.get(mouse_tid)
         template_mouse_parent = Pedigree.query.filter_by(mouse_id=mouse_tid).all()
         genes = Genotype.query.filter_by(mouse_id=mouse_tid).all()
@@ -370,7 +370,8 @@ def add_mice_from_template(mouse_tid):
         db.session.commit()
         return jsonify(), 201
     except Exception as e:
-        savepoint.rollback()
+        db.session.rollback()
+        logger.error(f"批量添加小鼠失败: {str(e)}")
         return jsonify({'error': str(e)}), 400
 
 # 批量修改实验小鼠
@@ -402,6 +403,8 @@ def batch_experiments_change():
         db.session.commit()
         return jsonify(), 201
     except Exception as e:
+        db.session.rollback()
+        logger.error(f"批量修改小鼠任务状态失败: {str(e)}")
         return jsonify({'error': str(e)}), 400
 
 
@@ -409,56 +412,61 @@ def batch_experiments_change():
 ##笼位视图
 @app.route('/api/cages', methods=['GET'])
 def get_all_cages():
-    # 使用预加载一次性获取所有笼子及其小鼠
-    cages = Cage.query.options(joinedload(Cage.mice)).order_by(Cage.order.asc()).all()
-    cage_data = []
-    for cage in cages:
-        mice_info = []
-        for mouse in cage.mice:
+    """使用预加载一次性获取所有笼子及其小鼠"""
+    try:
+        cages = Cage.query.options(joinedload(Cage.mice)).order_by(Cage.order.asc()).all()
+        cage_data = []
+        for cage in cages:
+            mice_info = []
+            for mouse in cage.mice:
+                if mouse.live_status == 1:
+                    mice_info.append({
+                        'tid': mouse.tid,
+                        'id': mouse.id,
+                        'genotype': mouse.get_full_genotype(),
+                        'sex': mouse.sex,
+                        'days': (datetime.now().date() - mouse.birth_date).days if mouse.birth_date else None
+                    })
+            cage_data.append({
+                'id': cage.id,
+                'cage_id': cage.cage_id,
+                'section': cage.section,
+                'location': cage.location,
+                'cage_type': cage.cage_type,
+                'mice': mice_info,
+                'mice_birth_date': cage.mice_birth_date.strftime('%Y-%m-%d') if cage.mice_birth_date else None,
+                'mice_count': cage.mice_count,
+                'mice_sex': cage.mice_sex,
+                'mice_genotype': cage.mice_genotype
+            })
+        return jsonify(cage_data)
+    except Exception as e:
+        logger.error(f"获取笼位失败: {str(e)}")
+        return jsonify({'error': str(e)}), 400
+
+@app.route('/api/cages/-1', methods=['GET'])
+def get_undetermined_mice():
+    """查找未分配笼子的小鼠"""
+    try:
+        undetermined_mice = []
+        undetermined_mice_query = Mouse.query.filter(Mouse.cage_id == None).all()
+        for mouse in undetermined_mice_query:
             if mouse.live_status == 1:
-                mice_info.append({
+                undetermined_mice.append({
                     'tid': mouse.tid,
                     'id': mouse.id,
                     'genotype': mouse.get_full_genotype(),
                     'sex': mouse.sex,
                     'days': (datetime.now().date() - mouse.birth_date).days if mouse.birth_date else None
                 })
-        cage_data.append({
-            'id': cage.id,
-            'cage_id': cage.cage_id,
-            'section': cage.section,
-            'location': cage.location,
-            'cage_type': cage.cage_type,
-            'mice': mice_info,
-            'mice_birth_date': cage.mice_birth_date.strftime('%Y-%m-%d') if cage.mice_birth_date else None,
-            'mice_count': cage.mice_count,
-            'mice_sex': cage.mice_sex,
-            'mice_genotype': cage.mice_genotype
-        })
-    return jsonify(cage_data)
-
-@app.route('/api/cages/-1', methods=['GET'])
-def get_undetermined_mice():
-    # 查找未分配笼子的小鼠
-    undetermined_mice = []
-    undetermined_mice_query = Mouse.query.filter(Mouse.cage_id == None).all()
-    for mouse in undetermined_mice_query:
-        if mouse.live_status == 1:
-            undetermined_mice.append({
-                'tid': mouse.tid,
-                'id': mouse.id,
-                'genotype': mouse.get_full_genotype(),
-                'sex': mouse.sex,
-                'days': (datetime.now().date() - mouse.birth_date).days if mouse.birth_date else None
-            })
-    return jsonify(undetermined_mice)
+        return jsonify(undetermined_mice)
+    except Exception as e:
+        logger.error(f"获取无笼位小鼠失败: {str(e)}")
+        return jsonify({'error': str(e)}), 400
 
 @app.route('/api/cages', methods=['POST'])
 def add_cage():
     data = request.json
-    now = datetime.now()
-    # 随机ID格式: 年月日时分秒 - 例如: 2024年06月03日15时30分45秒 -> 240603153045
-    timestamp = now.strftime("%y%m%d%H%M%S")
     try:
         # 获取当前最大的 order 值
         max_order = db.session.query(db.func.max(Cage.order)).scalar()
@@ -466,7 +474,6 @@ def add_cage():
         # 如果没有记录，max_order 会是 None
         new_order = max_order + 1 if max_order is not None else 0
         cage = Cage(
-            id=timestamp,
             cage_id=data['cage_id'],
             section=data['section'],
             location=data.get('location'),
@@ -481,6 +488,7 @@ def add_cage():
         db.session.commit()
         return jsonify({'message': 'Cage added successfully'}), 201
     except Exception as e:
+        logger.error(f"添加笼位失败: {str(e)}")
         return jsonify({'error': str(e)}), 400
 
 @app.route('/api/cage', methods=['PUT'])
@@ -497,6 +505,7 @@ def move_mouse():
         db.session.commit()
         return jsonify({'message': f'Mouse {data["mouse_id"]} moved to cage {data["cage_id"]}'})
     except Exception as e:
+        logger.error(f"调整小鼠笼位失败: {str(e)}")
         return jsonify({'error': str(e)}), 500
 
 # 删除笼位API
@@ -514,6 +523,8 @@ def delete_cage(cage_id):
         db.session.commit()
         return jsonify({'message': f'Cage {cage_id} deleted successfully'})
     except Exception as e:
+        logger.error(f"删除笼位失败: {str(e)}")
+        db.session.rollback()
         return jsonify({'error': str(e)}), 500
 
 # 更新笼位API
@@ -549,88 +560,99 @@ def update_cage(cage_id):
             'mice_genotype': cage.mice_genotype
         })
     except Exception as e:
+        logger.error(f"更新笼位失败: {str(e)}")
+        db.session.rollback()
         return jsonify({'error': str(e)}), 500
 
 # 更新笼位排序
 @app.route('/api/cages/order', methods=['PUT'])
 def update_cage_order():
-    id_from = request.json['id_from']
-    id_to = request.json['id_to']
-    cage_from = Cage.query.get(id_from)
-    cage_to = Cage.query.get(id_to)
-    temporary = cage_from.order
-    cage_from.order = cage_to.order
-    cage_to.order = temporary
-    db.session.commit()
-    return jsonify({'message': 'successfully'})
+    try:
+        id_from = request.json['id_from']
+        id_to = request.json['id_to']
+        cage_from = Cage.query.get(id_from)
+        cage_to = Cage.query.get(id_to)
+        temporary = cage_from.order
+        cage_from.order = cage_to.order
+        cage_to.order = temporary
+        db.session.commit()
+        return jsonify({'message': 'successfully'})
+    except Exception as e:
+        logger.error(f"调整笼位排序失败: {str(e)}")
+        db.session.rollback()
+        return jsonify({'error': str(e)}), 500
 
 
 
-#小鼠视图
+#小鼠详细视图
 #显示谱系图、体重变化图、状态记录
 @app.route('/api/mice/<int:mouse_tid>', methods=['GET'])
 def get_mice_info(mouse_tid):
     content = {}
-    mouse = Mouse.query.get(mouse_tid)
-    if mouse.cage_id is None:
-        c_cage = None
-    else:
-        c_cage = Cage.query.get(mouse.cage_id)
-    if mouse:
-        content['id'] = mouse.id
-        content['genotype'] = mouse.get_full_genotype()
-        content['sex'] = mouse.sex
-        content['live_status'] = mouse.live_status
-        if c_cage:
-            content['cage_id'] = c_cage.cage_id
-            content['cage_section'] = c_cage.section
-        if mouse.birth_date:
-            content['birth_date'] = mouse.birth_date.strftime('%Y-%m-%d')
-    else:
-        return jsonify({'error': 'Mouse not found'}), 404
-    if mouse.tests_done:
-        tests = []
-        for t in mouse.tests_done:
-            et = ExperimentType.query.get(t)
-            if et:
-                tests.append(et.name)
-        content['tests_done'] = tests
-    else:
-        content['tests_done'] = []
-    mid, father, mother, offspring = None, None, None, None
-    pedigree = Pedigree.query.filter_by(mouse_id=mouse.tid).all()
-    if pedigree:
-        mid = pedigree[0].mouse_id
-        father = [p.parent_id for p in pedigree if p.parent_type == 'father']
-        mother = [p.parent_id for p in pedigree if p.parent_type == 'mother']
-    after = Pedigree.query.filter_by(parent_id = mouse.tid).all()
-    if after:
-        offspring = [a.mouse_id for a in after]
-    content['pedigree'] = {
-        'mouse_id': mid,
-        'father_id': father,
-        'mother_id': mother,
-        'offspring': offspring
-    }
-    # 按日期排序体重记录
-    weight_records = WeightRecord.query.filter_by(
-        mouse_id=mouse.tid
-    ).order_by(WeightRecord.record_livingdays).all()
-    # 按日期排序状态记录
-    status_records = StatusRecord.query.filter_by(
-        mouse_id=mouse.tid
-    ).order_by(StatusRecord.record_livingdays.desc()).all()
-    content['weight_records'] = [{
-        'id': w.id,
-        'weight': w.weight,
-        'record_livingdays': w.record_livingdays
-    } for w in weight_records]
-    content['status_records'] = [{
-        'id': s.id,
-        'status': s.status,
-        'record_livingdays': s.record_livingdays
-    } for s in status_records]
-    return jsonify(content)
+    try:
+        mouse = Mouse.query.get(mouse_tid)
+        if mouse.cage_id is None:
+            c_cage = None
+        else:
+            c_cage = Cage.query.get(mouse.cage_id)
+        if mouse:
+            content['id'] = mouse.id
+            content['genotype'] = mouse.get_full_genotype()
+            content['sex'] = mouse.sex
+            content['live_status'] = mouse.live_status
+            if c_cage:
+                content['cage_id'] = c_cage.cage_id
+                content['cage_section'] = c_cage.section
+            if mouse.birth_date:
+                content['birth_date'] = mouse.birth_date.strftime('%Y-%m-%d')
+        else:
+            return jsonify({'error': 'Mouse not found'}), 404
+        if mouse.tests_done:
+            tests = []
+            for t in mouse.tests_done:
+                et = ExperimentType.query.get(t)
+                if et:
+                    tests.append(et.name)
+            content['tests_done'] = tests
+        else:
+            content['tests_done'] = []
+        mid, father, mother, offspring = None, None, None, None
+        pedigree = Pedigree.query.filter_by(mouse_id=mouse.tid).all()
+        if pedigree:
+            mid = pedigree[0].mouse_id
+            father = [p.parent_id for p in pedigree if p.parent_type == 'father']
+            mother = [p.parent_id for p in pedigree if p.parent_type == 'mother']
+        after = Pedigree.query.filter_by(parent_id = mouse.tid).all()
+        if after:
+            offspring = [a.mouse_id for a in after]
+        content['pedigree'] = {
+            'mouse_id': mid,
+            'father_id': father,
+            'mother_id': mother,
+            'offspring': offspring
+        }
+        # 按日期排序体重记录
+        weight_records = WeightRecord.query.filter_by(
+            mouse_id=mouse.tid
+        ).order_by(WeightRecord.record_livingdays).all()
+        # 按日期排序状态记录
+        status_records = StatusRecord.query.filter_by(
+            mouse_id=mouse.tid
+        ).order_by(StatusRecord.record_livingdays.desc()).all()
+        content['weight_records'] = [{
+            'id': w.id,
+            'weight': w.weight,
+            'record_livingdays': w.record_livingdays
+        } for w in weight_records]
+        content['status_records'] = [{
+            'id': s.id,
+            'status': s.status,
+            'record_livingdays': s.record_livingdays
+        } for s in status_records]
+        return jsonify(content)
+    except Exception as e:
+        logger.error(f"获取小鼠详细信息失败: {str(e)}")
+        return jsonify({'error': str(e)}), 500
 
 #删除小鼠状态记录
 @app.route('/api/status_records/<record_id>', methods=['DELETE'])
@@ -643,6 +665,7 @@ def delete_status_record(record_id):
         db.session.commit()
         return jsonify({'message': 'Status record deleted successfully'})
     except Exception as e:
+        logger.error(f"删除小鼠状态失败: {str(e)}")
         return jsonify({'error': str(e)}), 500
 
 #添加小鼠状态记录
@@ -669,6 +692,7 @@ def add_status_record():
             'status': record.status
         }), 201
     except Exception as e:
+        logger.error(f"添加小鼠状态失败: {str(e)}")
         return jsonify({'error': str(e)}), 500
 
 
@@ -689,7 +713,7 @@ def add_weight_records():
         for record_data in records:
             mouse = Mouse.query.get(record_data['mouse_id'])
             if not mouse:
-                app.logger.warning(f"Mouse {record_data['mouse_id']} not found, skipping record.")
+                logger.warning(f"Mouse {record_data['mouse_id']} not found, skipping record.")
                 continue
                 
             # 计算活着的天数（record_date减去出生日期）
@@ -699,7 +723,7 @@ def add_weight_records():
                 living_days = (record_date - mouse.birth_date).days
             else:
                 living_days = 0
-                app.logger.warning(f"Mouse {mouse.id} has no birth date, setting living_days to None.")
+                logger.warning(f"Mouse {mouse.id} has no birth date, setting living_days to None.")
 
             record = WeightRecord(
                 mouse_id=record_data['mouse_id'],
@@ -714,7 +738,7 @@ def add_weight_records():
     
     except Exception as e:
         db.session.rollback()
-        app.logger.error(f"Error adding weight records: {str(e)}")
+        logger.error(f"体重录入失败: {str(e)}")
         return jsonify({'error': 'Failed to add weight records', 'details': str(e)}), 500
 
 @app.route('/api/weight', methods=['GET'])
@@ -773,7 +797,7 @@ def get_lived_mice():
             
         return jsonify(mice_data)
     except Exception as e:
-        app.logger.error(f"获取存活小鼠列表失败: {str(e)}")
+        logger.error(f"获取存活小鼠列表失败: {str(e)}")
         return jsonify({'error': '获取数据失败'}), 500
     
 
@@ -806,28 +830,37 @@ def get_survival_data():
             })
         return jsonify(survival_data), 200
     except Exception as e:
-        app.logger.error(f"获取生存数据失败: {str(e)}")
+        logger.error(f"获取生存数据失败: {str(e)}")
         return jsonify({'error': '获取数据失败'}), 500
 
 # 基因型管理API
 @app.route('/api/gene', methods=['GET'])
 def get_genes():
-    genotypes = GeneLocus.query.all()
-    return jsonify([g.to_dict() for g in genotypes])
+    try:
+        genotypes = GeneLocus.query.all()
+        return jsonify([g.to_dict() for g in genotypes])
+    except Exception as e:
+        logger.error(f"获取基因型失败: {str(e)}")
+        return jsonify({'error': '获取数据失败'}), 500
 
 @app.route('/api/gene', methods=['POST'])
 def add_gene():
-    data = request.json
-    if not data.get('symbol'):
-        return jsonify({'error': '基因位点名称不能为空'}), 400
-    
-    locus = GeneLocus(symbol=data['symbol'], description=data.get('description', ''))
-    db.session.add(locus)
-    db.session.flush()
-    a_l = Allele(symbol = "+", locus_id = locus.id, description = "野生型，未修饰", is_wildtype = True)
-    db.session.add(a_l)
-    db.session.commit()
-    return jsonify(locus.to_dict()), 201
+    try:
+        data = request.json
+        if not data.get('symbol'):
+            return jsonify({'error': '基因位点名称不能为空'}), 400
+        
+        locus = GeneLocus(symbol=data['symbol'], description=data.get('description', ''))
+        db.session.add(locus)
+        db.session.flush()
+        a_l = Allele(symbol = "+", locus_id = locus.id, description = "野生型，未修饰", is_wildtype = True)
+        db.session.add(a_l)
+        db.session.commit()
+        return jsonify(locus.to_dict()), 201
+    except Exception as e:
+        logger.error(f"创建基因位点失败: {str(e)}")
+        db.session.rollback()
+        return jsonify({'error': '创建基因位点失败'}), 500
 
 @app.route('/api/<int:id>/gene_allele', methods=['POST'])
 def add_allele(id):
@@ -857,16 +890,21 @@ def update_gene(id):
 @app.route('/api/gene_allele/<int:allele_id>', methods=['PUT'])
 def update_allele(allele_id):
     data = request.json
-    gene = Allele.query.get_or_404(allele_id)
-    
-    if 'symbol' in data:
-        gene.symbol = data['symbol']
-    if 'description' in data:
-        gene.description = data['description']
-    if 'is_wildtype' in data:
-        gene.is_wildtype = data['is_wildtype']
-    db.session.commit()
-    return jsonify(gene.to_dict())
+    try:
+        gene = Allele.query.get_or_404(allele_id)
+        
+        if 'symbol' in data:
+            gene.symbol = data['symbol']
+        if 'description' in data:
+            gene.description = data['description']
+        if 'is_wildtype' in data:
+            gene.is_wildtype = data['is_wildtype']
+        db.session.commit()
+        return jsonify(gene.to_dict())
+    except:
+        logger.error(f"更新基因位点失败: {str(e)}")
+        db.session.rollback()
+        return jsonify({'error': '获取数据失败'}), 404
 
 @app.route('/api/gene/<int:id>', methods=['DELETE'])
 def delete_gene(id):
@@ -882,7 +920,9 @@ def delete_gene(id):
         db.session.commit()
         return '', 204
     except:
-        return 404
+        logger.error(f"删除基因位点失败: {str(e)}")
+        db.session.rollback()
+        return jsonify({'error': '获取数据失败'}), 404
     
 @app.route('/api/gene_allele/<int:id>', methods=['DELETE'])
 def delete_allele(id):
@@ -896,20 +936,25 @@ def delete_allele(id):
         db.session.commit()
         return '', 204
     except:
+        logger.error(f"删除等位基因失败: {str(e)}")
+        db.session.rollback()
         return 404
 
 # 位置管理API
 @app.route('/api/locations', methods=['GET'])
 def get_locations():
-    locations = Location.query.order_by(Location.order.asc()).all()
-    return jsonify([l.to_dict() for l in locations])
+    try:
+        locations = Location.query.order_by(Location.order.asc()).all()
+        return jsonify([l.to_dict() for l in locations]), 200
+    except Exception as e:
+        logger.error(f"获取区域失败: {str(e)}")
+        return jsonify({'error': f'获取位置失败: {str(e)}'}), 404
 
 @app.route('/api/locations', methods=['POST'])
 def add_location():
     data = request.json
     if not data.get('identifier'):
         return jsonify({'error': '位置标识不能为空'}), 400
-
     try:
         # 获取当前最大的 order 值
         max_order = db.session.query(db.func.max(Location.order)).scalar()
@@ -928,37 +973,47 @@ def add_location():
         return jsonify(location.to_dict()), 201
     except Exception as e:
         db.session.rollback()
+        logger.error(f"添加区域失败: {str(e)}")
         return jsonify({'error': f'添加位置失败: {str(e)}'}), 500
 
 @app.route('/api/locations/<int:id>', methods=['PUT'])
 def update_location(id):
     data = request.json
-    location = Location.query.get_or_404(id)
-    
-    if 'identifier' in data:
-        cages = Cage.query.filter(Cage.section == location.identifier).all()
-        location.identifier = data['identifier']
-        for cage in cages:
-            cage.section = location.identifier
-    if 'description' in data:
-        location.description = data['description']
-    
-    db.session.commit()
-    return jsonify(location.to_dict())
+    try:
+        location = Location.query.get_or_404(id)
+        
+        if 'identifier' in data:
+            cages = Cage.query.filter(Cage.section == location.identifier).all()
+            location.identifier = data['identifier']
+            for cage in cages:
+                cage.section = location.identifier
+        if 'description' in data:
+            location.description = data['description']
+        
+        db.session.commit()
+        return jsonify(location.to_dict())
+    except Exception as e:
+        logger.error(f"更新区域失败: {str(e)}")
+        return jsonify({'error': f'更新位置失败: {str(e)}'}), 500
 
 @app.route('/api/locations/<int:id>', methods=['DELETE'])
 def delete_location(id):
-    location = Location.query.get_or_404(id)
-    cages = Cage.query.filter_by(section=location.identifier).all()
-    db.session.delete(location)
-    for cage in cages:
-        # 将该笼位中的所有小鼠移动到临时区
-        mice = Mouse.query.filter_by(cage_id=cage.id).all()
-        for mouse in mice:
-            mouse.cage_id = None
-        db.session.delete(cage)
-    db.session.commit()
-    return '', 204
+    try:
+        location = Location.query.get_or_404(id)
+        cages = Cage.query.filter_by(section=location.identifier).all()
+        db.session.delete(location)
+        for cage in cages:
+            # 将该笼位中的所有小鼠移动到临时区
+            mice = Mouse.query.filter_by(cage_id=cage.id).all()
+            for mouse in mice:
+                mouse.cage_id = None
+            db.session.delete(cage)
+        db.session.commit()
+        return '', 204
+    except Exception as e:
+        db.session.rollback()
+        logger.error(f"添加区域失败: {str(e)}")
+        return jsonify({'error': f'添加位置失败: {str(e)}'}), 500
 
 # 数据导出API
 @app.route('/api/export/<export_type>', methods=['GET'])
@@ -1201,12 +1256,7 @@ def import_mice_data(df, result, conflict_resolution):
                     if not existing_cage:
                         max_order = db.session.query(db.func.max(Cage.order)).scalar()
                         new_order = max_order + 1 if max_order is not None else 0
-                        valid_cage_id = str(cage_id)
-                        while True:
-                            valid_cage_id = valid_cage_id+"-"
-                            if not Cage.query.get(valid_cage_id):
-                                break
-                        existing_cage = Cage(id=valid_cage_id, section=existing_location.identifier, cage_id=cage_id, order=new_order)
+                        existing_cage = Cage(section=existing_location.identifier, cage_id=cage_id, order=new_order)
                         db.session.add(existing_cage)
                         db.session.flush()
                     mouse.cage_id = existing_cage.id
@@ -1218,6 +1268,8 @@ def import_mice_data(df, result, conflict_resolution):
             result['successCount'] += 1
             
         except Exception as e:
+            db.session.rollback()
+            logger.error(f"导入小鼠失败: {str(e)}")
             result['errors'].append({
                 'row': index + 2,  # Excel行号从1开始，标题行+1
                 'message': f'导入失败: {str(e)}'
@@ -1278,6 +1330,8 @@ def import_weights_data(df, result, conflict_resolution):
             result['successCount'] += 1
             
         except Exception as e:
+            db.session.rollback()
+            logger.error(f"导入体重失败: {str(e)}")
             result['errors'].append({
                 'row': index + 2,
                 'message': f'导入失败: {str(e)}'
@@ -1337,6 +1391,8 @@ def import_record_data(df, result, conflict_resolution):
             result['successCount'] += 1
             
         except Exception as e:
+            db.session.rollback()
+            logger.error(f"导入小鼠状态失败: {str(e)}")
             result['errors'].append({
                 'row': index + 2,
                 'message': f'导入失败: {str(e)}'
@@ -1402,6 +1458,8 @@ def import_pedigree_data(df, result, conflict_resolution):
             result['successCount'] += 1
             
         except Exception as e:
+            db.session.rollback()
+            logger.error(f"导入小鼠血统关系失败: {str(e)}")
             result['errors'].append({
                 'row': index + 2,
                 'message': f'导入失败: {str(e)}'
@@ -1441,6 +1499,7 @@ def update_sections_order():
         return jsonify({'message': '部分顺序已更新'})
     except Exception as e:
         db.session.rollback()
+        logger.error(f"调整区域顺序失败: {str(e)}")
         return jsonify({'error': f'更新失败: {str(e)}'}), 500
 
 
@@ -1501,7 +1560,7 @@ def get_weight_record_with_filter():
             'limit': limit
         })
     except Exception as e:
-        app.logger.error(f"获取体重记录失败: {str(e)}")
+        logger.error(f"获取体重记录失败: {str(e)}")
         return jsonify({'error': '获取数据失败'}), 500
 
 # 添加体重记录
@@ -1541,7 +1600,7 @@ def add_weight_record():
         }), 201
     except Exception as e:
         db.session.rollback()
-        app.logger.error(f"添加体重记录失败: {str(e)}")
+        logger.error(f"添加体重记录失败: {str(e)}")
         return jsonify({'error': '添加记录失败'}), 500
 
 # 更新体重记录
@@ -1575,7 +1634,7 @@ def update_weight_record(id):
         })
     except Exception as e:
         db.session.rollback()
-        app.logger.error(f"更新体重记录失败: {str(e)}")
+        logger.error(f"更新体重记录失败: {str(e)}")
         return jsonify({'error': '更新记录失败'}), 500
 
 # 删除体重记录
@@ -1592,7 +1651,7 @@ def delete_weight_record(id):
         return jsonify({'message': '记录删除成功'})
     except Exception as e:
         db.session.rollback()
-        app.logger.error(f"删除体重记录失败: {str(e)}")
+        logger.error(f"删除体重记录失败: {str(e)}")
         return jsonify({'error': '删除记录失败'}), 500
     
 
@@ -1643,6 +1702,7 @@ def create_experiment_type():
         return jsonify(experiment_type.to_dict())
     except Exception as e:
         db.session.rollback()
+        logger.error(f"创建实验失败: {str(e)}")
         return jsonify({'error': str(e)}), 500
 
 @app.route('/api/experiment-types/<int:id>', methods=['PUT'])
@@ -1707,6 +1767,7 @@ def update_experiment_type(id):
         return jsonify(experiment_type.to_dict())
     except Exception as e:
         db.session.rollback()
+        logger.error(f"更新实验失败: {str(e)}")
         return jsonify({'error': str(e)}), 500
 
 @app.route('/api/experiment-types/<int:id>', methods=['DELETE'])
@@ -1729,6 +1790,7 @@ def delete_experiment_type(id):
         return jsonify({'message': '删除成功'})
     except Exception as e:
         db.session.rollback()
+        logger.error(f"删除实验失败: {str(e)}")
         return jsonify({'error': str(e)}), 500
 
 # 预设实验类型
@@ -1767,6 +1829,29 @@ def get_experiment_presets():
         }
     }
     return jsonify(presets)
+
+
+
+@app.route('/api/grouping/presets', methods=['GET'])
+def get_preset_group():
+    presets = [
+        {
+        'name': '对照组',
+        'description': 'WT雄性小鼠',
+        'rules': [
+            {
+                'type': 'genotype',
+                'locus': 'WT'
+            },
+            {
+                'type': 'sex',
+                'value': 'M'
+            }
+            ]
+        }
+    ]
+    return jsonify(presets)
+
 
 
 #实验视图
@@ -1814,6 +1899,7 @@ def get_experiment_data(experiment_id):
             results.append(result)
         return jsonify(results)
     except Exception as e:
+        logger.error(f"获取实验数据失败: {str(e)}")
         return jsonify({'error': str(e)}), 500
     
 @app.route('/api/experiment/<int:experiment_id>/candidate_mice', methods=['GET'])
@@ -1837,6 +1923,7 @@ def get_candidate_mice(experiment_id):
         
         return jsonify([mouse.to_dict() for mouse in candidate_mice])
     except Exception as e:
+        logger.error(f"获取候选小鼠失败: {str(e)}")
         return jsonify({'error': str(e)}), 500
 
 @app.route('/api/experiment/<int:experiment_id>/groups', methods=['GET'])
@@ -1858,6 +1945,7 @@ def get_experiment_groups(experiment_id):
         
         return jsonify(groups)
     except Exception as e:
+        logger.error(f"获取实验分组失败: {str(e)}")
         return jsonify({'error': str(e)}), 500
     
 @app.route('/api/experiment/<int:experiment_id>/groups/<oldGroupId>', methods=['PUT'])
@@ -1874,6 +1962,7 @@ def rename_experiment_group(experiment_id, oldGroupId):
         return jsonify({'message': f'分组 {oldGroupId} 已重命名为 {new_id}'})
     except Exception as e:
         db.session.rollback()
+        logger.error(f"实验分组改名失败: {str(e)}")
         return jsonify({'error': str(e)}), 500
 
 @app.route('/api/experiment/<int:experiment_id>/class_change', methods=['POST'])
@@ -1919,6 +2008,7 @@ def add_mouse_to_group(experiment_id):
         return jsonify({'message': '小鼠已成功添加到分组'})
     except Exception as e:
         db.session.rollback()
+        logger.error(f"改变小鼠分组失败: {str(e)}")
         return jsonify({'error': str(e)}), 500
 
 @app.route('/api/experiment/<int:experiment_id>/groups/<int:class_id>', methods=['DELETE'])
@@ -1939,6 +2029,7 @@ def delete_group(experiment_id, class_id):
         return jsonify({'message': f'分组 {class_id} 已删除', 'deleted_count': len(experiment_classes)})
     except Exception as e:
         db.session.rollback()
+        logger.error(f"删除实验分组失败: {str(e)}")
         return jsonify({'error': str(e)}), 500
 
 @app.route('/api/experiment/<int:experiment_id>/groups/clear', methods=['DELETE'])
@@ -1958,6 +2049,7 @@ def clear_all_groups(experiment_id):
         return jsonify({'message': '所有分组已清除', 'deleted_count': len(experiment_classes)})
     except Exception as e:
         db.session.rollback()
+        logger.error(f"清除实验分组失败: {str(e)}")
         return jsonify({'error': str(e)}), 500
     
 @app.route('/api/experiments', methods=['POST'])
@@ -2043,6 +2135,7 @@ def input_experiment_records():
         return jsonify({'message': '实验记录保存成功', 'count': len(records)})
     except Exception as e:
         db.session.rollback()
+        logger.error(f"录入实验数据失败: {str(e)}")
         return jsonify({'error': str(e)}), 500
 
 # 部分更新实验记录
@@ -2132,6 +2225,8 @@ def update_experiment(experiment_id):
         }), 200
         
     except Exception as e:
+        db.session.rollback()
+        logger.error(f"更新实验数据失败: {str(e)}")
         return jsonify({'error': str(e)}), 500
 
 # 删除实验记录
@@ -2154,6 +2249,7 @@ def delete_experiment(experiment_id):
         
     except Exception as e:
         db.session.rollback()
+        logger.error(f"删除实验数据失败: {str(e)}")
         return jsonify({'error': str(e)}), 500
 
 
@@ -2275,6 +2371,7 @@ def export_experiments_to_excel(ids, filename='experiments_export'):
         return send_file(output, as_attachment=True, download_name=f'{filename}.xlsx', mimetype='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet')
     
     except Exception as e:
+        logger.error(f"实验数据导出失败: {str(e)}")
         return jsonify({'error': '导出失败'}), 500
 
 def clean_sheet_name(name):
@@ -2502,7 +2599,7 @@ def export_database():
         )
         
     except Exception as e:
-        logging.error(f"导出数据库失败: {str(e)}")
+        logger.error(f"导出数据库失败: {str(e)}")
         return jsonify({'error': '导出数据库失败'}), 500
 
 @app.route('/api/database/export-log', methods=['GET'])
@@ -2522,7 +2619,7 @@ def export_log_file():
         )
         
     except Exception as e:
-        logging.error(f"导出日志文件失败: {str(e)}")
+        logger.error(f"导出日志文件失败: {str(e)}")
         return jsonify({'error': '导出日志文件失败'}), 500
 
 @app.route('/api/database/import', methods=['POST'])
