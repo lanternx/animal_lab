@@ -1970,8 +1970,8 @@ const saveEdit = async (index) => {
     if (editingIndex.value === index && editingField.value) {
         databases.value = {
             ...databases.value,
-            [key]: {
-                ...databases.value[key],
+            [index]: {
+                ...databases.value[index],
                 [editingField.value]: editingValue.value
             }
         }
@@ -1982,7 +1982,7 @@ const saveEdit = async (index) => {
 }
 
 const resetEdit = () => {
-    editingIndex.value = -1
+    editingIndex.value = ''
     editingField.value = ''
     editingValue.value = ''
 }
@@ -2351,7 +2351,8 @@ background-color: white;
 padding: 25px;
 border-radius: 8px;
 width: 450px;
-max-width: 70%;
+max-width: 100%;
+max-height: 80%;
 box-shadow: 0 4px 20px rgba(0, 0, 0, 0.2);
 overflow-y: auto;
 }
@@ -2995,6 +2996,33 @@ filter: brightness(0.9);
     user-select: none;
 }
 
+.checkbox-group label:before {
+    content: '';
+    position: absolute;
+    left: 0;
+    top: 0;
+    width: 22px;
+    height: 22px;
+    border: 2px solid #ddd;
+    border-radius: 4px;
+    background-color: #fff;
+    transition: all 0.2s ease;
+}
+
+.checkbox-group label:after {
+    content: '';
+    position: absolute;
+    left: 7px;
+    top: 3px;
+    width: 8px;
+    height: 13px;
+    border: solid #fff;
+    border-width: 0 2px 2px 0;
+    transform: rotate(45deg) scale(0);
+    transition: all 0.2s ease;
+    opacity: 0;
+}
+
 .checkbox-group label:hover:before {
     border-color: #2c6fbb;
 }
@@ -3007,6 +3035,11 @@ filter: brightness(0.9);
 .checkbox-group input[type="checkbox"]:checked + label:after {
     transform: rotate(45deg) scale(1);
     opacity: 1;
+}
+
+.checkbox-group input[type="checkbox"]:focus + label:before {
+    box-shadow: 0 0 0 3px rgba(44, 111, 187, 0.2);
+    border-color: #2c6fbb;
 }
 
 .section-header {

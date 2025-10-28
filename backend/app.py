@@ -2599,8 +2599,8 @@ def create_database():
     db_item = request.get_json()
     database = {
         'projectName': db_item['projectName'],
-        'createTime': db_item['startAt'].isoformat() if db_item['startAt'] else None,
-        'endTime': db_item['endAt'].isoformat() if db_item['endAt'] else None,
+        'startAt': db_item['startAt'].isoformat() if db_item['startAt'] else None,
+        'endAt': db_item['endAt'].isoformat() if db_item['endAt'] else None,
         'readOnly': db_item['readOnly']
     }
     timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
@@ -2657,8 +2657,8 @@ def modify_database(db_key):
     
     database = {
         'projectName': db_item['projectName'],
-        'createTime': db_item['startAt'].isoformat() if db_item['startAt'] else None,
-        'endTime': db_item['endAt'].isoformat() if db_item['endAt'] else None,
+        'startAt': db_item['startAt'].isoformat() if db_item['startAt'] else None,
+        'endAt': db_item['endAt'].isoformat() if db_item['endAt'] else None,
         'readOnly': db_item['readOnly']
     }
     db_list[db_key].update(database)
@@ -2761,8 +2761,8 @@ def import_database():
         db_item = json.loads(request.form.get('project_info'))
         database = {
             'projectName': db_item['projectName'],
-            'createTime': db_item['startAt'].isoformat() if db_item['startAt'] else None,
-            'endTime': db_item['endAt'].isoformat() if db_item['endAt'] else None,
+            'startAt': db_item['startAt'].isoformat() if db_item['startAt'] else None,
+            'endAt': db_item['endAt'].isoformat() if db_item['endAt'] else None,
             'readOnly': db_item['readOnly']
         }
         db_list[timestamp_name].update(database)
