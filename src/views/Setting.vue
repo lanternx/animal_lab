@@ -750,81 +750,191 @@
     
     <!-- 数据库信息 -->
     <div class="form-section">
-        <h3>数据库信息</h3>
-        <div class="info-container">
-        <div class="info-item">
-            <span class="info-label">数据库文件:</span>
-            <span class="info-value">{{ dbInfo.fileName || 'mice.db' }}</span>
-        </div>
-        <div class="info-item">
-            <span class="info-label">文件大小:</span>
-            <span class="info-value">{{ formatFileSize(dbInfo.fileSize) }}</span>
-        </div>
-        <div class="info-item">
-            <span class="info-label">最后修改:</span>
-            <span class="info-value">{{ dbInfo.lastModified || '未知' }}</span>
-        </div>
-        <div class="info-item">
-            <span class="info-label">记录数量:</span>
-            <span class="info-value">{{ dbInfo.totalRecords }} 条</span>
-        </div>
-        </div>
-        
-        <div class="form-group">
-        <button class="btn btn-outline" @click="refreshDbInfo">
-            <i class="material-icons">refresh</i> 刷新信息
-        </button>
-        </div>
-    </div>
-
-    <!-- 数据库导入 -->
-    <div class="form-section">
-        <h3>导入数据库</h3>
-        <div class="import-options">
-        <div class="file-upload" @dragover.prevent @drop="handleDbDrop">
-            <input type="file" accept=".db" @change="handleDbFileUpload">
-            <div class="upload-area" :class="{ 'dragover': isDbDragging }">
-            <i class="material-icons">cloud_upload</i>
-            <p v-if="!selectedDbFile">点击或拖拽数据库文件(.db)到此处上传</p>
-            <p v-else class="file-info">
-                <span>{{ selectedDbFile.name }}</span>
-                <span>({{ formatFileSize(selectedDbFile.size) }})</span>
-            </p>
-            <button v-if="selectedDbFile" class="btn btn-outline" @click="clearDbFile">清除</button>
+        <div class="section-header">
+            <h3>数据库信息</h3>
+            <div class="btn-group">
+                <button v-if="!addingDatabase" class="btn btn-outline" @click="addDatabase">创建新数据库</button>
+                <button class="btn btn-primary" @click="importDatabase">导入数据库</button>
             </div>
         </div>
-        
-        <div v-if="selectedDbFile" class="warning-message">
-            <i class="material-icons">warning</i>
-            <span>警告：导入数据库将覆盖当前所有数据，请谨慎操作！</span>
-        </div>
-        
-        <div v-if="selectedDbFile" class="form-group">
-            <button class="btn btn-primary" @click="importDatabase" :disabled="isImportingDb">
-            <span v-if="isImportingDb">导入中...</span>
-            <span v-else>确认导入数据库</span>
-            </button>
-        </div>
-        </div>
-    </div>
-    
-    <!-- 数据库导出 -->
-    <div class="form-section">
-        <h3>导出数据库</h3>
-        <div class="export-options">
-        <p>导出当前工作目录的数据库文件</p>
-        <div class="form-group">
-            <button class="btn btn-primary" @click="exportDatabase" :disabled="isExportingDb">
-            <span v-if="isExportingDb">导出中...</span>
-            <span v-else>导出数据库文件</span>
-            </button>
-        </div>
+        <div class="database-list">
+            <div 
+                v-for="(db, key) in databases" 
+                :key="key"
+                class="database-card"
+                :class="{ 'current': currentDatabase === key }"
+            >
+                <div class="database-header">
+                    <div class="database-name">
+                        <template v-if="editingIndex === key && editingField === 'projectName'">
+                            <input 
+                                v-model="editingValue" 
+                                class="editing-input"
+                                @keyup.enter="saveEdit(key)"
+                                @blur="saveEdit(key)"
+                                autofocus
+                            >
+                        </template>
+                        <template v-else>
+                            <span @dblclick="startEdit(key, 'projectName', db.projectName)">
+                                {{ db.projectName || '未命名项目' }}
+                            </span>
+                        </template>
+                    </div>
+                    <div class="info-value">
+                        <span 
+                            class="status-badge" 
+                            :class="getStatusClasses(db, key)"
+                            @click="toggleReadOnly(key)"
+                            :title="db.readOnly ? '点击设为可写' : '点击设为只读'"
+                        >
+                            <span class="status-icon">
+                                <template v-if="currentDatabase === key">★</template>
+                                <template v-else-if="db.readOnly">🔒</template>
+                                <template v-else>✓</template>
+                            </span>
+                            {{ getDatabaseStatus(db.readOnly, key) }}
+                        </span>
+                    </div>
+                </div>
+                
+                <div class="database-details">
+                    <div class="detail-item">
+                        <span class="detail-label">项目开始时间：</span>
+                        <span class="detail-value">
+                            <template v-if="editingIndex === key && editingField === 'startAt'">
+                                <input 
+                                    v-model="editingValue" 
+                                    class="editing-input"
+                                    type="date"
+                                    @keyup.enter="saveEdit(key)"
+                                    @blur="saveEdit(key)"
+                                    autofocus
+                                >
+                            </template>
+                            <template v-else>
+                                <span @dblclick="startEdit(key, 'startAt', db.startAt)">
+                                    {{ db.startAt || '未知' }}
+                                </span>
+                            </template>
+                        </span>
+                    </div>
+                    <div v-if="db.readOnly" class="detail-item">
+                        <span class="detail-label">项目结束时间：</span>
+                        <span class="detail-value">
+                            <template v-if="editingIndex === key && editingField === 'endAt'">
+                                <input 
+                                    v-model="editingValue" 
+                                    class="editing-input"
+                                    type="date"
+                                    @keyup.enter="saveEdit(key)"
+                                    @blur="saveEdit(key)"
+                                    autofocus
+                                >
+                            </template>
+                            <template v-else>
+                                <span @dblclick="startEdit(key, 'endAt', db.endAt)">
+                                    {{ db.endAt || '未知' }}
+                                </span>
+                            </template>
+                        </span>
+                    </div>
+                    <div class="detail-item">
+                        <span class="detail-label">文件大小:</span>
+                        <span class="detail-value">{{ formatFileSize(db.fileSize) }}</span>
+                    </div>
+                    <div class="detail-item">
+                        <span class="detail-label">最后修改:</span>
+                        <span class="detail-value">{{ db.lastModified || '未知' }}</span>
+                    </div>
+                    <div class="detail-item">
+                        <span class="detail-label">记录数量:</span>
+                        <span class="detail-value">{{ db.totalRecords }} 条</span>
+                    </div>
+                </div>
+                
+                <div class="actions">
+                    <button
+                        class="action-btn primary" 
+                        @click="selectDatabase(key)"
+                        :disabled="currentDatabase === key"
+                    >
+                        设为当前
+                    </button>
+                    <button
+                        class="action-btn secondary" 
+                        @click="exportDatabase(key)"
+                        :disabled="!db.totalRecords && db.totalRecords !== 0"
+                    >
+                        导出
+                    </button>
+                    <button
+                        class="action-btn btn-danger" 
+                        @click="deleteDatabase(key)"
+                        :disabled="currentDatabase === key"
+                    >
+                        删除
+                    </button>
+                </div>
+            </div>
+            <div v-if="addingDatabase" class="database-card">
+                <div class="database-header">
+                    <span class="detail-label">项目名称：</span>
+                    <div class="database-name">
+                        <input 
+                            v-model="editingDatabase.projectName" 
+                            class="editing-input"
+                            autofocus
+                        >
+                    </div>
+                </div>
+                
+                <div class="database-details">
+                    <div class="detail-item">
+                        <span class="detail-label">项目开始时间：</span>
+                        <span class="detail-value">
+                            <input 
+                                v-model="editingDatabase.startAt" 
+                                class="editing-input"
+                                type="date"
+                            >
+                        </span>
+                    </div>
+                    <div class="detail-item">
+                        <span class="detail-label">项目结束时间：</span>
+                        <span class="detail-value">
+                            <input 
+                                v-model="editingDatabase.endAt" 
+                                class="editing-input"
+                                type="date"
+                            >
+                        </span>
+                    </div>
+                    <div class="detail-item">
+                        <span class="detail-label">只读模式</span>
+                        <div class="checkbox-group">
+                            <input type="checkbox" v-model="editingDatabase.readOnly" id="edit-readonly-checkbox">
+                            <label for="edit-readonly-checkbox">启用只读模式</label>
+                        </div>
+                    </div>
+                </div>
+                <div class="actions">
+                    <button
+                        class="action-btn btn-primary" 
+                        @click="createDatabase">确认
+                    </button>
+                    <button
+                        class="action-btn btn-danger" 
+                        @click="cancelCreateDatabase">取消
+                    </button>
+                </div>
+            </div>
         </div>
     </div>
 
     <!-- 数据库清空 -->
     <div class="form-section">
-    <h3>清空数据库</h3>
+    <h3>清空当前数据库</h3>
     <div class="export-options">
         <p class="warning-text">警告：此操作将删除所有数据，包括小鼠信息、基因型、位置、实验记录等，且无法恢复！</p>
         
@@ -958,30 +1068,54 @@
     </div>
 
     <!-- 数据库导入结果对话框 -->
-    <div v-if="dbImportResultDialogVisible" @click.self="dbImportResultDialogVisible=false" class="dialog-overlay">
+    <div v-if="dbImportResultDialogVisible" @click.self="cancelImportDatabase" class="dialog-overlay">
     <div class="dialog-container">
-        <h2>数据库结果</h2>
-        <div class="import-result">
-        <div v-if="dbImportResult.success" class="result-item success">
-            <i class="material-icons">check_circle</i>
-            <span>数据库成功！</span>
+        <h3>导入数据库</h3>
+        <div class="import-options">
+        <div class="file-upload" @dragover.prevent @drop="handleDbDrop">
+            <input type="file" accept=".db" @change="handleDbFileUpload">
+            <div class="upload-area" :class="{ 'dragover': isDbDragging }">
+            <i class="material-icons">cloud_upload</i>
+            <p v-if="!selectedDbFile">点击或拖拽数据库文件(.db)到此处上传</p>
+            <p v-else class="file-info">
+                <span>{{ selectedDbFile.name }}</span>
+                <span>({{ formatFileSize(selectedDbFile.size) }})</span>
+            </p>
+            <button v-if="selectedDbFile" class="btn btn-outline" @click="clearDbFile">清除</button>
+            </div>
         </div>
-        <div v-else class="result-item error">
-            <i class="material-icons">error</i>
-            <span>数据库失败</span>
+
+        <div v-if="selectedDbFile" class="warning-message">
+            <i class="material-icons">warning</i>
+            <span>警告：导入数据库将添加到数据库列表中！</span>
         </div>
         
-        <div v-if="dbImportResult.message" class="result-message">
-            {{ dbImportResult.message }}
-        </div>
-        
-        <div v-if="dbImportResult.details" class="error-details">
-            <h4>详细信息:</h4>
-            <pre>{{ dbImportResult.details }}</pre>
+        <div v-if="selectedDbFile">
+            <h2>编辑数据库信息</h2>
+            <div class="form-group">
+                <label>项目名称 *</label>
+                <input type="text" v-model="editingDatabase.projectName" required>
+            </div>
+            <div class="form-group">
+                <label>开始时间</label>
+                <input type="date" v-model="editingDatabase.startAt">
+            </div>
+            <div class="form-group">
+                <label>结束时间</label>
+                <input type="date" v-model="editingDatabase.endAt">
+            </div>
+            <div class="form-group">
+                <label>只读模式</label>
+                <div class="checkbox-group">
+                    <input type="checkbox" v-model="editingDatabase.readOnly" id="edit-readonly-checkbox">
+                    <label for="edit-readonly-checkbox">启用只读模式</label>
+                </div>
+            </div>
         </div>
         </div>
         <div class="dialog-buttons">
-        <button class="btn btn-primary" @click="handleDbImportComplete">确定</button>
+            <button class="btn btn-primary" @click="handleDbImportComplete">确定</button>
+            <button class="btn btn-primary" @click="cancelImportDatabase">取消</button>
         </div>
     </div>
     </div>
@@ -1073,24 +1207,20 @@ const expandedExperimentType = ref(null)
 // 数据库管理相关状态
 const selectedDbFile = ref(null)
 const isDbDragging = ref(false)
-const isImportingDb = ref(false)
-const isExportingDb = ref(false)
 const isExportingLog = ref(false)
 const dbImportResultDialogVisible = ref(false)
-const dbImportResult = reactive({
-success: false,
-message: '',
-details: ''
-})
-const dbInfo = ref({
-fileName: '',
-fileSize: 0,
-lastModified: '',
-recordCount: 0
-})
 const deleteConfirmation = ref('')
 const deleteConfirmationError = ref('')
 const isClearingDb = ref(false)
+const editingDatabase = ref({
+projectName: '',
+startAt: '',
+endAt: '',
+readOnly: false
+})
+const currentDatabase = ref('')
+const databases = ref({})
+const addingDatabase = ref(false)
 
 // 计算属性：检查是否确认删除
 const isDeleteConfirmed = computed(() => {
@@ -1351,32 +1481,32 @@ return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i]
 }
 
 const importData = async () => {
-if (!selectedFile.value) {
-toast.info('请选择要导入的文件')
-return
-}
-
-isImporting.value = true
-
-const formData = new FormData()
-formData.append('file', selectedFile.value)
-formData.append('type', importType.value)
-formData.append('conflict_resolution', importConflictResolution.value)
-
-try {
-const response = await axios.post('/api/import', formData, {
-    headers: {
-    'Content-Type': 'multipart/form-data'
+    if (!selectedFile.value) {
+        toast.info('请选择要导入的文件')
+        return
     }
-})
-Object.assign(importResult, response.data)
-importResultDialogVisible.value = true
-} catch (error) {
-console.error('导入失败:', error)
-toast.error(`导入失败: ${error.response?.data?.error || '服务器错误'}`)
-} finally {
-isImporting.value = false
-}
+
+    isImporting.value = true
+
+    const formData = new FormData()
+    formData.append('file', selectedFile.value)
+    formData.append('type', importType.value)
+    formData.append('conflict_resolution', importConflictResolution.value)
+
+    try {
+        const response = await axios.post('/api/import', formData, {
+            headers: {
+            'Content-Type': 'multipart/form-data'
+            }
+        })
+        Object.assign(importResult, response.data)
+        importResultDialogVisible.value = true
+    } catch (error) {
+        console.error('导入失败:', error)
+        toast.error(`导入失败: ${error.response?.data?.error || '服务器错误'}`)
+    } finally {
+        isImporting.value = false
+    }
 }
 
 // 实验类型相关方法
@@ -1617,86 +1747,88 @@ const clearDbFile = () => {
   selectedDbFile.value = null
 }
 
-const importDatabase = async () => {
-  if (!selectedDbFile.value) {
-    toast.info('请选择要导入的数据库文件')
-    return
-  }
-
-  if (!confirm('警告：此操作将覆盖当前所有数据，且不可恢复！确定要继续吗？')) {
-    return
-  }
-
-  isImportingDb.value = true
-
-  const formData = new FormData()
-  formData.append('file', selectedDbFile.value)
-
-  try {
-    const response = await axios.post('/api/database/import', formData, {
-      headers: {
-        'Content-Type': 'multipart/form-data'
-      }
-    })
-    
-    Object.assign(dbImportResult, {
-      success: true,
-      message: response.data.message,
-      details: response.data.details
-    })
-    
+const importDatabase = () => {
     dbImportResultDialogVisible.value = true
-    toast.success('数据库导入成功')
-  } catch (error) {
-    console.error('数据库导入失败:', error)
-    Object.assign(dbImportResult, {
-      success: false,
-      message: error.response?.data?.error || '数据库导入失败',
-      details: error.response?.data?.details || ''
-    })
-    dbImportResultDialogVisible.value = true
-    toast.error('数据库导入失败')
-  } finally {
-    isImportingDb.value = false
-  }
+    selectedDbFile.value = null
+    editingDatabase.value = {
+        projectName: '',
+        startAt: '',
+        endAt: '',
+        readOnly: false
+    }
 }
 
-const exportDatabase = async () => {
-  isExportingDb.value = true
+const cancelImportDatabase = () => {
+    dbImportResultDialogVisible.value = false
+    selectedDbFile.value = null
+    editingDatabase.value = {
+        projectName: '',
+        startAt: '',
+        endAt: '',
+        readOnly: false
+    }
+}
 
-  try {
-    const response = await axios.get('/api/database/export', {
-      responseType: 'blob'
-    })
+const handleDbImportComplete = async () => {
+    if (!selectedDbFile.value) {
+        toast.info('请选择要导入的数据库文件')
+        return
+    }
+    dbImportResultDialogVisible.value = false
+    const formData = new FormData()
+    formData.append('file', selectedDbFile.value)
+    formData.append('project_info', editingDatabase.value)
+
+    try {
+        const response = await axios.post('/api/database/import', formData, {
+        headers: {
+            'Content-Type': 'multipart/form-data'
+        }
+        })
+        
+        toast.success('数据库导入成功')
+    } catch (error) {
+        console.error('数据库导入失败:', error)
+        toast.error('数据库导入失败')
+    }
+    selectedDbFile.value = null
+}
+
+const exportDatabase = async (key) => {
+    const db = databases.value[key]
+    if (!db) return
+
+    try {
+        const response = await axios.get(`/api/database/export/${key}`, {
+            responseType: 'blob'
+        })
 
     // 使用 PyWebview 的保存文件对话框
     if (window.pywebview && window.pywebview.api) {
-      const filename = `mice_backup_${new Date().toISOString().split('T')[0]}.db`
-      const arrayBuffer = await response.data.arrayBuffer()
-      const uint8array = new Uint8Array(arrayBuffer)
-      const dataArray = Array.from(uint8array)
-      const state = await window.pywebview.api.save_file_dialog(dataArray, filename)
-      if(state.success){
-        toast.success(`数据库导出成功，文件路径：${state.path}`)
-      } else {
-        toast.info(state.message || "导出失败")
-      }
+        const filename = `${db.projectName}_backup_${new Date().toISOString().split('T')[0]}.db`
+        const arrayBuffer = await response.data.arrayBuffer()
+        const uint8array = new Uint8Array(arrayBuffer)
+        const dataArray = Array.from(uint8array)
+        const state = await window.pywebview.api.save_file_dialog(dataArray, filename)
+        if(state.success){
+            toast.success(`数据库导出成功，文件路径：${state.path}`)
+        } else {
+            toast.info(state.message || "导出失败")
+        }
     } else {
-      const url = window.URL.createObjectURL(new Blob([response.data]))
-      const link = document.createElement('a')
-      link.href = url
-      link.setAttribute('download', `mice_backup_${new Date().toISOString().split('T')[0]}.db`)
-      document.body.appendChild(link)
-      link.click()
-      document.body.removeChild(link)
-      toast.success("数据库导出成功")
+        const url = window.URL.createObjectURL(new Blob([response.data]))
+        const link = document.createElement('a')
+        link.href = url
+        link.setAttribute('download', `${db.projectName}_backup_${new Date().toISOString().split('T')[0]}.db`)
+        document.body.appendChild(link)
+        link.click()
+        document.body.removeChild(link)
+        toast.success("数据库导出成功")
     }
-  } catch (error) {
-    console.error('导出数据库失败:', error)
-    toast.error('导出数据库失败，请重试')
-  } finally {
-    isExportingDb.value = false
-  }
+    } catch (error) {
+        console.error('导出数据库失败:', error)
+        toast.error('导出数据库失败，请重试')
+    }
 }
 
 const exportLogFile = async () => {
@@ -1738,20 +1870,14 @@ const exportLogFile = async () => {
 }
 
 const refreshDbInfo = async () => {
-  try {
-    const response = await axios.get('/api/database/info')
-    dbInfo.value = response.data
-  } catch (error) {
-    console.error('获取数据库信息失败:', error)
-    toast.error('获取数据库信息失败')
-  }
-}
-
-const handleDbImportComplete = () => {
-  dbImportResultDialogVisible.value = false
-  selectedDbFile.value = null
-  // 刷新数据库信息
-  refreshDbInfo()
+    try {
+        const response = await axios.get('/api/database/info')
+        const dbInfo = response.data
+        databases.value[currentDatabase.value] = {...databases.value[currentDatabase.value], ...dbInfo}
+    } catch (error) {
+        console.error('获取数据库信息失败:', error)
+        toast.error('获取数据库信息失败')
+    }
 }
 
 // 清空数据库方法
@@ -1776,34 +1902,170 @@ const clearDatabase = async () => {
     // 刷新数据库信息
     await refreshDbInfo()
     
-    // 显示清空结果
-    Object.assign(dbImportResult, {
-      success: true,
-      message: '数据库已成功清空，所有数据已被删除',
-      details: `清空时间: ${new Date().toLocaleString()}\n删除记录数: ${response.data.deleted_records || '未知'}`
-    })
-    dbImportResultDialogVisible.value = true
-    
   } catch (error) {
     console.error('清空数据库失败:', error)
     const errorMsg = error.response?.data?.error || '清空数据库失败'
     toast.error(errorMsg)
-    
-    Object.assign(dbImportResult, {
-      success: false,
-      message: errorMsg,
-      details: error.response?.data?.details || ''
-    })
-    dbImportResultDialogVisible.value = true
   } finally {
     isClearingDb.value = false
   }
 }
 
+// 编辑状态
+const editingIndex = ref('')
+const editingField = ref('')
+const editingValue = ref('')
+
+// 创建数据库
+const addDatabase = async () => {
+    editingDatabase.value = {
+        projectName: '',
+        startAt: '',
+        endAt: '',
+        readOnly: false
+    }
+    addingDatabase.value = true
+}
+
+const createDatabase = async () => {
+    const response = await axios.post('/api/database/create', editingDatabase.value)
+    editingDatabase.value = {
+        projectName: '',
+        startAt: '',
+        endAt: '',
+        readOnly: false
+    }
+    if (response.status === 201) {
+        // 确保响应包含必要的数据
+        if (response.data.key && response.data.database) {
+            const updatedDatabases = { ...databases.value }
+            updatedDatabases[response.data.key] = response.data.database
+            databases.value = updatedDatabases
+            toast.success(response.data.message || '数据库创建成功')
+        } else {
+            toast.error('服务器返回的数据格式不正确')
+        }
+    }
+    addingDatabase.value = false
+}
+
+const cancelCreateDatabase = () => {
+    editingDatabase.value = {
+        projectName: '',
+        startAt: '',
+        endAt: '',
+        readOnly: false
+    }
+    addingDatabase.value = false
+}
+
+// 双击编辑功能
+const startEdit = (index, field, value) => {
+    editingIndex.value = index
+    editingField.value = field
+    editingValue.value = value
+}
+
+const saveEdit = async (index) => {
+    if (editingIndex.value === index && editingField.value) {
+        databases.value = {
+            ...databases.value,
+            [key]: {
+                ...databases.value[key],
+                [editingField.value]: editingValue.value
+            }
+        }
+        const response = await axios.post(`/api/database/${index}`, databases.value[index])
+        resetEdit()
+        toast.success('修改成功')
+    }
+}
+
+const resetEdit = () => {
+    editingIndex.value = -1
+    editingField.value = ''
+    editingValue.value = ''
+}
+
+// 获取数据库状态文本
+const getDatabaseStatus = (readOnly, key) => {
+    if (currentDatabase.value === key) {
+        return readOnly ? '当前(只读)' : '当前使用中'
+    }
+    return readOnly ? '只读' : '可用'
+}
+
+// 获取状态徽章的CSS类
+const getStatusClasses = (db, key) => {
+    const classes = {}
+    if (currentDatabase.value === key) {
+        classes.current = true
+        classes.readonly = db.readOnly
+    } else {
+        if (db.readOnly) {
+            classes['readonly-only'] = true
+        } else {
+            classes.available = true
+        }
+    }
+    return classes
+}
+
+// 选择数据库
+const selectDatabase = async (key) => {
+    currentDatabase.value = key
+    await axios.put(`/api/database/${key}`)
+    toast.success('数据库切换成功，重新启动应用后生效')
+}
+
+// 切换只读状态
+const toggleReadOnly = async (key) => {
+    const db = databases.value[key]
+    if (db) {
+        if (currentDatabase.value === key) {
+            const message = db.readOnly 
+                ? "当前数据库正在使用中，确定要将其设为可写吗？" 
+                : "当前数据库正在使用中，确定要将其设为只读吗？设为只读后可能无法进行写操作。"
+            
+            if (!confirm(message)) return
+        }
+        
+        db.readOnly = !db.readOnly
+        const response = await axios.post(`/api/database/${key}`, db)
+        toast.success(`数据库已设为${db.readOnly ? '只读' : '可写'}`)
+    }
+}
+
+// 删除数据库
+const deleteDatabase = async (key) => {
+    if (currentDatabase.value === key) {
+        toast.error('不能删除当前正在使用的数据库')
+        return
+    }
+    
+    if (confirm('确定要删除这个数据库吗？此操作不可恢复！')) {
+        delete databases.value[key];
+        await axios.delete(`/api/database/${key}`)
+        toast.success('数据库删除成功')
+    }
+}
+
+const fetchDbInfo = async () => {
+    try {
+        const response = await axios.get('/api/database')
+        databases.value = response.data.databases
+        currentDatabase.value = response.data.current_database
+    } catch (error) {
+        console.error('获取数据库列表失败:', error)
+        toast.error('获取数据库列表失败')
+    }
+} 
+
 // 初始化数据
 onMounted(() => {
 fetchExperimentTypes()
 fetchExperimentPresets()
+fetchDbInfo()
 refreshDbInfo()
 })
 </script>
@@ -1991,21 +2253,6 @@ background-color: #d3f1d9;
 white-space: nowrap;
 }
 
-.action-btn {
-padding: 6px 12px;
-background-color: #f5f5f5;
-border: 1px solid #ddd;
-border-radius: 4px;
-cursor: pointer;
-font-size: 13px;
-transition: all 0.2s;
-margin-right: 8px;
-}
-
-.action-btn:hover {
-background-color: #e0e0e0;
-}
-
 .btn-group {
 display: flex;
 gap: 15px;
@@ -2104,8 +2351,9 @@ background-color: white;
 padding: 25px;
 border-radius: 8px;
 width: 450px;
-max-width: 90%;
+max-width: 70%;
 box-shadow: 0 4px 20px rgba(0, 0, 0, 0.2);
+overflow-y: auto;
 }
 
 .dialog-container h2 {
@@ -2556,4 +2804,225 @@ background-color: #c62828;
   background-color: #28a745;
   color: white;
 }
+
+.database-list {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
+    gap: 20px;
+    margin-bottom: 30px;
+}
+
+.database-card {
+    background-color: #f8f9fa;
+    border-radius: 8px;
+    padding: 15px;
+    box-shadow: 0 2px 5px rgba(0,0,0,0.1);
+    transition: all 0.3s ease;
+    border: 1px solid #e0e0e0;
+}
+
+.database-card:hover {
+    transform: translateY(-3px);
+    box-shadow: 0 5px 15px rgba(0,0,0,0.1);
+}
+
+.database-card.current {
+    border: 2px solid var(--primary);
+    background-color: #f0fff4;
+}
+
+.database-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 10px;
+}
+
+.database-name {
+    font-size: 18px;
+    font-weight: 600;
+    color: #333;
+    cursor: pointer;
+    padding: 4px;
+    border-radius: 4px;
+    transition: background-color 0.2s;
+}
+
+.database-name:hover {
+    background-color: #e3f2fd;
+}
+
+.info-value {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
+.status-badge {
+    padding: 4px 8px;
+    border-radius: 12px;
+    font-size: 12px;
+    font-weight: 500;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    cursor: pointer;
+    transition: all 0.2s;
+}
+
+.status-badge:hover {
+    opacity: 0.9;
+    transform: scale(1.05);
+}
+
+.status-badge.current {
+    background-color: #4CAF50;
+    color: white;
+}
+
+.status-badge.readonly {
+    background-color: #FF9800;
+    color: white;
+}
+
+.status-badge.available {
+    background-color: #2196F3;
+    color: white;
+}
+
+.status-badge.readonly-only {
+    background-color: #9E9E9E;
+    color: white;
+}
+
+.status-icon {
+    margin-right: 4px;
+    font-size: 14px;
+}
+
+.database-details {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+    gap: 10px;
+    margin-top: 10px;
+}
+
+.detail-item {
+    display: flex;
+    flex-direction: column;
+}
+
+.detail-label {
+    font-size: 12px;
+    color: #666;
+    margin-bottom: 2px;
+}
+
+.detail-value {
+    font-size: 14px;
+    color: #333;
+    cursor: pointer;
+    padding: 2px 4px;
+    border-radius: 3px;
+    transition: background-color 0.2s;
+}
+
+.detail-value:hover {
+    background-color: #f5f5f5;
+}
+
+.actions {
+    display: flex;
+    gap: 8px;
+    margin-top: 10px;
+}
+
+.action-btn {
+    padding: 6px 12px;
+    border: none;
+    border-radius: 4px;
+    cursor: pointer;
+    font-size: 13px;
+    transition: background-color 0.2s;
+}
+
+.action-btn:hover {
+filter: brightness(0.9);
+}
+
+.action-btn.primary {
+    background-color: #2196F3;
+    color: white;
+}
+
+.action-btn.secondary {
+    background-color: #e0e0e0;
+    color: #333;
+}
+
+.action-btn:disabled {
+    background-color: #f0f0f0;
+    color: #aaa;
+    cursor: not-allowed;
+}
+
+.editing-input {
+    width: 100%;
+    padding: 4px;
+    border: 1px solid #ddd;
+    border-radius: 4px;
+    font-size: 14px;
+}
+
+.checkbox-group {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    margin-top: 5px;
+}
+
+.checkbox-group input[type="checkbox"] {
+    display: none;
+}
+
+.checkbox-group label {
+    position: relative;
+    cursor: pointer;
+    padding-left: 35px;
+    margin-bottom: 0;
+    font-weight: normal;
+    color: #555;
+    user-select: none;
+}
+
+.checkbox-group label:hover:before {
+    border-color: #2c6fbb;
+}
+
+.checkbox-group input[type="checkbox"]:checked + label:before {
+    background-color: #2c6fbb;
+    border-color: #2c6fbb;
+}
+
+.checkbox-group input[type="checkbox"]:checked + label:after {
+    transform: rotate(45deg) scale(1);
+    opacity: 1;
+}
+
+.section-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 20px;
+    padding-bottom: 10px;
+    border-bottom: 1px solid #eee;
+}
+
+.section-header h3 {
+    font-size: 1.3rem;
+    font-weight: 600;
+    color: #2c3e50;
+    margin: 0;
+}
+        
 </style>

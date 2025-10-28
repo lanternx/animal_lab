@@ -476,18 +476,11 @@ class PredefinedGroup(db.Model):
                 required_status = rule.get('value')
                 if mouse.live_status != required_status:
                     return False
-            
-            # 检查年龄范围规则
-            elif rule.get('type') == 'age_range':
-                if not mouse.birth_date:
-                    return False
-                    
-                age_days = (datetime.now().date() - mouse.birth_date).days
-                min_age = rule.get('min_days', 0)
-                max_age = rule.get('max_days', float('inf'))
                 
-                if not (min_age <= age_days <= max_age):
-                    return False
+            elif rule.get('test_planned'):
+                pass
+
+            elif rule.get('test_done'):
+                pass
         
         return True
-
