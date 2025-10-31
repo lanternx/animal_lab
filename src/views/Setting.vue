@@ -317,14 +317,14 @@
                             <td><span class="required">genotype</span></td>
                             <td>字符串</td>
                             <td><span class="required">是</span></td>
-                            <td>基因型描述</td>
+                            <td>基因型描述，格式为：{位点1}[+]/[-]&{位点2}[-]/[-]</td>
                             <td class="example-row">C57BL/6</td>
                         </tr>
                         <tr>
                             <td><span class="required">sex</span></td>
                             <td>字符串</td>
                             <td><span class="required">是</span></td>
-                            <td>性别（M/F）</td>
+                            <td>性别：M/F</td>
                             <td class="example-row">M</td>
                         </tr>
                         <tr>
@@ -338,7 +338,7 @@
                             <td><span class="required">live_status</span></td>
                             <td>整数</td>
                             <td><span class="required">是</span></td>
-                            <td>存活状态（1=存活，0=死亡，2=解剖，3=失踪，4=丢弃，5=处理后死亡）</td>
+                            <td>存活状态：1=存活，0=死亡，2=解剖，3=失踪，4=丢弃，5=处理后死亡</td>
                             <td class="example-row">1</td>
                         </tr>
                         <tr>
@@ -372,9 +372,10 @@
                         <p>2. 日期格式必须为YYYY-MM-DD（例如：2023-05-15）</p>
                         <p>3. 性别字段只接受'M'（雄性）或'F'（雌性）</p>
                         <p>4. 基因型如果不存在会自动创建新基因型</p>
-                        <p>5. 当live_status!=1（不为存活）时，必须提供death_date</p>
-                        <p>6. 区域名称只有在存在笼位名称时才生效</p>
-                        <p>7. 若无区域名称，新笼位自动添加到新创建的区域，后续可调整（通过笼位设置）</p>
+                        <p>5. 基因型的位点和等位基因中不能出现特殊字符</p>
+                        <p>6. 当live_status!=1（不为存活）时，必须提供death_date</p>
+                        <p>7. 区域名称只有在存在笼位名称时才生效</p>
+                        <p>8. 若无区域名称，新笼位自动添加到新创建的区域，后续可调整（通过笼位设置）</p>
                     </div>
                 </div>
             </div>
@@ -1138,6 +1139,7 @@ const {genotypes} = storeToRefs(geneStore)
 const {loadGenotypes} = geneStore
 
 const {locations} = storeToRefs(cageStore)
+const {loadInitialData} = cageStore
 
 // UI状态
 const activeTab = ref('genotype')
@@ -1501,6 +1503,8 @@ const importData = async () => {
         })
         Object.assign(importResult, response.data)
         importResultDialogVisible.value = true
+        await loadGenotypes()
+        await loadInitialData()
     } catch (error) {
         console.error('导入失败:', error)
         toast.error(`导入失败: ${error.response?.data?.error || '服务器错误'}`)

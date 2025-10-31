@@ -37,6 +37,17 @@ class Mouse(db.Model):
             desc = gt.get_genotype_description()
             loci.append(desc)
         return "; ".join(loci)
+    
+    def get_genotype_str(self):
+        """获取可导入的基因型字符串表示"""
+        loci = []
+        for gt in self.genotypes:
+            if gt.allele1 and gt.allele2:
+                locus_str = "{"+gt.locus.symbol+"}["+gt.allele1.symbol+"]/["+gt.allele2.symbol+"]"
+            else:
+                locus_str = "{"+gt.locus.symbol+"}"
+            loci.append(locus_str)
+        return "&".join(loci)
 
     def to_dict(self):
         return {

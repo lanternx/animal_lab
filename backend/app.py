@@ -9,6 +9,7 @@ import pandas as pd
 from io import BytesIO
 from sqlalchemy import text, inspect
 from sqlalchemy.orm import joinedload
+import re
 
 import socket
 
@@ -243,11 +244,11 @@ def add_mouse():
         if data['genotype']:
             genotypes = data['genotype']
             for g in genotypes:
-                locus_id = GeneLocus.query.filter_by(g["locus"]).first()
-                if locus_id:
+                locus = GeneLocus.query.filter_by(symbol=g["locus"]).first()
+                if locus:
                     gene = Genotype(
                         mouse_id = mouse.tid,
-                        locus_id = locus_id,
+                        locus_id = locus.id,
                         allele1_id = g["allele1"],
                         allele2_id = g["allele2"])
                     db.session.add(gene)
@@ -1084,7 +1085,7 @@ def export_data(export_type):
             if m.live_status == 0:
                 data.append({
                     'mouse_id': m.id,
-                    'genotype': m.get_full_genotype(),
+                    'genotype': m.get_genotype_str(),
                     'birth_date': m.birth_date,
                     'death_date': m.death_date,
                     'live_status': m.live_status,
@@ -1093,7 +1094,7 @@ def export_data(export_type):
             elif m.live_status == 1:
                 data.append({
                     'mouse_id': m.id,
-                    'genotype': m.get_full_genotype(),
+                    'genotype': m.get_genotype_str(),
                     'birth_date': m.birth_date,
                     'death_date': m.death_date,
                     'live_status': m.live_status,
@@ -1134,9 +1135,16 @@ def export_data(export_type):
             data[index]['cage_id'] = ""
             data[index]['location'] = ""
         else:
-            cage = Cage.query.get(tid)
+            cage = Cage.query.get_or_404(tid)
             data[index]['cage_id'] = cage.cage_id
             data[index]['location'] = cage.section
+    for index in range(len(data)):
+        genotype_str = ""
+        mouse = Mouse.query.get(data[index]['tid'])
+        if mouse:
+            genotype_str = mouse.get_genotype_str()
+        data[index]['genotype_description'] = data[index]['genotype']
+        data[index]['genotype'] = genotype_str
     df = pd.DataFrame(data)
     
     return create_export_file(df, export_format, filename)
@@ -1216,6 +1224,71 @@ def import_mice_data(df, result, conflict_resolution):
     if missing_cols:
         result['errors'].append({'row': 0, 'message': f'缺少必要列: {", ".join(missing_cols)}'})
         return
+    def deal_with_genotype(genotype_str, mouse_tid):
+        # 删除旧的基因型记录
+        Genotype.query.filter_by(mouse_id=mouse_tid).delete()
+        
+        if not genotype_str:
+            return
+
+        #解析基因型字符串，格式为：{位点1}[等位基因1]/[等位基因2]&{位点2}[等位基因3]/[等位基因4]
+        loci = genotype_str.split('&')
+        parsed_loci = []
+        for locus in loci:
+            locus = locus.strip()
+            if not locus:
+                continue
+                
+            # 使用正则表达式匹配
+            match = re.match(r'\{([^}]+)\}\[([^]]+)\]\/\[([^]]+)\]', locus)
+            if match:
+                locus_symbol = match.group(1).strip()
+                allele1 = match.group(2).strip()
+                allele2 = match.group(3).strip()
+                parsed_loci.append((locus_symbol, allele1, allele2))
+            else:
+                match = re.match(r'\{([^}]+)\}', locus)
+                if match:
+                    locus_symbol = match.group(1).strip()
+                    parsed_loci.append((locus_symbol, None, None))
+                else:
+                    raise ValueError(f"无法解析基因型格式: {locus}")
+
+        for locus_symbol, allele1_sym, allele2_sym in parsed_loci:
+            # 查找或创建基因位点
+            locus = GeneLocus.query.filter_by(symbol=locus_symbol).first()
+            if not locus:
+                locus = GeneLocus(symbol=locus_symbol)
+                db.session.add(locus)
+                db.session.flush()
+            if allele1_sym and allele2_sym:
+                # 查找或创建等位基因1
+                allele1 = Allele.query.filter_by(symbol=allele1_sym, locus_id=locus.id).first()
+                if not allele1:
+                    allele1 = Allele(symbol=allele1_sym, locus_id=locus.id)
+                    db.session.add(allele1)
+                    db.session.flush()
+                # 查找或创建等位基因2
+                allele2 = Allele.query.filter_by(symbol=allele2_sym, locus_id=locus.id).first()
+                if not allele2:
+                    allele2 = Allele(symbol=allele2_sym, locus_id=locus.id)
+                    db.session.add(allele2)
+                    db.session.flush()
+                # 创建基因型记录
+                genotype = Genotype(
+                    mouse_id=mouse.tid,
+                    locus_id=locus.id,
+                    allele1_id=allele1.id,
+                    allele2_id=allele2.id
+                )
+            else:
+                # 创建基因型记录
+                genotype = Genotype(
+                    mouse_id=mouse.tid,
+                    locus_id=locus.id
+                )
+            db.session.add(genotype)
+
     max_location_order = db.session.query(db.func.max(Location.order)).scalar()
     new_location_order = max_location_order + 1 if max_location_order is not None else 0
     new_location = Location.query.filter_by(identifier=str(datetime.now().date())).first()
@@ -1225,19 +1298,13 @@ def import_mice_data(df, result, conflict_resolution):
     for index, row in df.iterrows():
         try:
             # 转换出生日期格式
-            if type(row['birth_date']) == str:
-                birth_date = datetime.strptime(row['birth_date'], '%Y-%m-%d').date()
+            if pd.notna(row['birth_date']):
+                birth_date = pd.to_datetime(row['birth_date']).date()
             else:
-                birth_date = datetime.strptime(str(row['birth_date'].date()), '%Y-%m-%d').date()
+                birth_date = None
             
             # 处理基因型
-            genotype = str(row['genotype']).strip() if pd.notna(row['genotype']) else None
-
-            # 检查并创建新基因型
-            if genotype and genotype != "":
-                existing_genotype = Genotype.query.filter_by(name=genotype).first()
-                if not existing_genotype:
-                    db.session.add(Genotype(name=genotype))
+            genotype_str = str(row['genotype']).strip() if pd.notna(row['genotype']) else None
 
             mouse = Mouse.query.filter_by(id=row['id']).filter_by(birth_date=birth_date).first()
             if mouse:
@@ -1246,28 +1313,27 @@ def import_mice_data(df, result, conflict_resolution):
                     continue
                 elif conflict_resolution == 'overwrite':
                     # 更新基本字段
-                    mouse.genotype = str(row['genotype']).strip() if pd.notna(row['genotype']) else None
                     mouse.sex = str(row['sex']).upper()[0]
                     mouse.live_status = int(row.get('live_status', 1))
 
+                    deal_with_genotype(genotype_str, mouse.tid)
             else:
                 # 创建新小鼠
                 mouse = Mouse(
                     id=row['id'],
-                    genotype=genotype,
                     sex=str(row['sex']).upper()[0],  # 只取第一个字母
                     birth_date=birth_date,
                     live_status=int(row.get('live_status', 1)),
                     tests_done = [],
                     tests_planned = []
                 )
+                db.session.add(mouse)
+                db.session.flush()
+                deal_with_genotype(genotype_str, mouse.tid)
             
             # 可选字段
             if 'death_date' in df.columns and pd.notna(row['death_date']) and mouse.live_status != 1:
-                if type(row['death_date']) == str:
-                    mouse.death_date = datetime.strptime(row['death_date'], '%Y-%m-%d').date()
-                else:
-                    mouse.death_date = datetime.strptime(str(row['death_date'].date()), '%Y-%m-%d').date()
+                mouse.death_date = pd.to_datetime(row['death_date']).date()
             if 'cage_id' in df.columns and pd.notna(row['cage_id']):
                 if 'location' in df.columns and pd.notna(row['location']):
                     location = str(row['location'].strip())
@@ -1304,7 +1370,6 @@ def import_mice_data(df, result, conflict_resolution):
             else:
                 mouse.cage_id = None
 
-            db.session.add(mouse)
             db.session.commit()
             result['successCount'] += 1
             
