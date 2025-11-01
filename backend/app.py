@@ -795,28 +795,12 @@ def get_weight_records():
 @app.route('/api/lived_mice', methods=['GET'])
 def get_lived_mice():
     try:
-        # 使用JOIN获取笼位信息并排序
-        mice = db.session.query(
-            Mouse.tid,
-            Mouse.id,
-            Mouse.sex,
-            Mouse.cage_id,
-            Cage.section,
-            Cage.cage_id.label('cage_name'),
-            Cage.order.label('cage_order')
-        ).outerjoin(
-            Cage, Mouse.cage_id == Cage.id
-        ).filter(
-            Mouse.live_status == 1
-        ).order_by(
-            db.case(
-                (Cage.section.is_(None), 1),  # 没有区域的放最后
-                else_=0
-            ),
-            Cage.section.asc(),     # 区域升序排序
-            Cage.order.asc(),        # 笼位排序值升序
-            Mouse.id.asc()           # 小鼠ID升序
-        ).all()
+        mice = Mouse.query.outerjoin(Cage).filter(Mouse.live_status == 1).filter(Mouse.birth_date).order_by(
+                db.case((Cage.section.is_(None), 1), else_=0),
+                Cage.section.asc(),
+                Cage.order.asc(),
+                Mouse.id.asc()
+            ).all()
 
         mice_data = []
         for mouse in mice:
@@ -825,8 +809,8 @@ def get_lived_mice():
                 section = "临时区"
                 cage_name = None
             else:
-                section = mouse.section
-                cage_name = mouse.cage_name
+                section = mouse.cage.section
+                cage_name = mouse.cage.cage_id
             
             mice_data.append({
                 'tid': mouse.tid,
@@ -1392,10 +1376,10 @@ def import_weights_data(df, result, conflict_resolution):
     for index, row in df.iterrows():
         try:
             mouse_id = str(row['id'])
-            if type(row['birth_date']) == str:
-                birth_date = datetime.strptime(row['birth_date'], '%Y-%m-%d').date()
+            if pd.notna(row['birth_date']):
+                birth_date = pd.to_datetime(row['birth_date']).date()
             else:
-                birth_date = datetime.strptime(str(row['birth_date'].date()), '%Y-%m-%d').date()
+                birth_date = None
             # 检查小鼠是否存在
             mouse = Mouse.query.filter_by(id=mouse_id).filter_by(birth_date=birth_date).first()
             if not mouse:
@@ -1404,11 +1388,10 @@ def import_weights_data(df, result, conflict_resolution):
                     'message': f'小鼠ID {mouse_id} 不存在'
                 })
                 continue
-
-            if type(row['record_date']) == str:
-                record_date = datetime.strptime(row['record_date'], '%Y-%m-%d').date()
+            if pd.notna(row['record_date']):
+                record_date = pd.to_datetime(row['record_date']).date()
             else:
-                record_date = datetime.strptime(str(row['record_date'].date()), '%Y-%m-%d').date()
+                record_date = None
         
             # 计算生存天数
             birth_date = mouse.birth_date
@@ -1454,10 +1437,10 @@ def import_record_data(df, result, conflict_resolution):
     for index, row in df.iterrows():
         try:
             mouse_id = str(row['id'])
-            if type(row['birth_date']) == str:
-                birth_date = datetime.strptime(row['birth_date'], '%Y-%m-%d').date()
+            if pd.notna(row['birth_date']):
+                birth_date = pd.to_datetime(row['birth_date']).date()
             else:
-                birth_date = datetime.strptime(str(row['birth_date'].date()), '%Y-%m-%d').date()
+                birth_date = None
             # 检查小鼠是否存在
             mouse = Mouse.query.filter_by(id=mouse_id).filter_by(birth_date=birth_date).first()
             if not mouse:
@@ -1466,11 +1449,10 @@ def import_record_data(df, result, conflict_resolution):
                     'message': f'小鼠ID {mouse_id} 不存在'
                 })
                 continue
-
-            if type(row['record_date']) == str:
-                record_date = datetime.strptime(row['record_date'], '%Y-%m-%d').date()
+            if pd.notna(row['record_date']):
+                record_date = pd.to_datetime(row['record_date']).date()
             else:
-                record_date = datetime.strptime(str(row['record_date'].date()), '%Y-%m-%d').date()
+                record_date = None
 
             # 计算生存天数
             living_days = (record_date - birth_date).days
