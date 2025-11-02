@@ -12,8 +12,8 @@
       
       <!-- 搜索控件 -->
       <div class="search-controls" v-if="selectedMice.length === 0">
-        <input v-model="searchTerm" placeholder="搜索小鼠ID或基因型" @keyup.enter="loadMice">
-        <button @click="loadMice" class="search-btn">
+        <input v-model="searchTerm" placeholder="搜索小鼠ID或基因型" @keyup.enter="applyFilters">
+        <button @click="applyFilters" class="search-btn">
           <i class="material-icons">search</i>
           搜索
         </button>
@@ -627,17 +627,16 @@ import { useGeneStore, useCageStore } from '@/stores'
 import { storeToRefs } from 'pinia'
 
 const geneStore = useGeneStore()
-const { genotypes } = storeToRefs(geneStore)
+const { mice, loading, genotypes } = storeToRefs(geneStore)
+const { loadMice } = geneStore
 
 const cageStore = useCageStore()
 const { cages } = storeToRefs(cageStore)
 const { fetchCages } = cageStore
 
 // 响应式数据
-const mice = ref([])
 const filteredMice = ref([])
 const searchTerm = ref('')
-const loading = ref(false)
 const saving = ref(false)
 const showMouseDetail = ref(false)
 const selectedMouseId = ref(null)
@@ -781,7 +780,6 @@ const availableTestsDone = computed(() => {
 })
 
 // 数据列表
-
 const experiments = ref([])
 
 // 计算属性
@@ -804,48 +802,6 @@ const createAxiosInstance = () => {
       'X-Requested-With': 'XMLHttpRequest'
     }
   })
-}
-
-const calculateAge = (birthDate, calDate) => {
-  if (!birthDate || !calDate) return { days: null, weeks: null }
-
-  const cal = new Date(calDate)
-  const birth = new Date(birthDate)
-  const diffTime = Math.abs(cal - birth)
-  const daysOld = Math.floor(diffTime / (1000 * 60 * 60 * 24))
-  const weeksOld = Math.floor(daysOld / 7)
-  
-  return { days: daysOld, weeks: weeksOld }
-}
-
-const loadMice = async () => {
-  loading.value = true
-  try {
-    const api = createAxiosInstance()
-    const response = await api.get('/mice')
-    mice.value = response.data.map(mouse => {
-      let days = null
-      let weeks = null
-      if (mouse.birth_date) {
-        if (mouse.live_status !== 1 && mouse.death_date) {
-          ({ days, weeks } = calculateAge(mouse.birth_date, mouse.death_date))
-        } else {
-          ({ days, weeks } = calculateAge(mouse.birth_date, new Date()))
-        }
-      }
-      return {
-        ...mouse,
-        days_old: days,
-        weeks_old: weeks
-      }
-    })
-    applyFilters()
-  } catch (error) {
-    console.error('加载小鼠失败:', error)
-    toast.error(`加载小鼠数据失败: ${error.message || '请检查网络连接'}`)
-  } finally {
-    loading.value = false
-  }
 }
 
 const loadExperiments = async () => {
@@ -1062,7 +1018,7 @@ const clearSelection = () => {
     selectedMice.value = [];
     lastSelectedIndex.value = -1;
     batchSelectedTests.value = [];
-    loadMice()
+    applyFilters()
 }
 
 const batchAddExperiment = async (batchTest) => {
@@ -1624,7 +1580,7 @@ watch(searchTerm, (newVal) => {
 
 // 生命周期
 onMounted(async () => {
-  await loadMice()
+  applyFilters()
   await loadExperiments()
   document.addEventListener('click', closeContextMenu)
   document.addEventListener('click', handleClickOutside)

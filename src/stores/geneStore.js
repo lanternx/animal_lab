@@ -13,10 +13,32 @@ export const useGeneStore = defineStore('genotype', () => {
         })
 
     const loadInitialData = async () => {
-        loadGenotypes()
+        await loadMice()
+        await loadGenotypes()
+        await loadAllGenotypes()
+    }
+
+    const mice = ref([])
+    const loading = ref(false)
+    const loadMice = async () => {
+        loading.value = true
+        try {
+            const response = await api.get('/mice')
+            mice.value = response.data
+        } catch (error) {
+            console.error('加载小鼠失败:', error)
+        } finally {
+            loading.value = false
+        }
     }
     
     const genotypes = ref([])
+    const allGenotypes = ref([])
+
+    const loadAllGenotypes = async () => {
+        const genotypeResponse = await axios.get('/api/genotypes')
+        allGenotypes.value = genotypeResponse.data
+    }
 
     const loadGenotypes = async () => {
         try {
@@ -27,10 +49,67 @@ export const useGeneStore = defineStore('genotype', () => {
         }
     }
 
-    return {
-        genotypes,
 
+    // 分组数据
+    const tempGroups = ref([{ sex: { M: true, F: true }, genotype: [] }])
+    const groupLetters = ['A', 'B', 'C', 'D', 'E', 'F', 'G', 'H', 'I', 'J']
+    const colors = ['#F27970', '#BB9727', '#54B345', '#32B897', '#05B9E2', '#8983BF', '#C76DA2', "#743027"]
+
+    // 添加分组
+    const addGroup = () => {
+        if (tempGroups.value.length >= 8) {
+            toast.info('最多只能添加8个分组')
+            return
+        }
+        tempGroups.value.push({ sex: { M: true, F: true }, genotype: [] })
+    }
+
+    // 移除分组
+    const removeGroup = (index) => {
+        if (tempGroups.value.length > 1) {
+            tempGroups.value.splice(index, 1)
+        }
+    }
+
+    // 清空分组
+    const clearGroups = () => {
+        tempGroups.value = []
+    }
+
+    const getTempGroups = async () => {
+        // 筛选符合分组条件的小鼠
+        const response = await api.get('/groups/temp', { params: { groups: JSON.stringify(tempGroups.value) } })
+        return response.data.map((group, groupIndex) => ({ 
+            name: `分组 ${groupLetters[groupIndex]}`,
+            color: colors[groupIndex % colors.length],
+            mice: group
+        }))
+    }
+
+    const getPredefinedGroups = async (gIndex) => {
+        // 筛选符合分组条件的小鼠
+        const response = await api.get(`/groups/predefined/${gIndex}`)
+        return response.data
+    }
+
+    return {
+        mice,
+        loading,
+        genotypes,
+        allGenotypes,
+        tempGroups,
+        
+        colors,
+        groupLetters,
+
+        loadMice,
         loadGenotypes,
-        loadInitialData
+        loadInitialData,
+
+        addGroup,
+        removeGroup,
+        clearGroups,
+        getTempGroups,
+        getPredefinedGroups
     }
 })

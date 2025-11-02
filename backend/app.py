@@ -7,7 +7,7 @@ import sys
 from pathlib import Path
 import pandas as pd
 from io import BytesIO
-from sqlalchemy import text, inspect
+from sqlalchemy import text, inspect, or_, and_
 from sqlalchemy.orm import joinedload
 import re
 
@@ -196,12 +196,24 @@ def get_all_mice():
             else:
                 father = None
                 mother = None
+            if m.birth_date:
+                birth_date = m.birth_date.strftime('%Y-%m-%d')
+                if m.live_status != 1 and m.death_date:
+                    days = (m.death_date - m.birth_date).days
+                    weeks = days // 7
+                else:
+                    days = (datetime.now().date() - m.birth_date).days
+                    weeks = days // 7
+            else:
+                birth_date = None
+                days = None
+                weeks = None
             mouse_dict = {
                 'tid': m.tid,
                 'id': m.id,
                 'genotype': m.get_genotypes(),
                 'sex': m.sex,
-                'birth_date': m.birth_date.strftime('%Y-%m-%d') if m.birth_date else None,
+                'birth_date': birth_date,
                 'death_date': m.death_date.strftime('%Y-%m-%d') if m.death_date else None,
                 'cage_id': m.cage_id,
                 'live_status': m.live_status,
@@ -209,7 +221,9 @@ def get_all_mice():
                 'mother': mother,
                 'strain': m.strain,
                 'tests_done': m.tests_done,
-                'tests_planned': m.tests_planned
+                'tests_planned': m.tests_planned,
+                'days_old': days,
+                'weeks_old': weeks
             }
             mice_data.append(mouse_dict)
 
@@ -284,6 +298,7 @@ def add_mouse():
 
 @app.route('/api/mice/<int:mouse_tid>', methods=['PUT'])
 def update_mouse(mouse_tid):
+    """更新小鼠信息"""
     data = request.json
     mouse = Mouse.query.get(mouse_tid)
     if not mouse:
@@ -356,6 +371,7 @@ def update_mouse(mouse_tid):
 
 @app.route('/api/mice/<int:mouse_tid>', methods=['DELETE'])
 def delete_mouse(mouse_tid):
+    """删除小鼠及其相关记录"""
     mouse = Mouse.query.get(mouse_tid)
     if not mouse:
         return jsonify({'error': 'Mouse not found'}), 404
@@ -374,9 +390,9 @@ def delete_mouse(mouse_tid):
         logger.error(f"删除小鼠失败: {str(e)}")
         return jsonify({'error': str(e)}), 500
 
-# 批量添加小鼠
 @app.route('/api/mice/<int:mouse_tid>', methods=['POST'])
 def add_mice_from_template(mouse_tid):
+    """基于模板小鼠批量添加新小鼠"""
     data = request.json
     try:
         template_mouse = Mouse.query.get(mouse_tid)
@@ -385,7 +401,7 @@ def add_mice_from_template(mouse_tid):
         for m in data:
             new_mouse_data = template_mouse.to_dict()
             # 移除不需要继承的字段（如主键、创建时间等）
-            excluded_fields = ['id', 'tid', 'sex']
+            excluded_fields = ['id', 'tid', 'sex', 'genotype']
             for field in excluded_fields:
                 new_mouse_data.pop(field, None)
             new_mouse_data['death_date'] = date.fromisoformat(new_mouse_data['death_date']) if new_mouse_data['death_date'] else None
@@ -2823,7 +2839,120 @@ def import_database():
         })
     except Exception as e:
         logging.error(f"导入数据库失败: {str(e)}")
-        return jsonify({'error': '导入数据库失败', 'details': str(e)}), 500 
+        return jsonify({'error': '导入数据库失败', 'details': str(e)}), 500
+
+@app.route('/api/genotypes', methods=['GET'])
+def get_all_genotypes():
+    """获取所有基因型组合"""
+    try:
+        genotypes = {}
+        loci = GeneLocus.query.all()
+        for locus in loci:
+            genotypes[locus.symbol] = locus.get_combination()
+        return jsonify(genotypes)
+    except Exception as e:
+        logger.error(f"获取基因型组合失败: {str(e)}")
+        return jsonify({'error': str(e)}), 500
+
+@app.route('/api/groups/temp', methods=['GET'])
+def get_temp_groups():
+    """
+    根据分组条件筛选小鼠 - 精确基因型匹配版本
+    """
+    try:
+        groups_json = request.args.get('groups')
+        if not groups_json:
+            return jsonify({'error': '缺少分组参数'}), 400
+        
+        groups = json.loads(groups_json)
+        if not isinstance(groups, list):
+            return jsonify({'error': '分组参数格式错误'}), 400
+        
+        results = []
+        
+        for group in groups:
+            # 性别条件
+            sex_conditions = []
+            if group.get('sex', {}).get('M'):
+                sex_conditions.append(Mouse.sex == 'M')
+            if group.get('sex', {}).get('F'):
+                sex_conditions.append(Mouse.sex == 'F')
+            
+            if not sex_conditions:
+                # 如果没有选择任何性别，跳过这个分组
+                results.append([])
+                continue
+            
+            # 基因型条件
+            genotype_list = group.get('genotype', [])
+            
+            # 构建基础查询
+            if genotype_list:
+                # 如果有基因型条件，需要先找到符合基因型条件的小鼠
+                mouse_subqueries = []
+                
+                for genotype in genotype_list:
+                    match = re.match(r'^([^<]+)<sup>([^/]+)/([^<]+)</sup>$', genotype)
+                    if match:
+                        locus_symbol = match.group(1)
+                        allele1_symbol = match.group(2)
+                        allele2_symbol = match.group(3)
+                        # 查找匹配的基因型
+                        subquery = db.session.query(Genotype.mouse_id).join(
+                            Genotype.locus
+                        ).filter(
+                            GeneLocus.symbol == locus_symbol,
+                            or_(
+                                and_(
+                                    Genotype.allele1.has(Allele.symbol == allele1_symbol),
+                                    Genotype.allele2.has(Allele.symbol == allele2_symbol)
+                                ),
+                                and_(
+                                    Genotype.allele1.has(Allele.symbol == allele2_symbol),
+                                    Genotype.allele2.has(Allele.symbol == allele1_symbol)
+                                )
+                            )
+                        )
+                        mouse_subqueries.append(subquery)
+                    else:
+                        if GeneLocus.query.filter_by(symbol=genotype).first() is None:
+                            continue  # 跳过无效的基因型条件
+                        subquery = db.session.query(Genotype.mouse_id).join(Genotype.locus).filter(GeneLocus.symbol == genotype)
+                        mouse_subqueries.append(subquery)
+                
+                # 如果有基因型条件，找到符合所有条件的小鼠ID
+                if mouse_subqueries:
+                    # 取所有子查询的交集
+                    common_mice = mouse_subqueries[0]
+                    for subq in mouse_subqueries[1:]:
+                        common_mice = common_mice.union(subq)
+                    
+                    common_mice_ids = [m[0] for m in common_mice.distinct().all()]
+                    
+                    # 查询这些小鼠的详细信息
+                    mice = Mouse.query.filter(
+                        Mouse.tid.in_(common_mice_ids),
+                        or_(*sex_conditions)
+                    ).all()
+                else:
+                    # 如果没有有效的基因型条件，只按性别筛选
+                    mice = Mouse.query.filter(
+                        or_(*sex_conditions)
+                    ).all()
+            else:
+                # 如果没有基因型条件，只按性别筛选
+                mice = Mouse.query.filter(
+                    or_(*sex_conditions)).all()
+            results.append([m.tid for m in mice])
+        return jsonify(results)
+    except json.JSONDecodeError:
+        return jsonify({'error': '分组参数JSON格式错误'}), 400
+    except Exception as e:
+        return jsonify({'error': f'服务器错误: {str(e)}'}), 500
+    
+@app.route('/api/groups/predefined/<int:gIndex>', methods=['GET'])
+def get_predefined_groups(gIndex):
+    pass
 
 if __name__ == '__main__':
     with app.app_context():

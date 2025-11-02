@@ -28,6 +28,11 @@
             <i class="material-icons">add</i> 添加分组
             </button>
         </div>
+        <div>
+            <button id="addGroupBtn" class="btn btn-sm btn-danger" @click="clearGroups">
+            <i class="material-icons">add</i> 清空分组
+            </button>
+        </div>
         </div>
         
             <!-- 分组设置 -->
@@ -35,13 +40,13 @@
             <h5>分组设置</h5>
             <div class="groups-container">
             <div 
-                v-for="(group, index) in groups" 
+                v-for="(group, index) in tempGroups"
                 :key="index" 
                 class="group-card"
             >
                 <div class="card">
                 <div class="card-header compact-header">
-                    <span>分组 {{ groupLetters[index] }}</span>
+                    <span>分组 {{ index }}</span>
                     <button @click="removeGroup(index)">
                         <i class="material-icons">close</i>
                     </button>
@@ -72,16 +77,37 @@
                     </div>
                     <div class="mb-2">
                         <div class="form-group">
-                            <label class="form-label">基因型</label>
-                            <select class="form-select" v-model="group.genotype" multiple>
-                                <option v-for="genotype in allGenotypes" 
-                                        :key="genotype.id"
-                                        :value="genotype.name"
-                                        class="option-item"
-                                        :class="{ selected: group.genotype.includes(genotype.name) }">
-                                    {{ genotype.name }}
-                                </option>
-                            </select>
+                        <label class="form-label">基因型</label>
+                        <div class="genotype-tree">
+                            <div v-for="(combinations, locus) in allGenotypes" :key="locus" class="locus-item">
+                            <div class="locus-header">
+                                <label class="locus-label">
+                                <input 
+                                    type="checkbox" 
+                                    :value="locus" 
+                                    v-model="group.genotype"
+                                    @change="onLocusSelect(index, locus)"
+                                    class="locus-checkbox"
+                                >
+                                <span class="locus-name">{{ locus }}</span>
+                                </label>
+                            </div>
+                            <div v-if="combinations && combinations.length" class="combinations-list">
+                                <div v-for="combination in combinations" :key="combination" class="combination-item">
+                                <label class="combination-label">
+                                    <input 
+                                    type="checkbox" 
+                                    :value="`${locus}<sup>${combination}</sup>`"
+                                    v-model="group.genotype"
+                                    @change="onCombinationSelect(index, locus, combination)"
+                                    class="combination-checkbox"
+                                    >
+                                    <span class="combination-name" v-html="`${locus}<sup>${combination}</sup>`"></span>
+                                </label>
+                                </div>
+                            </div>
+                            </div>
+                        </div>
                         </div>
                     </div>
                 </div>
@@ -89,7 +115,7 @@
             </div>
             
             <div 
-                v-if="groups.length < 5" 
+                v-if="tempGroups.length < 5" 
                 class="group-card add-card"
                 @click="addGroup"
             >
@@ -186,9 +212,6 @@
                 <table class="table">
                     <thead>
                     <tr>
-                        <th style="width: 20px;">
-                        <input type="checkbox" v-model="selectAll" @change="toggleSelectAll">
-                        </th>
                         <th>区域</th>
                         <th>笼位</th>
                         <th>小鼠ID</th>
@@ -201,15 +224,11 @@
                     <tr 
                         v-for="(mouse, index) in lived_mice" 
                         :key="mouse.id"
-                        :class="{ 'selected-row': selectedRows[index] }"
                     >
-                        <td>
-                        <input type="checkbox" v-model="selectedRows[index]">
-                        </td>
                         <td>{{ mouse.section }}</td>
                         <td>{{ mouse.cage_name }}</td>
                         <td>{{ mouse.id }}</td>
-                        <td>{{ mouse.genotype }}</td>
+                        <td v-html="mouse.genotype"></td>
                         <td>{{ mouse.sex }}</td>
                         <td>
                         <input 
@@ -278,22 +297,20 @@ import Chart from 'chart.js/auto'
 import regression from 'regression'
 import { toast } from 'vue3-toastify'
 import 'vue3-toastify/dist/index.css'
+import { useGeneStore } from '@/stores'
+import { storeToRefs } from 'pinia'
+
+const geneStore = useGeneStore()
+const { allGenotypes, tempGroups, mice } = storeToRefs(geneStore)
+const { addGroup, removeGroup, clearGroups, getTempGroups, getPredefinedGroups } = geneStore
 
 // 小鼠数据
 const lived_mice = ref([])
 // 体重输入值
 const weightValues = ref({})
-// 选中的行
-const selectedRows = ref([])
-const selectAll = ref(false)
 // 模态框控制
 const showModal = ref(false)
 const recordDate = ref(new Date().toISOString().split('T')[0])
-const allGenotypes = ref([])
-
-// 分组数据
-const groups = ref([{ sex: { M: true, F: true }, genotype: [] }])
-const groupLetters = ['A', 'B', 'C', 'D', 'E', 'F', 'G', 'H', 'I', 'J']
 
 // 图表选项
 const averageMethod = ref('weekly')
@@ -317,10 +334,6 @@ try {
     // 获取小鼠数据
     const response = await axios.get('/api/lived_mice')
     lived_mice.value = response.data
-    const genotypeResponse = await axios.get('/api/genotypes')
-    allGenotypes.value = genotypeResponse.data
-    // 初始化选中状态数组
-    selectedRows.value = new Array(lived_mice.value.length).fill(false)
     
     // 获取体重记录
     const recordsResponse = await axios.get('/api/weight')
@@ -351,11 +364,6 @@ const inputs = document.querySelectorAll('.weight-input')
 if (index < inputs.length - 1) {
     inputs[index + 1].focus()
 }
-}
-
-// 全选/取消全选
-const toggleSelectAll = () => {
-selectedRows.value = selectedRows.value.map(() => selectAll.value)
 }
 
 // 保存体重记录的处理方法
@@ -426,41 +434,22 @@ confirmDate.value = null
 showConfirmModal.value = false
 }
 
-// 添加分组
-const addGroup = () => {
-if (groups.value.length >= 8) {
-    toast.info('最多只能添加8个分组')
-    return
-}
-groups.value.push({ sex: { M: true, F: true }, genotype: [] })
-}
-
-// 移除分组
-const removeGroup = (index) => {
-if (groups.value.length > 1) {
-    groups.value.splice(index, 1)
-}
-}
-
 const showChart = async () => {
-if (groups.value.length === 0) {
+if (tempGroups.value.length === 0) {
     toast.error('请至少添加一个分组')
     return
 }
 
 try {
-    // 获取小鼠数据
-    const miceRes = await axios.get('/api/mice')
-    const allMiceData = miceRes.data
-    
     if (weightRecords.value.length === 0) {
     toast.error('没有可用的体重记录数据')
     return
     }
     
     hasData.value = true
-    await nextTick()
-    generateChart(weightRecords.value, allMiceData)
+    const groups = await getTempGroups()
+    await nextTick();
+    generateChart(weightRecords.value, groups)
 } catch (error) {
     console.error('生成图表失败:', error)
     toast.error('生成图表失败: ' + error.message)
@@ -468,7 +457,7 @@ try {
 }
 
 // 生成图表
-const generateChart = (records, allMiceData) => {
+const generateChart = (records, groups) => {
 try {
     const ctx = document.getElementById('weightChart')
     if (!ctx) {
@@ -480,29 +469,21 @@ try {
     if (weightChart) {
     weightChart.destroy()
     }
-    
     const datasets = []
-    const colors = ['#F27970', '#BB9727', '#54B345', '#32B897', '#05B9E2', '#8983BF', '#C76DA2', "#743027"]
     
     // 处理数据
-    groups.value.forEach((group, groupIndex) => {
-    const groupName = `分组 ${groupLetters[groupIndex]}`
-    const color = colors[groupIndex % colors.length]
-    
-    // 筛选符合分组条件的小鼠
-    const groupMice = allMiceData.filter(mouse => {
-        const sexMatch = mouse.sex === 'M' ? group.sex.M : group.sex.F
-        const genotypeMatch = group.genotype.length === 0 || group.genotype.includes(mouse.genotype)
-        return sexMatch && genotypeMatch
-    })
-    
+    groups.forEach(group => {
+    const groupName = group.name || '暂无名称'
+    const color = group.color || 'black'
+    const groupMice = group.mice || []
+
     if (groupMice.length === 0){
         toast.error("所选组别无小鼠！")
     }
     
     // 获取这些小鼠的体重记录
     const groupRecords = records.filter(record => 
-        groupMice.some(mouse => mouse.tid === record.mouse_id)
+        groupMice.some(m => m === record.mouse_id)
     )
     
     if (groupRecords.length === 0){
@@ -512,7 +493,7 @@ try {
     const scatterData = []
     
     groupRecords.forEach(record => {
-        const mouse = allMiceData.find(m => m.tid === record.mouse_id)
+        const mouse = mice.value.find(m => m.tid === record.mouse_id)
         scatterData.push({
         x: record.record_livingdays,
         y: record.weight,
@@ -888,6 +869,32 @@ if (hasData.value) {
 }
 })
 
+// 处理位点选择
+const onLocusSelect = (index, locus) => {
+    const isSelected = tempGroups.value[index].genotype.includes(locus)
+    
+    if (isSelected) {
+    // 如果选择了位点，移除该位点下的所有组合
+    tempGroups.value[index].genotype = tempGroups.value[index].genotype.filter(g => 
+        !allGenotypes.value[locus].includes(g)
+    )
+    } else {
+    // 如果取消选择位点，不做额外处理
+    }
+}
+
+// 处理组合选择
+const onCombinationSelect = (index, locus, combination) => {
+    const isSelected = tempGroups.value[index].genotype.includes(combination)
+    
+    if (isSelected) {
+    // 如果选择了组合，移除对应的位点
+    tempGroups.value[index].genotype = tempGroups.value[index].genotype.filter(g => g !== locus)
+    } else {
+    // 如果取消选择组合，不做额外处理
+    }
+}
+
 // 组件挂载时初始化
 onMounted(() => {
 init()
@@ -1002,17 +1009,6 @@ border-radius: 4px;
 transition: border-color 0.15s;
 }
 
-.form-select {
-display: block;
-width: 100%;
-padding: 0.5rem;
-font-size: 1rem;
-background-color: #fff;
-border: 1px solid #ced4da;
-border-radius: 4px;
-height: auto;
-}
-
 .dialog-container {
 position: fixed;
 top: 50%;
@@ -1094,10 +1090,6 @@ padding: 0.5rem;
 border: 1px solid #ced4da;
 border-radius: 4px;
 font-size: 1rem;
-}
-
-.selected-row {
-background-color: #e6f7ff;
 }
 
 .d-grid {
@@ -1247,11 +1239,6 @@ margin-right: 0.5rem;
   margin-bottom: 4px;
 }
 
-.group-card .form-select {
-  font-size: 0.8rem;
-  height: 80px;
-}
-
 .group-card .form-check {
   font-size: 0.8rem;
 }
@@ -1318,33 +1305,6 @@ z-index: 950;
 .text-muted {
   color: #6c757d;
 }
-
-.option-item {
-    cursor: pointer;
-    transition: all 0.2s ease;
-    /* 自动换行设置 */
-    white-space: normal;
-    word-wrap: break-word;
-}
-
-/* 斑马纹效果 - 行间色差 */
-.option-item:nth-child(odd) {
-    background-color: #ffffff;
-}
-
-.option-item:nth-child(even) {
-    background-color: #f8f9fa;
-}
-
-.option-item:hover {
-    background-color: #e3f2fd;
-}
-
-.option-item.selected {
-    background-color: #3498db;
-    color: white;
-}
-
 
 /* 确认对话框样式 */
 .confirm-dialog {
@@ -1416,5 +1376,89 @@ z-index: 950;
   height: 100%;
   background-color: rgba(0, 0, 0, 0.5);
   z-index: 1002;
+}
+
+.genotype-tree {
+  border: 1px solid #ced4da;
+  border-radius: 4px;
+  max-height: 200px;
+  overflow-y: auto;
+  background-color: #fff;
+}
+
+.locus-item {
+  border-bottom: 1px solid #f0f0f0;
+}
+
+.locus-item:last-child {
+  border-bottom: none;
+}
+
+.locus-header {
+  padding: 8px 12px;
+  background-color: #f8f9fa;
+  border-bottom: 1px solid #e9ecef;
+}
+
+.locus-label {
+  display: flex;
+  align-items: center;
+  font-weight: 600;
+  margin: 0;
+  cursor: pointer;
+}
+
+.locus-checkbox {
+  margin-right: 8px;
+}
+
+.locus-name {
+    font-size: 0.8rem;
+  color: #495057;
+}
+
+.combinations-list {
+  padding-left: 20px;
+}
+
+.combination-item {
+  padding: 6px 12px;
+  border-bottom: 1px solid #f8f9fa;
+}
+
+.combination-item:last-child {
+  border-bottom: none;
+}
+
+.combination-label {
+  display: flex;
+  align-items: center;
+  margin: 0;
+  cursor: pointer;
+}
+
+.combination-checkbox {
+  margin-right: 8px;
+}
+
+.combination-name {
+  color: #6c757d;
+  font-size: 0.7em;
+}
+
+/* 悬停效果 */
+.locus-label:hover,
+.combination-label:hover {
+  background-color: #f8f9fa;
+}
+
+/* 选中状态 */
+.locus-checkbox:checked + .locus-name {
+  color: #007bff;
+}
+
+.combination-checkbox:checked + .combination-name {
+  color: #28a745;
+  font-weight: 500;
 }
 </style>
