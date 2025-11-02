@@ -22,6 +22,11 @@
               <i class="material-icons">add</i> 添加分组
             </button>
           </div>
+          <div>
+            <button id="addGroupBtn" class="btn btn-sm btn-danger" @click="clearGroups">
+            <i class="material-icons">add</i> 清空分组
+            </button>
+          </div>
         </div>
         
         <!-- 分组设置 -->
@@ -29,55 +34,76 @@
           <h5>分组设置</h5>
           <div class="groups-container">
             <div 
-              v-for="(group, index) in groups" 
+              v-for="(group, index) in tempGroups" 
               :key="index" 
               class="group-card"
             >
               <div class="card">
                 <div class="card-header compact-header d-flex justify-content-between align-items-center">
-                  <span>分组 {{ groupLetters[index] }}</span>
+                  <span>分组 {{ index }}</span>
                   <button @click="removeGroup(index)" v-if="groups.length > 1">
                     <i class="material-icons">close</i>
                   </button>
                 </div>
-                <div class="card-body">
-                  <div class="mb-2">
+                  <div class="card-body">
+                    <div class="mb-2">
                     <label class="form-label">性别</label>
                     <div class="d-flex flex-wrap">
-                      <div class="form-check me-3">
+                        <div class="form-check me-3">
                         <input 
-                          class="form-check-input" 
-                          type="checkbox" 
-                          v-model="group.sex.M" 
-                          :id="'group'+index+'SexM'"
+                            class="form-check-input" 
+                            type="checkbox" 
+                            v-model="group.sex.M" 
+                            :id="'group'+index+'SexM'"
                         >
                         <label class="form-check-label" :for="'group'+index+'SexM'">雄性</label>
-                      </div>
-                      <div class="form-check">
+                        </div>
+                        <div class="form-check">
                         <input 
-                          class="form-check-input" 
-                          type="checkbox" 
-                          v-model="group.sex.F" 
-                          :id="'group'+index+'SexF'"
+                            class="form-check-input" 
+                            type="checkbox" 
+                            v-model="group.sex.F" 
+                            :id="'group'+index+'SexF'"
                         >
                         <label class="form-check-label" :for="'group'+index+'SexF'">雌性</label>
-                      </div>
+                        </div>
                     </div>
-                  </div>
-                  <div class="mb-2">
-                    <div class="form-group">
-                      <label class="form-label">基因型</label>
-                      <select class="form-select" v-model="group.genotype" multiple>
-                        <option v-for="genotype in allGenotypes" 
-                                :key="genotype.id"
-                                :value="genotype.name"
-                                class="option-item"
-                                :class="{ selected: group.genotype.includes(genotype.name) }">
-                          {{ genotype.name }}
-                        </option>
-                      </select>
                     </div>
-                  </div>
+                    <div class="mb-2">
+                        <div class="form-group">
+                        <label class="form-label">基因型</label>
+                        <div class="genotype-tree">
+                            <div v-for="(combinations, locus) in allGenotypes" :key="locus" class="locus-item">
+                            <div class="locus-header">
+                                <label class="locus-label">
+                                <input 
+                                    type="checkbox" 
+                                    :value="locus" 
+                                    v-model="group.genotype"
+                                    @change="onLocusSelect(index, locus)"
+                                    class="locus-checkbox"
+                                >
+                                <span class="locus-name">{{ locus }}</span>
+                                </label>
+                            </div>
+                            <div v-if="combinations && combinations.length" class="combinations-list">
+                                <div v-for="combination in combinations" :key="combination" class="combination-item">
+                                <label class="combination-label">
+                                    <input 
+                                    type="checkbox" 
+                                    :value="`${locus}<sup>${combination}</sup>`"
+                                    v-model="group.genotype"
+                                    @change="onCombinationSelect(index, locus, combination)"
+                                    class="combination-checkbox"
+                                    >
+                                    <span class="combination-name" v-html="`${locus}<sup>${combination}</sup>`"></span>
+                                </label>
+                                </div>
+                            </div>
+                            </div>
+                        </div>
+                        </div>
+                    </div>
                 </div>
               </div>
             </div>
@@ -107,8 +133,8 @@
                 <div class="d-flex flex-wrap justify-content-around">
                   <!-- 图例 -->
                   <div class="d-flex flex-wrap mt-4">
-                      <span class="legend-color" :style="{backgroundColor: getColor(index)}"></span>
-                      {{ group.name || `分组 ${groupLetters[index]}` }}
+                      <span class="legend-color" :style="{backgroundColor: group.color}"></span>
+                      {{ group.name || `分组 ${index}` }}
                   </div>
                   <div class="stat-card text-center mx-2">
                     <div class="stat-value">{{ group.allMice }}</div>
@@ -162,7 +188,7 @@
                     <tr v-for="(mouse, index) in displayedMice" :key="index">
                       <td>{{ mouse.mouse_id }}</td>
                       <td>{{ mouse.sex === 'M' ? '雄性' : '雌性' }}</td>
-                      <td>{{ mouse.genotype }}</td>
+                      <td v-html="mouse.genotype"></td>
                       <td>{{ mouse.living_days }} 天</td>
                       <td>
                         <span :class="{'text-success': mouse.status === 0, 'text-danger': mouse.status === 1}">
@@ -170,8 +196,8 @@
                         </span>
                       </td>
                       <td>
-                        <span class="badge" :style="{backgroundColor: getColor(mouse.groupIndex)}">
-                          {{ mouse.groupName || `分组 ${groupLetters[mouse.groupIndex]}` }}
+                        <span class="badge" :style="{backgroundColor: mouse.color}">
+                          {{ mouse.groupName }}
                         </span>
                       </td>
                     </tr>
@@ -210,205 +236,66 @@
   </div>
 </template>
 
-<script>
-import { ref, computed, onMounted, nextTick } from 'vue';
+<script setup>
+import { ref, computed, nextTick } from 'vue';
 import axios from 'axios';
 import Chart from 'chart.js/auto';
 import { toast } from 'vue3-toastify';
 import 'vue3-toastify/dist/index.css';
+import { useGeneStore } from '@/stores'
+import { storeToRefs } from 'pinia'
+import { color } from 'd3';
 
-export default {
-  name: 'SurvivalAnalysis',
-  setup() {
-    const micedata = ref([]);
-    
-    // 基因型选项
-    const allGenotypes = ref([]);
-    
-    // 分组数据
-    const groups = ref([]);
-    const groupLetters = ['A', 'B', 'C', 'D', 'E', 'F', 'G', 'H'];
-    
-    // 生存数据
-    const survivalData = ref([]);
-    const chartInstance = ref(null);
-    const hasData = ref(false);
-    const currentPage = ref(1);
-    const pageSize = 10;
-    
-    // 添加新分组
-    const addGroup = () => {
-      if (groups.value.length >= 8) {
-        toast.info('最多只能添加8个分组');
-        return;
-      }
-      groups.value.push({ 
-        sex: { M: true, F: true }, 
-        genotype: [] 
-      });
-    };
-    
-    // 删除分组
-    const removeGroup = (index) => {
-      if (groups.value.length > 1) {
-        groups.value.splice(index, 1);
-      }
-    };
-    
-    // 获取颜色（兼容bodyweight.vue的样式）
-    const getColor = (index) => {
-      const colors = [
-        '#F27970', '#BB9727', '#54B345', '#32B897', '#05B9E2', '#8983BF', '#C76DA2', '#743027'
-      ];
-      return colors[index % colors.length];
-    };
+const geneStore = useGeneStore()
+const { allGenotypes, tempGroups } = storeToRefs(geneStore)
+const { addGroup, removeGroup, clearGroups, getTempGroups, onLocusSelect, onCombinationSelect } = geneStore
 
-    const fetchData = async () => {
-      try {
-        if (groups.value.length === 0) {
-          toast.error('请至少添加一个分组');
-          return;
-        } 
-        // 重置所有分组的统计数据
-        groups.value.forEach(group => {
-          group.allMice = 0;
-          group.deadMice = 0;
-          group.censoredMice = 0;
-          group.maxDays = 0;
-          group.ls50 = 0;
-          group.survivalData = []; // 存储生存曲线数据点
-          group.censoredPoints = []; // 存储删失事件点
-        });
 
-        // 处理数据并添加分组信息
-        survivalData.value = micedata.value.map(mouse => {
-          // 确定小鼠属于哪个分组
-          const groupIndex = groups.value.findIndex(group => {
-            const sexMatch = group.sex[mouse.sex];
-            const genotypeMatch = group.genotype.length === 0 || 
-                                group.genotype.includes(mouse.genotype);
-            return sexMatch && genotypeMatch;
-          });
-          
-          if (groupIndex >= 0) {
-            // 更新分组统计数据
-            const group = groups.value[groupIndex];
-            group.allMice++;
-            
-            // 注意：status=1表示死亡，status=0表示删失
-            if (mouse.status === 1) {
-              group.deadMice++;
-            } else if (mouse.status === 0) {
-              group.censoredMice++;
-            }
-            
-            if (mouse.living_days > group.maxDays) {
-              group.maxDays = mouse.living_days;
-            }
-          }
-          
+// 响应式数据
+const groups = ref([]);
+const chartInstance = ref(null);
+const hasData = ref(false);
+const currentPage = ref(1);
+const pageSize = 10;
+
+// 获取生存数据
+const fetchData = async () => {
+  try {
+    if (tempGroups.length === 0) {
+      toast.error('请至少添加一个分组');
+      return;
+    }
+    const groupData = await getTempGroups()
+    const response = await axios.post('/api/survival-analysis', {
+      groups: groupData.map(g => g.mice)
+    });
+
+    if (response.data.success) {
+      // 更新前端状态
+      groups.value = response.data.group_results.map((group, index) => {
+        if (groupData[index]) {
           return {
-            ...mouse,
-            groupIndex: groupIndex >= 0 ? groupIndex : -1
+            ...group, // 保留所有原有属性
+            name: groupData[index].name,
+            color: groupData[index].color
           };
-        });
+        }
+        return group; // 如果没有对应的 groupData，返回原对象
+      });
+      hasData.value = true;
+      await nextTick();
+      // 使用后端准备好的图表数据
+      renderChart();
+    } else {
+      toast.error(response.data.error || '分析失败');
+    }
+  } catch (error) {
+    console.error('获取生存数据失败:', error);
+    toast.error('获取数据失败，请检查网络连接或后端服务');
+  }
+};
 
-        // 为每个分组计算生存曲线数据点和中位生存时间
-        groups.value.forEach(group => {
-          if (group.allMice > 0) {
-            // 筛选当前分组的小鼠数据
-            const groupMice = survivalData.value.filter(
-              m => m.groupIndex === groups.value.indexOf(group)
-            );
-            
-            // 按生存时间排序
-            const sortedData = [...groupMice].sort((a, b) => a.living_days - b.living_days);
-            
-            let cumulativeSurvival = 1.0;
-            let atRisk = sortedData.length;
-            let ls50Found = false;
-            // 添加起始点 (0, 1)
-            group.survivalData.push({ x: 0, y: 1, mouseIds: [] });
-            for (let i = 0; i < sortedData.length; i++) {
-              const mouse = sortedData[i];
-              // 处理删失事件（status=0）
-              if (mouse.status === 0) {
-                group.censoredPoints.push({
-                  x: mouse.living_days,
-                  y: cumulativeSurvival,
-                  mouseIds: [mouse.mouse_id]
-                });
-                atRisk--;
-                continue;
-              }
-              // 计算死亡事件后的生存率（status=1）
-              const deathsAtTime = sortedData.filter(m => 
-                m.living_days === mouse.living_days && m.status === 1
-              );
-              // 计算新的生存率
-              const survivalRate = 1 - (deathsAtTime.length / atRisk);
-              cumulativeSurvival *= survivalRate;
-              // 添加数据点
-              group.survivalData.push({
-                x: mouse.living_days,
-                y: cumulativeSurvival,
-                mouseIds: deathsAtTime.map(m => m.mouse_id)
-              });
-              // 记录中位生存时间
-              if (!ls50Found && cumulativeSurvival <= 0.5) {
-                group.ls50 = mouse.living_days;
-                ls50Found = true;
-              }
-              // 调整索引和剩余数量
-              atRisk -= deathsAtTime.length;
-              i += deathsAtTime.length - 1;
-            };
-          } else{
-            toast.error("所选组别无小鼠！");
-            return;
-          }
-        });
-        const maximumDays = Math.max(...groups.value.map(g => g.maxDays));
-        // 在所有分组循环完成后，单独处理全删失组
-        groups.value.forEach(group => {
-          if (group.deadMice === 0 && group.censoredMice > 0) {
-            // 筛选当前分组的小鼠数据
-            const groupMice = survivalData.value.filter(
-              m => m.groupIndex === groups.value.indexOf(group)
-            );
-            
-            // 按生存时间排序
-            const sortedData = [...groupMice].sort((a, b) => a.living_days - b.living_days);
-            
-            // 创建水平生存曲线
-            group.survivalData = [
-              { x: 0, y: 1, mouseIds: [] },
-              { x: maximumDays, y: 1, mouseIds: [] }
-            ];
-            
-            // 添加所有删失点
-            sortedData.forEach(mouse => {
-              group.censoredPoints.push({
-                x: mouse.living_days,
-                y: 1,
-                mouseIds: [mouse.mouse_id]
-              });
-            });
-            
-            // 中位生存时间未知
-            group.ls50 = "未知";
-          }
-        });
-        hasData.value = true;
-        await nextTick();
-        // 绘制图表
-        renderChart();
-      } catch (error) {
-        console.error('获取生存数据失败:', error);
-        toast.error('获取数据失败，请检查网络连接或后端服务');
-      }
-    };
-
+// 渲染图表
 const renderChart = () => {
   const ctx = document.getElementById('survivalChart');
   
@@ -417,23 +304,25 @@ const renderChart = () => {
     chartInstance.value.destroy();
   }
   
+  if (groups.value.length === 0) {
+    return;
+  }
+
   // 创建生存曲线数据集
   const datasets = groups.value
     .filter(group => group.survivalData && group.survivalData.length > 0)
     .map((group, groupIndex) => {
-      const groupName = group.name || `分组 ${groupLetters[groupIndex]}`;
-      
       // 生存曲线数据集
       const survivalDataset = {
-        label: groupName,
+        label: group.name,
         data: group.survivalData.map(point => ({
           x: point.x,
           y: point.y,
           // 添加小鼠ID信息
           mouseIds: point.mouseIds || [] 
         })),
-        borderColor: getColor(groupIndex),
-        backgroundColor: `${getColor(groupIndex)}20`,
+        borderColor: group.color,
+        backgroundColor: `${group.color}20`,
         borderWidth: 3,
         pointRadius: 0, // 隐藏曲线上的点
         fill: false,
@@ -452,9 +341,9 @@ const renderChart = () => {
         }));
       
       const eventDataset = {
-        label: `${groupName} - 死亡事件`,
+        label: `${group.name} - 死亡事件`,
         data: eventPoints,
-        pointBackgroundColor: getColor(groupIndex),
+        pointBackgroundColor: group.color,
         pointBorderColor: '#fff',
         pointRadius: 5,
         pointHoverRadius: 7,
@@ -465,7 +354,7 @@ const renderChart = () => {
 
       // 删失事件数据集
       const censoredDataset = {
-        label: `${groupName} - 删失事件`,
+        label: `${group.name} - 删失事件`,
         data: group.censoredPoints.map(point => ({
           x: point.x,
           y: point.y,
@@ -573,51 +462,22 @@ const renderChart = () => {
     }
   });
 };
-    
-    // 过滤并分页显示的小鼠数据
-    const filteredMice = computed(() => survivalData.value.filter(m => m.groupIndex >= 0));
-    const totalPages = computed(() => Math.ceil(filteredMice.value.length / pageSize));
-    const displayedMice = computed(() => {
-      const start = (currentPage.value - 1) * pageSize;
-      return filteredMice.value.slice(start, start + pageSize);
-    });
-    
-    // 初始化
-    const init = async () => {
-      try {
-        // 获取基因型数据
-        const response = await axios.get('/api/genotypes');
-        allGenotypes.value = response.data;
-        // 发送请求到后端API获取所有生存数据
-        const miceResponse = await axios.get('/api/survival');
-        micedata.value = miceResponse.data;
-      } catch (error) {
-        console.error('获取基因型数据失败:', error);
-      }
-    };
-    
-    onMounted(() => {
-      init();
-    });
-    
-    return {
-      groups,
-      allGenotypes,
-      groupLetters,
-      survivalData,
-      hasData,
-      currentPage,
-      pageSize,
-      filteredMice,
-      totalPages,
-      addGroup,
-      removeGroup,
-      fetchData,
-      getColor,
-      displayedMice
-    };
-  }
-};
+
+// 计算属性
+const filteredMice = computed(() => {
+  return groups.value.flatMap(group => 
+    (group.mice || []).map(mouse => ({
+      ...mouse,
+      groupName: group.name || `分组 ${groups.value.indexOf(group)}`,
+      color: group.color
+    }))
+  );
+});
+const totalPages = computed(() => Math.ceil(filteredMice.value.length / pageSize));
+const displayedMice = computed(() => {
+  const start = (currentPage.value - 1) * pageSize;
+  return filteredMice.value.slice(start, start + pageSize);
+});
 </script>
 
 <style scoped>
@@ -1083,5 +943,94 @@ const renderChart = () => {
 .page-link:focus {
     outline: none;
     box-shadow: 0 0 0 3px rgba(102, 126, 234, 0.25);
+}
+
+.genotype-tree {
+  border: 1px solid #ced4da;
+  border-radius: 4px;
+  max-height: 200px;
+  overflow-y: auto;
+  background-color: #fff;
+}
+
+.locus-item {
+  border-bottom: 1px solid #f0f0f0;
+}
+
+.locus-item:last-child {
+  border-bottom: none;
+}
+
+.locus-header {
+  padding: 8px 12px;
+  background-color: #f8f9fa;
+  border-bottom: 1px solid #e9ecef;
+}
+
+.locus-label {
+  display: flex;
+  align-items: center;
+  font-weight: 600;
+  margin: 0;
+  cursor: pointer;
+}
+
+.locus-checkbox {
+  margin-right: 8px;
+}
+
+.locus-name {
+    font-size: 0.8rem;
+  color: #495057;
+}
+
+.combinations-list {
+  padding-left: 20px;
+}
+
+.combination-item {
+  padding: 6px 12px;
+  border-bottom: 1px solid #f8f9fa;
+}
+
+.combination-item:last-child {
+  border-bottom: none;
+}
+
+.combination-label {
+  display: flex;
+  align-items: center;
+  margin: 0;
+  cursor: pointer;
+}
+
+.combination-checkbox {
+  margin-right: 8px;
+}
+
+.combination-name {
+  color: #6c757d;
+  font-size: 0.7em;
+}
+
+/* 悬停效果 */
+.locus-label:hover,
+.combination-label:hover {
+  background-color: #f8f9fa;
+}
+
+/* 选中状态 */
+.locus-checkbox:checked + .locus-name {
+  color: #007bff;
+}
+
+.combination-checkbox:checked + .combination-name {
+  color: #28a745;
+  font-weight: 500;
+}
+
+.btn-danger {
+background-color: var(--danger);
+color: white;
 }
 </style>

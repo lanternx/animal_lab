@@ -845,11 +845,12 @@ def get_lived_mice():
 
 
 #生存视图
-@app.route('/api/survival', methods=['GET'])
+@app.route('/api/survival-analysis', methods=['POST'])
 def get_survival_data():
+    data = request.json
     try:
         mice = Mouse.query.filter((Mouse.live_status == 0) | (Mouse.live_status == 1)).all()
-        survival_data = []
+        survival_data = [[] for _ in data['groups']]
         for mouse in mice:
             if mouse.live_status == 0:
                 if mouse.birth_date and mouse.death_date:
@@ -863,17 +864,153 @@ def get_survival_data():
                     status = 0
                 else:
                     continue
-            survival_data.append({
-                'mouse_id': mouse.id,
-                'sex': mouse.sex,
-                'genotype': mouse.genotype,
-                'living_days': living_days,
-                'status': status
-            })
-        return jsonify(survival_data), 200
+            for index, g in enumerate(data['groups']):
+                if mouse.tid in g:
+                    survival_data[index].append({
+                        'tid': mouse.tid,
+                        'mouse_id': mouse.id,
+                        'sex': mouse.sex,
+                        'genotype': mouse.get_full_genotype(),
+                        'living_days': living_days,
+                        'status': status
+                    })
+        # 计算生存分析结果
+        analysis_result = calculate_survival_analysis(survival_data)
+        
+        return jsonify(analysis_result), 200
     except Exception as e:
         logger.error(f"获取生存数据失败: {str(e)}")
         return jsonify({'error': '获取数据失败'}), 500
+
+def calculate_survival_analysis(mice_data):
+    """
+    计算生存分析结果
+    """
+    # 初始化分组结果
+    group_results = []
+
+    # 为每个分组初始化统计数据
+    for i, group in enumerate(mice_data):
+        group_results.append({
+            'mice': group,
+            'allMice': len(group),
+            'deadMice': sum(1 for mouse in group if mouse['status'] == 1),
+            'censoredMice': sum(1 for mouse in group if mouse['status'] == 0),
+            'maxDays': max((mouse['living_days'] for mouse in group), default=0),
+            'ls50': 0,
+            'survivalData': [],
+            'censoredPoints': []
+        })
+    
+    # 为每个分组计算生存曲线
+    for group in group_results:
+        if group['allMice'] > 0:
+            # 按生存时间排序
+            sorted_data = sorted(group['mice'], key=lambda x: x['living_days'])
+            
+            cumulative_survival = 1.0
+            at_risk = len(sorted_data)
+            ls50_found = False
+            
+            # 添加起始点
+            group['survivalData'].append({
+                'x': 0, 
+                'y': 1.0, 
+                'mouseIds': [],
+                'at_risk': at_risk
+            })
+            
+            i = 0
+            while i < len(sorted_data):
+                mouse = sorted_data[i]
+                
+                # 处理删失事件
+                if mouse['status'] == 0:
+                    group['censoredPoints'].append({
+                        'x': mouse['living_days'],
+                        'y': cumulative_survival,
+                        'mouseIds': [mouse['mouse_id']],
+                        'at_risk': at_risk
+                    })
+                    at_risk -= 1
+                    i += 1
+                    continue
+                
+                # 查找同一时间点的所有死亡事件
+                current_time = mouse['living_days']
+                deaths_at_time = []
+                j = i
+                while j < len(sorted_data) and sorted_data[j]['living_days'] == current_time:
+                    if sorted_data[j]['status'] == 1:
+                        deaths_at_time.append(sorted_data[j])
+                    j += 1
+                
+                # 计算生存率
+                if at_risk > 0:
+                    survival_rate = 1 - (len(deaths_at_time) / at_risk)
+                    cumulative_survival *= survival_rate
+                    
+                    # 添加数据点
+                    group['survivalData'].append({
+                        'x': current_time,
+                        'y': cumulative_survival,
+                        'mouseIds': [m['mouse_id'] for m in deaths_at_time],
+                        'at_risk': at_risk,
+                        'deaths': len(deaths_at_time)
+                    })
+                    
+                    # 记录中位生存时间
+                    if not ls50_found and cumulative_survival <= 0.5:
+                        group['ls50'] = current_time
+                        ls50_found = True
+                    
+                    at_risk -= len(deaths_at_time)
+                    i += len(deaths_at_time)
+                else:
+                    break
+            
+            # 如果没有找到中位生存时间
+            if not ls50_found:
+                group['ls50'] = ">{}".format(group['maxDays'])
+        else:
+            group['error'] = "所选组别无小鼠"
+    
+    # 处理全删失组
+    maximum_days = max([g['maxDays'] for g in group_results if g['allMice'] > 0], default=0)
+    for group in group_results:
+        if group.get('error'):
+            continue
+            
+        if group['deadMice'] == 0 and group['censoredMice'] > 0:
+            sorted_data = sorted(group['mice'], key=lambda x: x['living_days'])
+    
+            # 创建水平生存曲线
+            group['survivalData'] = [
+                {'x': 0, 'y': 1.0, 'mouseIds': [], 'at_risk': len(sorted_data)},
+                {'x': maximum_days, 'y': 1.0, 'mouseIds': [], 'at_risk': len(sorted_data)}
+            ]
+            
+            # 添加所有删失点
+            group['censoredPoints'] = [
+                {
+                    'x': mouse['living_days'],
+                    'y': 1.0,
+                    'mouseIds': [mouse['mouse_id']],
+                    'at_risk': len(sorted_data) - i  # 近似计算
+                }
+                for i, mouse in enumerate(sorted_data)
+            ]
+            
+            group['ls50'] = "未知"
+    
+    # 构建返回结果
+    result = {
+        'success': True,
+        'group_results': group_results
+    }
+    return result
+
+
 
 # 基因型管理API
 @app.route('/api/gene', methods=['GET'])

@@ -302,7 +302,7 @@ import { storeToRefs } from 'pinia'
 
 const geneStore = useGeneStore()
 const { allGenotypes, tempGroups, mice } = storeToRefs(geneStore)
-const { addGroup, removeGroup, clearGroups, getTempGroups, getPredefinedGroups } = geneStore
+const { addGroup, removeGroup, clearGroups, getTempGroups, getPredefinedGroups, onLocusSelect, onCombinationSelect } = geneStore
 
 // 小鼠数据
 const lived_mice = ref([])
@@ -868,32 +868,6 @@ if (hasData.value) {
     showChart()
 }
 })
-
-// 处理位点选择
-const onLocusSelect = (index, locus) => {
-    const isSelected = tempGroups.value[index].genotype.includes(locus)
-    
-    if (isSelected) {
-    // 如果选择了位点，移除该位点下的所有组合
-    tempGroups.value[index].genotype = tempGroups.value[index].genotype.filter(g => 
-        !allGenotypes.value[locus].includes(g)
-    )
-    } else {
-    // 如果取消选择位点，不做额外处理
-    }
-}
-
-// 处理组合选择
-const onCombinationSelect = (index, locus, combination) => {
-    const isSelected = tempGroups.value[index].genotype.includes(combination)
-    
-    if (isSelected) {
-    // 如果选择了组合，移除对应的位点
-    tempGroups.value[index].genotype = tempGroups.value[index].genotype.filter(g => g !== locus)
-    } else {
-    // 如果取消选择组合，不做额外处理
-    }
-}
 
 // 组件挂载时初始化
 onMounted(() => {
