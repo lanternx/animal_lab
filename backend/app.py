@@ -372,17 +372,15 @@ def update_mouse(mouse_tid):
 @app.route('/api/mice/<int:mouse_tid>', methods=['DELETE'])
 def delete_mouse(mouse_tid):
     """删除小鼠及其相关记录"""
-    mouse = Mouse.query.get(mouse_tid)
-    if not mouse:
-        return jsonify({'error': 'Mouse not found'}), 404
+    mouse = Mouse.query.get_or_404(mouse_tid)
     try:
-        db.session.delete(mouse)
         Genotype.query.filter_by(mouse_id=mouse_tid).delete()
         StatusRecord.query.filter_by(mouse_id=mouse_tid).delete()
         Pedigree.query.filter_by(mouse_id=mouse_tid).delete()
         Pedigree.query.filter_by(parent_id=mouse_tid).delete()
         WeightRecord.query.filter_by(mouse_id=mouse_tid).delete()
         ExperimentClass.query.filter_by(mouse_id=mouse_tid).delete()
+        db.session.delete(mouse)
         db.session.commit()
         return jsonify({'message': 'Mouse deleted successfully'})
     except Exception as e:
@@ -440,6 +438,7 @@ def batch_experiments_change():
         mice_ids = data.get("miceIds", [])
         test_ids = data.get("testIds", [])
         operation = data.get("batchTest", "")
+        breakpoint()
         if operation == "完成实验":
             for mtid in mice_ids:
                 m = Mouse.query.get(mtid)
@@ -1921,7 +1920,8 @@ def create_experiment_type():
         # 创建实验类型
         experiment_type = ExperimentType(
             name=data['name'],
-            description=data.get('description', '')
+            description=data.get('description', ''),
+            is_show=data.get('is_show', False)
         )
         db.session.add(experiment_type)
         db.session.flush()  # 获取ID但不提交
@@ -1968,6 +1968,7 @@ def update_experiment_type(id):
         # 更新实验类型基本信息
         experiment_type.name = data['name']
         experiment_type.description = data.get('description', '')
+        experiment_type.is_show = data.get('is_show', False)
         
         # 更新字段定义
         field_ids = []
@@ -2041,6 +2042,7 @@ def get_experiment_presets():
         "xenograft": {
             "name": "异种移植肿瘤测量",
             "description": "裸鼠肿瘤生长测量实验",
+            "is_show": True,
             "fields": [
                 {"field_name": "肿瘤长径", "data_type": "REAL", "unit": "mm", "is_required": True, "display_order": 1},
                 {"field_name": "肿瘤短径", "data_type": "REAL", "unit": "mm", "is_required": True, "display_order": 2},
@@ -2051,6 +2053,7 @@ def get_experiment_presets():
         "rotarod": {
             "name": "转棒实验",
             "description": "小鼠运动协调能力测试",
+            "is_show": True,
             "fields": [
                 {"field_name": "潜伏期", "data_type": "REAL", "unit": "s", "is_required": True, "display_order": 1},
                 {"field_name": "跌落速度", "data_type": "REAL", "unit": "rpm", "is_required": True, "display_order": 2},
@@ -2061,12 +2064,19 @@ def get_experiment_presets():
         "open_field": {
             "name": "旷场实验",
             "description": "小鼠焦虑和探索行为测试",
+            "is_show": True,
             "fields": [
                 {"field_name": "总活动距离", "data_type": "REAL", "unit": "cm", "is_required": True, "display_order": 1},
                 {"field_name": "中央区域时间", "data_type": "REAL", "unit": "s", "is_required": True, "display_order": 2},
                 {"field_name": "站立次数", "data_type": "INTEGER", "unit": "次", "is_required": True, "display_order": 3},
                 {"field_name": "粪便粒数", "data_type": "INTEGER", "unit": "粒", "is_required": False, "display_order": 4}
             ]
+        },
+        "weight_tracking": {
+            "name": "体重追踪",
+            "description": "用于小鼠体重变化记录分组",
+            "is_show": False,
+            "fields": []
         }
     }
     return jsonify(presets)

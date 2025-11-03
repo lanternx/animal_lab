@@ -290,7 +290,8 @@ class ExperimentType(db.Model):
             'id': self.id,
             'name': self.name,
             'description': self.description, 
-            'fields': sorted_fields
+            'fields': sorted_fields,
+            'is_show': self.is_show
         }
 
 # 字段定义表

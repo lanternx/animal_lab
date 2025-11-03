@@ -15,8 +15,8 @@ export const useCageStore = defineStore('cage', () => {
         })
 
     const loadInitialData = async () => {
-        fetchLocations()
-        fetchCages()
+        await fetchLocations()
+        await fetchCages()
     }
 
     // 位置相关方法

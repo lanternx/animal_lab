@@ -623,7 +623,7 @@ import axios from 'axios'
 import { toast } from 'vue3-toastify'
 import 'vue3-toastify/dist/index.css'
 import MouseDetailModal from './MouseDetailView.vue'
-import { useGeneStore, useCageStore } from '@/stores'
+import { useGeneStore, useCageStore, useExperimentStore } from '@/stores'
 import { storeToRefs } from 'pinia'
 
 const geneStore = useGeneStore()
@@ -633,6 +633,9 @@ const { loadMice } = geneStore
 const cageStore = useCageStore()
 const { cages } = storeToRefs(cageStore)
 const { fetchCages } = cageStore
+
+const experimentStore = useExperimentStore()
+const { experiments } = storeToRefs(experimentStore)
 
 // 响应式数据
 const filteredMice = ref([])
@@ -779,9 +782,6 @@ const availableTestsDone = computed(() => {
   )
 })
 
-// 数据列表
-const experiments = ref([])
-
 // 计算属性
 const modalTitle = computed(() => {
   switch (modalMode.value) {
@@ -802,17 +802,6 @@ const createAxiosInstance = () => {
       'X-Requested-With': 'XMLHttpRequest'
     }
   })
-}
-
-const loadExperiments = async () => {
-  try {
-    const api = createAxiosInstance()
-    const response = await api.get('/experiment-types')
-    experiments.value = response.data
-  } catch (error) {
-    console.error('加载实验失败:', error)
-    toast.error(`加载实验失败: ${error.message || '请检查网络连接'}`)
-  }
 }
 
 const sortBy = (field) => {
@@ -1032,6 +1021,8 @@ const batchAddExperiment = async (batchTest) => {
       miceIds: selectedMice.value,
       testIds: batchSelectedTests.value.map(e => e.id)
     })
+    await loadMice()
+    applyFilters()
     toast.success("批量修改" + batchTest +"成功")
   } catch (error) {
     console.error('批量修改实验小鼠失败:', error)
@@ -1220,7 +1211,13 @@ const deleteMouse = async (mouseId) => {
       mice.value.splice(index, 1)
       applyFilters()
     }
+    const cageIndex = cages.value.findIndex(c => c.mice.some(m => m.tid === mouseId))
+    if (cageIndex !== -1) {
+      const cage = cages.value[cageIndex]
+      cage.mice = cage.mice.filter(m => m.tid !== mouseId)
+    }
     closeContextMenu()
+    cages.value = cages.value.mouses.filter(m => m.tid !== mouseId)
   } catch (error) {
     console.error('删除小鼠失败:', error)
     
@@ -1581,7 +1578,6 @@ watch(searchTerm, (newVal) => {
 // 生命周期
 onMounted(async () => {
   applyFilters()
-  await loadExperiments()
   document.addEventListener('click', closeContextMenu)
   document.addEventListener('click', handleClickOutside)
 })

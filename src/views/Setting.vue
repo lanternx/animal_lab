@@ -214,7 +214,7 @@
                 </tr>
             </thead>
             <tbody>
-            <template v-for="experimentType in experimentTypes" :key="experimentType.id">
+            <template v-for="experimentType in experiments" :key="experimentType.id">
                 <tr :class="{ selected: selectedExperiments.includes(experimentType.id) }">
                     <td>{{ experimentType.name }}</td>
                     <td>{{ experimentType.description }}</td>
@@ -582,6 +582,14 @@
             <label>描述</label>
             <input type="text" v-model="editingExperimentType.description" placeholder="例如: 测量裸鼠肿瘤尺寸">
             </div>
+
+            <div class="form-group">
+                <label>是否展示</label>
+                <div class="checkbox-group">
+                    <input type="checkbox" v-model="editingExperimentType.is_show" id="edit-show-checkbox">
+                    <label for="edit-show-checkbox">在侧边栏显示</label>
+                </div>
+            </div>
             
             <div class="form-group">
             <button type="submit" class="btn btn-primary">
@@ -671,17 +679,19 @@
                 <th>实验类型名称</th>
                 <th>描述</th>
                 <th>字段数量</th>
+                <th>是否展示</th>
                 <th>操作</th>
                 </tr>
             </thead>
             <tbody>
-            <template v-for="experimentType in experimentTypes" :key="experimentType.id">
+            <template v-for="experimentType in experiments" :key="experimentType.id">
                 <tr>
                     <td>{{ experimentType.name }}</td>
                     <td>{{ experimentType.description }}</td>
                     <td>{{ experimentType.fields ? experimentType.fields.length : 0 }}</td>
+                    <td>{{ experimentType.is_show ? '是' : '否' }}</td>
                     <td class="action-cell">
-                        <button class="action-btn" @click="editExperimentType(experimentType)">
+                        <button class="action-btn" @click="editExperimentType(experimentType.id)">
                             编辑
                         </button>
                         <button class="action-btn btn-danger" @click="deleteExperimentType(experimentType.id)">
@@ -754,12 +764,12 @@
             <form @submit.prevent="saveGroup" class="form-group-row">
                 <div class="form-group">
                     <label>分组名称 *</label>
-                    <input type="text" v-model="editingGroup.name" placeholder="例如: TP53敲除雌性小鼠" required>
+                    <input type="text" v-model="editingGroup.name" placeholder="例如: WT vs TP53 ♀" required>
                 </div>
                 
                 <div class="form-group">
                     <label>描述</label>
-                    <input type="text" v-model="editingGroup.description" placeholder="例如: TP53基因敲除的雌性C57BL/6小鼠">
+                    <input type="text" v-model="editingGroup.description" placeholder="例如: WT雌性小鼠 vs TP53敲除雌性小鼠">
                 </div>
                 
                 <div class="form-group">
@@ -774,7 +784,7 @@
             
             <!-- 规则配置 -->
             <div class="form-section">
-                <h4>分组规则</h4>
+                <h4>小组名称</h4>
                 <div class="rules-container">
                     <div v-for="(rule, index) in editingGroup.rules" :key="index" class="rule-item">
                         <div class="rule-header">
@@ -794,7 +804,6 @@
                                         <option value="strain">品系</option>
                                         <option value="cage">笼位</option>
                                         <option value="live_status">存活状态</option>
-                                        <option value="age_range">年龄范围</option>
                                     </select>
                                 </div>
                                 
@@ -1371,22 +1380,26 @@
 </template>
 
 <script setup>
-import { ref, reactive, onMounted, watch, computed } from 'vue'
+import { ref, reactive, onMounted, watch, computed, nextTick } from 'vue'
 import axios from 'axios'
 import { toast } from 'vue3-toastify'
 import 'vue3-toastify/dist/index.css'
 
-import { useGeneStore, useCageStore } from '@/stores'
+import { useGeneStore, useCageStore, useExperimentStore } from '@/stores'
 import { storeToRefs } from 'pinia'
 
 const geneStore = useGeneStore()
 const cageStore = useCageStore()
+const experimentStore = useExperimentStore()
 
 const {genotypes} = storeToRefs(geneStore)
 const {loadGenotypes} = geneStore
 
 const {locations} = storeToRefs(cageStore)
 const {loadInitialData} = cageStore
+
+const {experiments, experimentPresets} = storeToRefs(experimentStore)
+const {fetchExperiments} = experimentStore
 
 // UI状态
 const activeTab = ref('genotype')
@@ -1443,12 +1456,11 @@ errors: []
 })
 
 // 实验类型相关状态
-const experimentTypes = ref([])
-const experimentPresets = ref({})
 const editingExperimentType = reactive({
 id: null,
 name: '',
 description: '',
+is_show: true,
 fields: []
 })
 const selectedPreset = ref('')
@@ -1773,26 +1785,6 @@ const importData = async () => {
     }
 }
 
-// 实验类型相关方法
-const fetchExperimentTypes = async () => {
-try {
-const response = await axios.get('/api/experiment-types')
-experimentTypes.value = response.data
-} catch (error) {
-console.error('获取实验类型列表失败:', error)
-toast.error('获取实验类型列表失败')
-}
-}
-
-const fetchExperimentPresets = async () => {
-try {
-const response = await axios.get('/api/experiment-types/presets')
-experimentPresets.value = response.data
-} catch (error) {
-console.error('获取实验预设失败:', error)
-}
-}
-
 const addField = () => {
 editingExperimentType.fields.push({
 field_name: '',
@@ -1854,20 +1846,17 @@ try {
 await axios[method](url, dataToSend)
 toast.success('保存成功')
 cancelEdit()
-await fetchExperimentTypes()
-window.experimentTypesUpdated = true
+await fetchExperiments()
 } catch (error) {
 console.error('保存实验类型失败:', error)
 toast.error(error.response?.data?.error || '保存实验类型失败')
 }
 }
 
-const editExperimentType = (experimentType) => {
+const editExperimentType = (experimentID) => {
 // 深拷贝实验类型
+const experimentType = experiments.value.find(et => et.id === experimentID)
 const copy = JSON.parse(JSON.stringify(experimentType))
-copy.id = experimentType.id
-copy.name = experimentType.name
-copy.description = experimentType.description
 
 Object.assign(editingExperimentType, copy)
 selectedPreset.value = ''
@@ -1885,6 +1874,7 @@ const cancelEdit = () => {
 editingExperimentType.id = null
 editingExperimentType.name = ''
 editingExperimentType.description = ''
+editingExperimentType.is_show = true
 editingExperimentType.fields = []
 }
 
@@ -1894,8 +1884,7 @@ if (!confirm('确定要删除这个实验类型吗？')) return
 try {
 await axios.delete(`/api/experiment-types/${id}`)
 toast.success('删除成功')
-await fetchExperimentTypes()
-window.experimentTypesUpdated = true
+await fetchExperiments()
 } catch (error) {
 console.error('删除实验类型失败:', error)
 toast.error(error.response?.data?.error || '删除实验类型失败')
@@ -1928,15 +1917,21 @@ if (!editingExperimentType.name) {
 if (!editingExperimentType.description) {
     editingExperimentType.description = preset.description
 }
+editingExperimentType.is_show = preset.is_show
 }
 }
 
 const resetForm = () => {
-editingExperimentType.id = null
-editingExperimentType.name = ''
-editingExperimentType.description = ''
-editingExperimentType.fields = []
-selectedPreset.value = ''
+    if (editingExperimentType.id) {
+        editExperimentType(editingExperimentType.id)
+    } else {
+        editingExperimentType.id = null
+        editingExperimentType.name = ''
+        editingExperimentType.description = ''
+        editingExperimentType.fields = []
+        editingExperimentType.is_show = true
+        selectedPreset.value = ''
+    }
 }
 
 const moveFieldUp = (index) => {
@@ -2571,8 +2566,6 @@ const testGroup = (groupId) => {
 
 // 初始化数据
 onMounted(() => {
-fetchExperimentTypes()
-fetchExperimentPresets()
 fetchDbInfo()
 refreshDbInfo()
 fetchPredefinedGroups()

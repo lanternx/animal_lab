@@ -63,9 +63,9 @@
       </router-link>
         </div>
         
-        <div class="nav-section" v-if="experiments.length>0">
+        <div class="nav-section" v-if="showedExperiments.length>0">
           <div class="nav-title" v-if="!sidebarCollapsed">实验记录</div>
-          <div v-for="(expr, index) in experiments" :key="index">
+          <div v-for="(expr, index) in showedExperiments" :key="index">
             <router-link 
               :to="{ name: 'Experiments', params: { experimentId: expr.id } }" 
               custom v-slot="{ navigate, isActive }"
@@ -163,57 +163,32 @@
 
 </template>
 
-<script>
-import axios from 'axios';
+<script setup>
+import { ref, onMounted } from 'vue'
+import { useExperimentStore } from '@/stores'
+import { storeToRefs } from 'pinia'
 
-export default {
-  name: 'AppLayout',
-  data() {
-    return {
-      sidebarCollapsed: true,
-      experiments:[]
-    };
-  },
-  methods: {
-    toggleSidebar() {
-      this.sidebarCollapsed = !this.sidebarCollapsed;
-      // 保存状态到localStorage
-      localStorage.setItem('sidebarCollapsed', this.sidebarCollapsed);
-    },
-    setActiveView(view) {
-      this.activeView = view;
-    },
-    // 实验类型相关方法
-    fetchExperiments() {
-        axios.get('/api/experiment-types')
-        .then(response => {
-            this.experiments = response.data;
-        })
-        .catch(error => {
-            console.error('获取实验类型列表失败:', error);
-            alert('获取实验类型列表失败');
-        });
-    }
-  },
-  mounted() {
-    this.fetchExperiments();
-    // 从localStorage加载侧边栏状态
-    const savedState = localStorage.getItem('sidebarCollapsed');
-    if (savedState !== null) {
-      this.sidebarCollapsed = savedState === 'true';
-    }
-    
-    // 初始设置活动视图
-    this.setActiveView('cage');
-    // 定期检查更新
-    this.updateInterval = setInterval(() => {
-      if (window.experimentTypesUpdated) {
-        window.experimentTypesUpdated = false
-        this.fetchExperiments()
-      }
-    }, 1000)
+const experimentStore = useExperimentStore()
+const { showedExperiments } = storeToRefs(experimentStore)
+
+// 响应式数据
+const sidebarCollapsed = ref(true)
+
+// 方法
+const toggleSidebar = () => {
+  sidebarCollapsed.value = !sidebarCollapsed.value
+  // 保存状态到localStorage
+  localStorage.setItem('sidebarCollapsed', sidebarCollapsed.value)
+}
+
+// 生命周期
+onMounted(() => {
+  // 从localStorage加载侧边栏状态
+  const savedState = localStorage.getItem('sidebarCollapsed')
+  if (savedState !== null) {
+    sidebarCollapsed.value = savedState === 'true'
   }
-};
+})
 </script>
 
 <style>
