@@ -438,7 +438,6 @@ def batch_experiments_change():
         mice_ids = data.get("miceIds", [])
         test_ids = data.get("testIds", [])
         operation = data.get("batchTest", "")
-        breakpoint()
         if operation == "完成实验":
             for mtid in mice_ids:
                 m = Mouse.query.get(mtid)
@@ -3102,6 +3101,4 @@ def get_predefined_groups(gIndex):
     pass
 
 if __name__ == '__main__':
-    with app.app_context():
-        db.create_all()
-    app.run(debug=True)
+    app.run(debug=True, host='localhost', port=5000)

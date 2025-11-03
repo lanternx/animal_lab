@@ -104,11 +104,10 @@ export const useGeneStore = defineStore('genotype', () => {
     // 处理位点选择
     const onLocusSelect = (index, locus) => {
         const isSelected = tempGroups.value[index].genotype.includes(locus)
-        
         if (isSelected) {
         // 如果选择了位点，移除该位点下的所有组合
         tempGroups.value[index].genotype = tempGroups.value[index].genotype.filter(g => 
-            !allGenotypes.value[locus].includes(g)
+            !allGenotypes.value[locus].some(al => g === locus+'<sup>'+al+'</sup>')
         )
         } else {
         // 如果取消选择位点，不做额外处理
@@ -117,8 +116,7 @@ export const useGeneStore = defineStore('genotype', () => {
 
     // 处理组合选择
     const onCombinationSelect = (index, locus, combination) => {
-        const isSelected = tempGroups.value[index].genotype.includes(combination)
-        
+        const isSelected = tempGroups.value[index].genotype.includes(locus+'<sup>'+combination+'</sup>')
         if (isSelected) {
         // 如果选择了组合，移除对应的位点
         tempGroups.value[index].genotype = tempGroups.value[index].genotype.filter(g => g !== locus)

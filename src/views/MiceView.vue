@@ -1217,7 +1217,6 @@ const deleteMouse = async (mouseId) => {
       cage.mice = cage.mice.filter(m => m.tid !== mouseId)
     }
     closeContextMenu()
-    cages.value = cages.value.mouses.filter(m => m.tid !== mouseId)
   } catch (error) {
     console.error('删除小鼠失败:', error)
     
