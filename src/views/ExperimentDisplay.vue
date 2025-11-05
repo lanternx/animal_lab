@@ -80,99 +80,6 @@
         <!-- Tabulator 数据表格 -->
         <div ref="tabulatorRef" class="tabulator-table"></div>
     </div>
-</div>
-
-    <!-- 修改分组模态框 -->
-    <div v-if="showGroupModal" class="modal-backdrop" @click.self="showGroupModal = false">
-    <div class="modal-container">
-        <div class="modal-header">
-        <h5 class="modal-title">修改分组</h5>
-        <button type="button" class="btn-close" @click="showGroupModal = false">
-            <i class="material-icons">close</i>
-        </button>
-        </div>
-        <div class="modal-body">
-        <div class="group-management">
-            <div class="d-flex justify-content-between mb-4">
-            <button class="btn btn-primary me-2" @click="fetchGroups">
-                <i class="material-icons btn-icon">refresh</i>
-                刷新分组
-            </button>
-            <button class="btn btn-danger" @click="clearSelection">
-                <i class="material-icons btn-icon">clear</i>
-                取消选择
-            </button>
-            <button class="btn btn-danger" @click="clearAllGroups">
-                <i class="material-icons btn-icon">delete</i>
-                清除所有分组
-            </button>
-            </div>
-            
-            <!-- 候选小鼠 -->
-            <div class="mb-4">
-            <h5>候选小鼠 ({{ candidateMice.length }})</h5>
-            <div class="candidate-list" @dragover.prevent @drop="onDrop($event, '')">
-                <div v-for="mouse in candidateMice" :key="mouse.tid" class="candidate-item"
-                draggable="true" @dragstart="onDragStart($event, '', mouse.tid)"
-                :class="{
-                        'selected': isSelected(mouse.tid)
-                    }">
-                    <div class="mouse-info" @click="toggleCandidateSelection(mouse.tid)">
-                        {{ mouse.id }} ({{ mouse.genotype }}, {{ mouse.sex }}, {{ mouse.birth_date }})
-                    </div>
-                </div>
-            </div>
-            </div>
-            
-            <!-- 分组展示 -->
-            <div class="groups-container">
-            <div v-for="(group, groupId) in groupedMice" :key="groupId" class="group-card" @dragover.prevent @drop="onDrop($event, groupId)">
-                <div class="group-header">
-                <div class="group-name-container">
-                    <span
-                    v-if="!editingGroups[groupId]" 
-                    @dblclick="startEditingGroup(groupId)"
-                    class="group-name-display"
-                    >{{ groupId }}</span>
-                    <input
-                    v-else
-                    type="text"
-                    v-model="editingGroupNames[groupId]"
-                    @blur="saveGroupName(groupId)"
-                    @keyup.enter="saveGroupName(groupId)"
-                    @keyup.escape="cancelEditingGroup(groupId)"
-                    ref="groupNameInputs"
-                    class="group-name-input"
-                    />
-                    <button class="btn btn-sm" @click="startEditingGroup(groupId)">
-                    <i class="material-icons">edit</i>
-                    </button>
-                </div>
-                <button class="btn btn-sm btn-danger" @click="deleteGroup(groupId)">
-                    <i class="material-icons">delete</i>
-                </button>
-                </div>
-                <div class="group-body">
-                <div v-for="mouse in group" :key="mouse.mouse_id" class="mouse-item"
-                    draggable="true" @dragstart="onDragStart($event, groupId, mouse.mouse_id)"
-                    :class="{
-                        'selected': isSelected(mouse.mouse_id)
-                    }">
-                    <div class="mouse-info" @click="toggleCandidateSelection(mouse.mouse_id)">
-                    {{ mouse.mouse_info.id }} ({{ mouse.mouse_info.genotype }}, {{ mouse.mouse_info.sex }}, {{ mouse.birth_date }})
-                    </div>
-                </div>
-                </div>
-            </div>
-            
-            <div v-if="Object.keys(groupedMice).length < 5" class="group-card add-group" @click="addNewGroup">
-                <i class="material-icons">add</i>
-                <span>添加分组</span>
-            </div>
-            </div>
-        </div>
-        </div>
-    </div>
     </div>
 
     <!-- 录入数据模态框 -->
@@ -224,6 +131,12 @@ import { TabulatorFull as Tabulator } from 'tabulator-tables';
 import 'tabulator-tables/dist/css/tabulator.min.css';
 import { Chart } from 'chart.js/auto';
 import regression from 'regression';
+import { useGeneStore } from '@/stores'
+import { storeToRefs } from 'pinia'
+
+const geneStore = useGeneStore()
+const {mice} = storeToRefs(geneStore)
+const {} = geneStore
 
 //切换实验时
 onBeforeRouteUpdate(async (to, from) => {
@@ -231,7 +144,6 @@ onBeforeRouteUpdate(async (to, from) => {
         currentRequestToken.cancel('取消上一个请求');
     }
     experimentData.value = [];
-    candidateMice.value = [];
     groupedMice.value = {};
     if (to.params.experimentId !== from.params.experimentId) {
         experimentId.value = to.params.experimentId;
@@ -252,15 +164,8 @@ const activeTab = ref('visualization');
 const experimentData = ref([]);
 const fieldDefinitions = ref([]);
 const hasData = ref(false);
-const colors = ['#F27970', '#BB9727', '#54B345', '#32B897', '#05B9E2', '#8983BF', '#C76DA2', "#743027"];
 
 // 分组管理状态
-const candidateMice = ref([]);
-const groupedMice = ref({});
-const selectedCandidates = ref([]);
-const editingGroups = ref({});
-const editingGroupNames = ref({});
-const groupNameInputs = ref([]);
 const showGroupModal = ref(false);
 
 // 数据列表状态
@@ -283,24 +188,15 @@ const recordRowData = ref([]);
 
 // 计算属性
 const processedData = computed(() => {
-    const mouseIdToGroupMap = {}; 
-    const mouseIdToInfoMap = {}; 
-    Object.keys(groupedMice.value).forEach(groupName => { 
-        groupedMice.value[groupName].forEach(mouseData => { 
-            if (mouseData.mouse_id) { 
-                mouseIdToGroupMap[mouseData.mouse_id] = groupName; 
-                mouseIdToInfoMap[mouseData.mouse_id] = mouseData.mouse_info; 
-            }
-        }); 
-    }); 
-
     return experimentData.value.map(item => { 
-        const groupName = mouseIdToGroupMap[item.mouse_id] || '未分组'; 
-        const mouseInfo = mouseIdToInfoMap[item.mouse_id]; 
+        const group = groupedMice.value.rules.find(group => { 
+            group.mouseId.some(item.mouse_id)
+        }); 
         const rowData = { 
             __experimentId: item.id, 
-            id: mouseInfo ? mouseInfo.id : '未知', 
-            group: groupName, 
+            id: mice.value.find(m => m.tid === item.mouse_id).id, 
+            group: group.name,
+            color: group.color,
             field_date: item.date, 
             researcher: item.researcher, 
             notes: item.notes
@@ -494,8 +390,7 @@ try {
     const expResponse = await axios.get(`/api/experiment/${experimentId.value}`, {cancelToken: currentRequestToken.token});
     experimentName.value = expResponse.data.name;
     fieldDefinitions.value = expResponse.data.fields;
-    
-    await fetchCandidateMice();
+
     await fetchGroups();
     await fetchData();
     
@@ -596,6 +491,16 @@ function resetFilters() {
     }
 }
 
+const groupedMice = ref({})
+const fetchGroups = async () => {
+try {
+    const response = await axios.get(`/api/experiment/${experimentId.value}/grouped_mice`, {cancelToken: currentRequestToken.token});
+    groupedMice.value = response.data;
+} catch (error) {
+    console.error('获取小鼠错误:', error);
+    toast.error('获取小鼠错误: ' + error.message);
+}
+}
 async function exportData () {
     if (tabulatorInstance.value) {
         const params = {
@@ -640,78 +545,6 @@ try {
     console.error('获取数据:', error);
     toast.error('获取数据: ' + error.message);
 }
-}
-
-function toggleCandidateSelection(tid) {
-const index = selectedCandidates.value.indexOf(tid);
-if (index > -1) {
-    selectedCandidates.value.splice(index, 1);
-} else {
-    selectedCandidates.value.push(tid);
-}
-}
-
-function isSelected(tid) {
-return selectedCandidates.value.includes(tid);
-}
-
-function onDragStart(event, groupId, mouseId) {
-    let ids = '';
-    if (selectedCandidates.value.length === 0) {
-        ids = mouseId;
-    } else {
-        if (!selectedCandidates.value.includes(mouseId)) {
-            selectedCandidates.value.push(mouseId);
-        }
-        ids = selectedCandidates.value.join(',');
-    }
-    event.dataTransfer.setData('mouseIds', ids);
-    event.dataTransfer.setData('groupId', groupId);
-}
-
-async function onDrop(event, toGroupId) {
-    const mouseIds = event.dataTransfer.getData('mouseIds').split(',').map(Number);
-    const fromGroupId = event.dataTransfer.getData('groupId');
-    mouseIds.forEach(id => {
-        changeMouseGroup(id, fromGroupId, toGroupId);
-    });
-    selectedCandidates.value = [];
-
-    try {     
-        await fetchCandidateMice();
-        await fetchGroups();
-    } catch (error) {
-        console.error('添加小鼠到分组失败:', error);
-        toast.error('添加小鼠到分组失败: ' + error.message);
-    }    
-}
-
-function clearSelection() {
-selectedCandidates.value = [];
-}
-
-function addNewGroup() {
-    if (Object.keys(groupedMice.value).length >= 5) {
-        toast.error('最多只能添加5个分组');
-        return;
-    }
-    const newGroupId = prompt('请输入新分组的名称:');
-    if (newGroupId && newGroupId.trim() !== '') {
-        groupedMice.value[newGroupId] = [];
-    }
-}
-
-function startEditingGroup(groupId) {
-editingGroups.value[groupId] = true;
-editingGroupNames.value[groupId] = groupId;
-
-nextTick(() => {
-    const input = groupNameInputs.value.find(el => el.dataset.groupId === groupId);
-    if (input) {
-    input.focus();
-    input.select();
-    }
-});
 }
 
 async function generateChart() {
@@ -877,7 +710,7 @@ function createXYChart(canvas, xField, yField, groupedData) {
     }
         
     Object.keys(groupedData).forEach((groupName, index) => {
-        const color = colors[index % colors.length]
+        const color = groupedData[groupName].color
         const groupData = groupedData[groupName];
         const data = [];
 
@@ -1045,6 +878,7 @@ function createBoxPlotWithPoints(canvas, columnField, groupedData) {
   
   // 准备数据
   const groupNames = Object.keys(groupedData);
+  const groupColors = groupNames.map(gn => groupedData[gn].color)
   const scatterData = [];
   const boxPlotStats = [];
   let globalMin = Infinity;
@@ -1053,7 +887,8 @@ function createBoxPlotWithPoints(canvas, columnField, groupedData) {
   // 为每个分组计算统计数据
   groupNames.forEach((groupName, groupIndex) => {
     const groupItems = groupedData[groupName];
-    
+    const groupColor = groupedData[groupName].color;
+
     // 获取该分组所有小鼠在该字段上的值
     const values = groupItems
       .map(item => {
@@ -1084,7 +919,8 @@ function createBoxPlotWithPoints(canvas, columnField, groupedData) {
         scatterData.push({
           x: groupIndex + xOffset,
           y: value,
-          groupIndex: groupIndex
+          groupIndex: groupIndex,
+          color: groupColor
         });
       });
     } else {
@@ -1117,7 +953,7 @@ function createBoxPlotWithPoints(canvas, columnField, groupedData) {
             x: point.x,
             y: point.y
           })),
-          backgroundColor: scatterData.map(point => colors[point.groupIndex] + 'AA'), // 半透明
+          backgroundColor: scatterData.map(point => point.color + 'AA'), // 半透明
           borderColor: '#FFFFFF',
           borderWidth: 1,
           pointRadius: 4,
@@ -1192,8 +1028,8 @@ function createBoxPlotWithPoints(canvas, columnField, groupedData) {
           const whiskerWidth = 10;
           
           // 设置颜色
-          ctx.strokeStyle = colors[groupIndex];
-          ctx.fillStyle = colors[groupIndex] + '40'; // 半透明填充
+          ctx.strokeStyle = groupColors[groupIndex];
+          ctx.fillStyle = groupColors[groupIndex] + '40'; // 半透明填充
           ctx.lineWidth = 1.5;
           
           // 绘制箱体 (Q1到Q3)
@@ -1209,7 +1045,7 @@ function createBoxPlotWithPoints(canvas, columnField, groupedData) {
           ctx.beginPath();
           ctx.moveTo(xCenter - boxWidth/2, medianY);
           ctx.lineTo(xCenter + boxWidth/2, medianY);
-          ctx.strokeStyle = colors[groupIndex];
+          ctx.strokeStyle = groupColors[groupIndex];
           ctx.lineWidth = 2;
           ctx.stroke();
           
@@ -1340,6 +1176,7 @@ function createDistributionChart(canvas, xField, groupedData) {
         const n = 200;
         const step = range / n;
         const points = [];
+        const color = groupedData[groupName].color;
         
         for (let i = 0; i <= n; i++) {
             const x = globalMin + i * step;
@@ -1357,8 +1194,8 @@ function createDistributionChart(canvas, xField, groupedData) {
         datasets.push({
             label: groupName,
             data: points,
-            borderColor: colors[index % colors.length],
-            backgroundColor: colors[index % colors.length] + '40',
+            borderColor: color,
+            backgroundColor: color + '40',
             borderWidth: 2,
             pointRadius: 0,
             tension: 0.3,
@@ -1407,13 +1244,12 @@ function createDistributionChart(canvas, xField, groupedData) {
 function initRecordData() {
     const rowData = [];
 
-    Object.entries(groupedMice.value).forEach(([groupName, group]) => {
-        group.forEach(mouseData => {
-        const mouse = mouseData.mouse_info;
+    groupedMice.value.rules.forEach(group => {
+        group.mouseId.forEach(mTid => {
         const row = {
-            group: groupName,
-            mouse_id: mouse.id,
-            mouse_tid: mouse.tid,
+            group: group.name,
+            mouse_id: mice.value.find(m => m.tid === mTid).id,
+            mouse_tid: mTid,
             notes: ''
         };
         
@@ -1423,9 +1259,8 @@ function initRecordData() {
         
         rowData.push(row);
         });
-});
-
-recordRowData.value = rowData;
+    });
+    recordRowData.value = rowData;
 }
 
 async function openRecordModal() {
@@ -1527,10 +1362,6 @@ try {
 </script>
 
 <style scoped>
-.experiment-display {
-padding: 20px;
-}
-
 .action-buttons {
 display: flex;
 gap: 10px;
@@ -1541,13 +1372,6 @@ margin-bottom: 20px;
 display: flex;
 align-items: center;
 gap: 5px;
-}
-
-.data-display {
-background: white;
-border-radius: 8px;
-padding: 20px;
-box-shadow: 0 2px 8px rgba(0,0,0,0.1);
 }
 
 .chart-container {
@@ -1634,98 +1458,6 @@ padding: 0.5rem;
 
 .modal-body {
 padding: 1.5rem;
-}
-
-.group-management {
-padding: 10px;
-}
-
-.candidate-list {
-max-height: 200px;
-overflow-y: auto;
-border: 1px solid #dee2e6;
-border-radius: 4px;
-padding: 10px;
-}
-
-.candidate-item {
-display: flex;
-justify-content: space-between;
-align-items: center;
-padding: 8px;
-border-bottom: 1px solid #f1f1f1;
-transition: background-color 0.2s ease;
-cursor: pointer;
-}
-
-.candidate-item:last-child {
-border-bottom: none;
-}
-
-.candidate-item.selected {
-    background-color: #d4e6f1;
-}
-
-.groups-container {
-display: grid;
-grid-template-columns: repeat(auto-fill, minmax(250px, 1fr));
-gap: 15px;
-margin-top: 15px;
-}
-
-.group-card {
-border-radius: 8px;
-overflow: hidden;
-box-shadow: 0 2px 4px rgba(0,0,0,0.05);
-background: white;
-}
-
-.group-header {
-display: flex;
-justify-content: space-between;
-align-items: center;
-padding: 0.5rem 1rem;
-background-color: #f8f9fa;
-border-bottom: 1px solid #e9ecef;
-font-weight: 600;
-}
-
-.group-body {
-padding: 1rem;
-max-height: 300px;
-overflow-y: auto;
-}
-
-.mouse-item {
-display: flex;
-justify-content: space-between;
-align-items: center;
-padding: 0.5rem;
-border-bottom: 1px solid #f1f1f1;
-}
-
-.mouse-item:last-child {
-border-bottom: none;
-}
-
-.mouse-item.selected {
-    background-color: #d4e6f1;
-}
-
-.add-group {
-display: flex;
-flex-direction: column;
-align-items: center;
-justify-content: center;
-background-color: #f8f9fa;
-border: 2px dashed #ced4da;
-cursor: pointer;
-min-height: 150px;
-}
-
-.add-group:hover {
-background-color: #e9ecef;
-border-color: #adb5bd;
 }
 
 .form-group {
@@ -1891,34 +1623,6 @@ border-radius: 4px;
 background: white;
 }
 
-.group-name-container {
-flex-grow: 1;
-margin-right: 10px;
-display: flex;
-flex-direction: row;
-align-items: center;
-gap: 10px;  
-}
-
-.group-name-display {
-cursor: pointer;
-padding: 4px 8px;
-border-radius: 4px;
-transition: background-color 0.2s;
-}
-
-.group-name-display:hover {
-background-color: #f0f0f0;
-}
-
-.group-name-input {
-width: 100%;
-padding: 4px 8px;
-border: 1px solid #3498db;
-border-radius: 4px;
-font-size: 1em;
-}
-
 .tabulator-table {
 background: white;
 border-radius: 8px;
@@ -1935,15 +1639,6 @@ box-shadow: 0 2px 8px rgba(0,0,0,0.1);
   padding: 15px;
   width: 330px; /* 400px + 左右padding */
   height: 430px; /* 最小宽度 */
-}
-
-
-/* 图表标题样式 */
-.chart-title {
-  font-size: 16px;
-  font-weight: bold;
-  margin-bottom: 10px;
-  text-align: center;
 }
 
 @media (max-width: 1024px) {

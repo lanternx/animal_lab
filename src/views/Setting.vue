@@ -1000,7 +1000,7 @@
                                     </div>
                                 </div>
                             </div>
-                            <button @click="addRule(subgroupIndex)" class="btn btn-outline">
+                            <button @click="addRule(subgroupIndex)" :disabled="showIDList" class="btn btn-outline">
                                 <i class="material-icons">add</i> 添加规则
                             </button>
                         </div>
@@ -1168,7 +1168,8 @@
                         <tr>
                             <th>分组名称</th>
                             <th>描述</th>
-                            <th>规则数量</th>
+                            <th>分组类型</th>
+                            <th>小组数量</th>
                             <th>创建时间</th>
                             <th>操作</th>
                         </tr>
@@ -1177,6 +1178,11 @@
                         <tr v-for="group in predefinedGroups" :key="group.id">
                             <td>{{ group.name }}</td>
                             <td>{{ group.description }}</td>
+                            <td>
+                                <span class="group-type-badge" :class="group.is_id_group ? 'id-group' : 'rule-group'">
+                                    {{ group.is_id_group ? 'ID分组' : '规则分组' }}
+                                </span>
+                            </td>
                             <td>{{ group.rules ? group.rules.length : 0 }}</td>
                             <td>{{ group.created_at || '未知' }}</td>
                             <td class="action-cell">
@@ -2572,7 +2578,7 @@ const changeGroupType = async () => {
     if (editingGroup.type === 'id') {
         showIDList.value = true
         if (editingGroup.experiment) {
-            const miceExperiment = await axios.post(`/api/experiments/${editingGroup.experiment}/grouped_mice`)
+            const miceExperiment = await axios.post(`/api/experiments/${editingGroup.experiment}/mice`)
             candidateMice.value = miceExperiment.data
         } else {
             candidateMice.value = mice.value
@@ -2614,7 +2620,7 @@ const saveGenes = (subgroupIndex, ruleIndex, index) => {
         return
     }
     editingGroup.rules[subgroupIndex].rules[ruleIndex].genes[index] = {
-        gene: {...selectedGenes.value},
+        gene: [...selectedGenes.value],
         selectedGeneName: geneStore.selectedGeneName
     }
     selectedGenes.value = []
@@ -2642,10 +2648,12 @@ const reviewRules = async () => {
     })
     isRepeated.value = true
     showIDList.value = true
+    editingGroup.rules.forEach(g => g.expanded = false)
 }
 
 const reviewRulesClose = () => {
     showIDList.value = false
+    editingGroup.rules.forEach(g => g.expanded = true)
 }
 
 const saveGroup = async () => {
@@ -2738,18 +2746,20 @@ const getGroupRules = (groupId) => {
 
 const formatRuleCondition = (rule) => {
     switch (rule.type) {
-        case 'genotype':
-            let condition = `基因位点: ${rule.locus}`
-            if (rule.alleles && rule.alleles.length > 0) {
-                condition += `, 等位基因: ${rule.alleles.join(', ')}`
-                condition += `, 最小数量: ${rule.min_count || 1}`
+        case 'genotype': 
+            return "基因型：" + rule.genes.map(g => {
+            if (g.locus === "WT") {
+                return "WT"
             }
-            if (rule.zygosity) {
-                condition += `, 纯合状态: ${rule.zygosity === 'homozygous' ? '纯合' : '杂合'}`
+            if (g.locus) {
+            const alleles = genotypes.value.find(gt => gt.symbol === g.locus).alleles
+            const allele1 = g.allele1 ? alleles.find(a => a.id === g.allele1)?.symbol : ""
+            const allele2 = g.allele2 ? alleles.find(a => a.id === g.allele2)?.symbol : ""
+            return `${g.locus}<sup>${allele1}/${allele2}</sup>`
+            } else {
+            return ''
             }
-            condition += `, ${rule.required ? '必须存在' : '可选'}`
-            return condition
-            
+            }).join(";")
         case 'sex':
             return `性别: ${rule.value === 'M' ? '雄性' : '雌性'}`
             

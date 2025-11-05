@@ -251,7 +251,6 @@ def add_mouse():
         mouse.cage_id = data.get('cage_id', None)
         # 新增字段
         mouse.strain = data.get('strain')
-        mouse.tests_done = data.get('tests_done')
         mouse.tests_planned = data.get('tests_planned')
         db.session.add(mouse)
         db.session.flush()
@@ -280,6 +279,13 @@ def add_mouse():
                     parent_id = t,
                     parent_type = 'mother')
                 db.session.add(parent)
+        if 'tests_done' in data and data['tests_done']:
+            for t in data['tests_done']:
+                exp = ExperimentClass(
+                    mouse_id=mouse.tid,
+                    experiment_id=t
+                )
+                db.session.add(exp)
         db.session.commit()
         return jsonify({
             'id': mouse.id,
@@ -289,7 +295,7 @@ def add_mouse():
             'live_status': mouse.live_status,
             'cage_id': mouse.cage_id,
             'strain': mouse.strain,
-            'tests_done': mouse.tests_done,
+            'tests_done': [t.experiment_id for t in mouse.tests_done] if mouse.tests_done else [],
             'tests_planned': mouse.tests_planned
         }), 201
     except Exception as e:
@@ -300,14 +306,10 @@ def add_mouse():
 def update_mouse(mouse_tid):
     """更新小鼠信息"""
     data = request.json
-    mouse = Mouse.query.get(mouse_tid)
-    if not mouse:
-        return jsonify({'error': 'Mouse not found'}), 404
+    mouse = Mouse.query.get_or_404(mouse_tid)
     try:
-        old_genes = Genotype.query.filter_by(mouse_id=mouse.tid).all()
-        for g_o in old_genes:
-            db.session.delete(g_o)
         if data['genotype']:
+            Genotype.query.filter_by(mouse_id=mouse.tid).delete()
             genotypes = data['genotype']
             for g in genotypes:
                 locus = GeneLocus.query.filter_by(symbol=g["locus"]).first()
@@ -324,11 +326,19 @@ def update_mouse(mouse_tid):
             mouse.birth_date = datetime.strptime(data['birth_date'], '%Y-%m-%d').date()
         if data['death_date']:
             mouse.death_date = datetime.strptime(data['death_date'], '%Y-%m-%d').date()
-        # 新增字段
         if 'strain' in data:
             mouse.strain = data.get('strain')
         if 'tests_done' in data:
-            mouse.tests_done = data.get('tests_done')
+            tests_done = set(data.get('tests_done'))
+            experiments = set([t.experiment_id for t in mouse.tests_done])
+            if tests_done != experiments:
+                ExperimentClass.query.filter_by(mouse_id=mouse.tid).delete()
+                for t in tests_done:
+                    exp = ExperimentClass(
+                        mouse_id=mouse.tid,
+                        experiment_id=t
+                    )
+                    db.session.add(exp)
         if 'tests_planned' in data:
             mouse.tests_planned = data.get('tests_planned')
         if 'cage_id' in data:
@@ -361,7 +371,7 @@ def update_mouse(mouse_tid):
             'father': data.get('father'),
             'mother': data.get('mother'),
             'strain': mouse.strain,
-            'tests_done': mouse.tests_done,
+            'tests_done': [t.experiment_id for t in mouse.tests_done] if mouse.tests_done else [],
             'tests_planned': mouse.tests_planned
         })
     except Exception as e:
@@ -665,7 +675,7 @@ def get_mice_info(mouse_tid):
         if mouse.tests_done:
             tests = []
             for t in mouse.tests_done:
-                et = ExperimentType.query.get(t)
+                et = ExperimentType.query.get(t.experiment_id)
                 if et:
                     tests.append(et.name)
             content['tests_done'] = tests
@@ -1458,7 +1468,6 @@ def import_mice_data(df, result, conflict_resolution):
                     sex=str(row['sex']).upper()[0],  # 只取第一个字母
                     birth_date=birth_date,
                     live_status=int(row.get('live_status', 1)),
-                    tests_done = [],
                     tests_planned = []
                 )
                 db.session.add(mouse)
@@ -3033,19 +3042,47 @@ def get_predefined_mice(groups_id):
 
 def analyse_rule(rule):
     if rule['type'] == 'genotype':
-        genes = rule.get('genes', [])
-        for gene in genes:
-            locus = GeneLocus.query.filter_by(symbol=gene["locus"]).first()
-            a1 = gene['allele1']
-            a2 = gene['allele2']
-            result = Genotype.query.filter(
-                Genotype.locus_id == locus.id,
-                or_(
-                    and_(Genotype.allele1_id == a1, Genotype.allele2_id == a2),
-                    and_(Genotype.allele1_id == a2, Genotype.allele2_id == a1)
-                )
-            )
-            return [r.mouse_id for r in result.all()]
+        gene_set = rule.get('genes', [])
+        result = []
+        for genes in gene_set:
+            query = []
+            for gene in genes['gene']:
+                if gene["locus"]:
+                    locus = GeneLocus.query.filter_by(symbol=gene["locus"]).first()
+                else:
+                    continue
+                a1 = gene['allele1']
+                a2 = gene['allele2']
+                if a1 and a2:
+                    query.append(Genotype.query.filter(
+                        Genotype.locus_id == locus.id,
+                        or_(
+                            and_(Genotype.allele1_id == a1, Genotype.allele2_id == a2),
+                            and_(Genotype.allele1_id == a2, Genotype.allele2_id == a1)
+                        )
+                    ))
+                elif a1 and not a2:
+                    query.append(Genotype.query.filter(
+                        Genotype.locus_id == locus.id,
+                        or_(Genotype.allele1_id == a1, Genotype.allele2_id == a1)
+                    ))
+                elif not a1 and a2:
+                    query.append(Genotype.query.filter(
+                        Genotype.locus_id == locus.id,
+                        or_(Genotype.allele1_id == a2, Genotype.allele2_id == a2)
+                    ))
+                else:
+                    query.append(Genotype.query.filter(
+                        Genotype.locus_id == locus.id
+                    ))
+            common_locus = query[0]
+            for subq in query[1:]:
+                common_locus = common_locus.intersect(subq)
+            result.append(common_locus)
+        common_mice = result[0]
+        for subq in result[1:]:
+            common_mice = common_mice.union(subq)
+        return [r.mouse_id for r in common_mice.all()]
     elif rule['type'] == 'sex':
         value = rule.get('value')
         if value in ['M', 'F']:
@@ -3124,7 +3161,7 @@ def review_predefined_groups():
         if editing['type'] == 'rule':
             group_result = []
             for group in editing['rules']:
-                group_mice_ids = candidate
+                group_mice_ids = set(candidate)
                 for rule in group.get('rules', []):
                     rule_query = analyse_rule(rule)
                     if rule_query is None:

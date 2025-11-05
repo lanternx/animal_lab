@@ -1128,6 +1128,10 @@ const saveMouse = async () => {
     }
     
     await loadMice()
+    applyFilters()
+    if (formData.cage_id) {
+      fetchCages()
+    }
     closeModal()
   } catch (error) {
     console.error('保存小鼠失败:', error)
@@ -1145,7 +1149,6 @@ const saveMouse = async () => {
     }
   } finally {
     saving.value = false
-    fetchCages()
   }
 }
 
@@ -1434,8 +1437,11 @@ const saveTemplateMice = async () => {
     
     toast.success(`添加${newMice.value.length}只小鼠！`)
     await loadMice()
+    applyFilters()
+    if (templateMouse.value.cage_id) {
+      fetchCages()
+    }
     closeModal()
-    fetchCages()
   } catch (error) {
     console.error('批量添加小鼠失败:', error)
     
