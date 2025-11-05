@@ -263,7 +263,7 @@
           <div class="form-group">
             <div class="form-header">
               <label>基因型:
-                <span class="selected-gene" v-html="selectedGeneName"></span>
+                <span class="selected-gene" v-html="geneStore.selectedGeneName"></span>
               </label>
               <button class="primary-btn btn-add-top" @click="addGene" :disabled="!addable">
                 <i class="material-icons">add</i>
@@ -275,7 +275,7 @@
               <div class="locus-control">
                 <div class="locus-select">
                 <select v-model="gene.locus" @change="onFormLocusChange(index, gene.locus)">
-                  <option v-for="locus in locusSuggestions[index]" :key="locus.id" :value="locus.symbol">
+                  <option v-for="locus in geneStore.locusSuggestions[index]" :key="locus.id" :value="locus.symbol">
                     {{ locus.symbol }}
                   </option>
                 </select>
@@ -627,8 +627,8 @@ import { useGeneStore, useCageStore, useExperimentStore } from '@/stores'
 import { storeToRefs } from 'pinia'
 
 const geneStore = useGeneStore()
-const { mice, loading, genotypes } = storeToRefs(geneStore)
-const { loadMice } = geneStore
+const { mice, loading, genotypes, selectedGenes, alleleSuggestions, addable } = storeToRefs(geneStore)
+const { loadMice, onFormLocusChange, onFormAlleleChange, deleteGene, addGene, deleteGenes } = geneStore
 
 const cageStore = useCageStore()
 const { cages } = storeToRefs(cageStore)
@@ -701,50 +701,6 @@ const filters = reactive({
   tests_planned: null
 })
 const filteredAlleles = ref([])
-
-// 基因型选择
-const selectedGenes = ref([])
-const selectedGeneName = computed(() => {
-  return selectedGenes.value.map(g => {
-    // 处理野生型情况
-    if (g.locus === "WT") {
-      return "WT"
-    }
-    if (g.locus) {
-      const alleles = genotypes.value.find(gt => gt.symbol === g.locus).alleles
-      const allele1 = g.allele1 ? alleles.find(a => a.id === g.allele1)?.symbol : ""
-      const allele2 = g.allele2 ? alleles.find(a => a.id === g.allele2)?.symbol : ""
-      return `${g.locus}<sup>${allele1}/${allele2}</sup>`
-    } else {
-      return ''
-    }
-  }).join(";")
-})
-const locusSuggestions = computed(() => {
-  const hasWT = selectedGenes.value.some(g => g.locus === "WT");
-  return selectedGenes.value.map((gene, index) => {
-    
-    const selectedLoci = selectedGenes.value
-      .filter((_, i) => i !== index)
-      .map(g => g.locus);
-    
-    if (hasWT) {
-      if (gene.locus === "WT") {
-        return genotypes.value.filter(genotype => 
-          !selectedLoci.includes(genotype.symbol)
-        );
-      } else {
-        return [genotypes.value.find(genotype => genotype.symbol === "WT")];
-      }
-    } else {
-      return genotypes.value.filter(genotype => 
-          !selectedLoci.includes(genotype.symbol)
-        );
-    }
-  });
-});
-const alleleSuggestions = ref([])
-const addable = ref(true)
 
 // 父本母本选择
 const fatherQuery = ref('')
@@ -1261,76 +1217,6 @@ const showContextMenu = (event, mouse) => {
 
 const closeContextMenu = () => {
   contextMenu.visible = false
-}
-
-const onFormLocusChange = (index, locus) => {
-  // 查找匹配的基因位点
-  const matchedLocus = genotypes.value.find(g => g.symbol === locus);
-  // 更新等位基因建议
-  alleleSuggestions.value[index] = matchedLocus ? [matchedLocus.alleles, matchedLocus.alleles] : [[], []];
-  if (matchedLocus.alleles.length == 1) {
-    selectedGenes.value[index].allele1 = matchedLocus.alleles[0].id
-    selectedGenes.value[index].allele2 = matchedLocus.alleles[0].id
-  } else {
-    selectedGenes.value[index].allele1 = null
-    selectedGenes.value[index].allele2 = null
-  }
-  if (locus === "WT") {
-    selectedGenes.value = [{'locus': 'WT', 'allele1': null, 'allele2': null}]
-    addable.value = false
-  } else {
-    addable.value = true
-  }
-};
-
-const onFormAlleleChange = (isFirstAllele, index, allele) => {
-  const locus = genotypes.value.find(g => g.symbol === selectedGenes.value[index].locus)
-  if (!locus) {
-    return
-  }
-  const selectedAllele = locus.alleles.find(a => a.id === allele);
-  if (!selectedAllele) {
-    return
-  }
-  const targetArray = isFirstAllele 
-    ? alleleSuggestions.value[index][1] 
-    : alleleSuggestions.value[index][0];
-  if (selectedAllele.is_wildtype) {
-    const newArray = targetArray.filter(a => !a.is_wildtype);
-    if (isFirstAllele) {
-      alleleSuggestions.value[index][1] = newArray;
-    } else {
-      alleleSuggestions.value[index][0] = newArray;
-    }
-  } else {
-    const alls = locus.alleles
-    if (isFirstAllele) {
-      alleleSuggestions.value[index][1] = alls
-    } else {
-      alleleSuggestions.value[index][0] = alls
-    }
-  }
-
-  if (isFirstAllele && alleleSuggestions.value[index][1].length === 1) {
-    selectedGenes.value[index].allele2 = alleleSuggestions.value[index][1][0].id
-  }
-}
-
-const deleteGene = (index) => {
-  if ( selectedGenes.value[index].locus === "WT") {
-    addable.value = true
-  }
-  selectedGenes.value.splice(index, 1)
-}
-
-const addGene = () => {
-  selectedGenes.value.push({"locus":'', "allele1":null, "allele2":null})
-  alleleSuggestions.value.push([])
-}
-
-const deleteGenes = () => {
-  selectedGenes.value = []
-  addable.value = true
 }
 
 const searchParents = (type) => {
@@ -1883,43 +1769,6 @@ onMounted(async () => {
   border-top: 1px solid #f1f5f9;
 }
 
-.primary-btn {
-  padding: 10px 20px;
-  background: #4a9bff;
-  color: white;
-  border: none;
-  border-radius: 6px;
-  cursor: pointer;
-  font-weight: 500;
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  transition: background 0.3s;
-}
-
-.primary-btn:hover:not(:disabled) {
-  background: #3a8beb;
-}
-
-.primary-btn:disabled {
-  opacity: 0.7;
-  cursor: not-allowed;
-}
-
-.cancel-btn {
-  padding: 10px 20px;
-  background: #f8fafc;
-  color: #4a5568;
-  border: 1px solid #e2e8f0;
-  border-radius: 6px;
-  cursor: pointer;
-  font-weight: 500;
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  transition: background 0.3s;
-}
-
 .cancel-btn:hover {
   background: #e2e8f0;
 }
@@ -2031,25 +1880,6 @@ onMounted(async () => {
 
 .context-menu li i {
   font-size: 18px;
-}
-
-.genotype-select-container {
-  background: white;
-  border-radius: 10px;
-  padding: 15px;
-  margin-bottom: 15px;
-  box-shadow: 0 3px 10px rgba(0, 0, 0, 0.05);
-  border: 1px solid #e1e8f0;
-  transition: all 0.3s ease;
-  display: flex;
-  flex-wrap: wrap;
-  gap: 15px;
-  align-items: center;
-}
-
-.genotype-select-container:hover {
-  box-shadow: 0 5px 15px rgba(0, 0, 0, 0.08);
-  border-color: #c5d5e6;
 }
 
 /* 父本母本选择样式 */
@@ -2333,174 +2163,5 @@ onMounted(async () => {
   margin-bottom: 20px;
   background-color: #f8f9fa;
   border-radius: 8px;
-}
-
-.form-header {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  margin-bottom: 20px;
-  flex-wrap: wrap;
-  gap: 15px;
-}
-
-.form-header label {
-  font-size: 1.2rem;
-  font-weight: 600;
-  color: #2c3e50;
-  display: flex;
-  align-items: center;
-}
-
-.selected-gene {
-  display: inline-block;
-  background: #e3f2fd;
-  color: #1976d2;
-  padding: 8px 15px;
-  border-radius: 50px;
-  font-weight: 600;
-  margin-left: 15px;
-  font-size: 1rem;
-  box-shadow: 0 2px 5px rgba(25, 118, 210, 0.1);
-}
-
-.btn-remove {
-    background: #f44336;
-    color: white;
-    padding: 10px 10px;
-    border-radius: 8px;
-    font-weight: 600;
-    font-size: 0.95rem;
-    cursor: pointer;
-    transition: all 0.2s ease;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    border: none;
-    min-width: 50px;
-}
-
-.btn-remove i {
-    margin-right: 5px;
-    font-size: 0.9rem;
-}
-
-.btn-remove:hover {
-    background: #e53935 !important;
-    transform: translateY(-2px);
-    box-shadow: 0 4px 8px rgba(244, 67, 54, 0.3);
-}
-
-.btn-clear-all {
-  background: #ff9800;
-}
-
-.btn-clear-all i {
-  margin-right: 8px;
-  font-size: 0.9rem;
-}
-
-.btn-clear-all:hover {
-  background: #f57c00 !important;
-  transform: translateY(-2px);
-  box-shadow: 0 4px 8px rgba(255, 152, 0, 0.3);
-}
-
-.btn-add-top {
-  background: #4caf50;
-}
-
-.btn-add-top i {
-  margin-right: 8px;
-  font-size: 0.9rem;
-}
-
-.btn-add-top:hover {
-  background: #43a047 !important;
-  transform: translateY(-2px);
-  box-shadow: 0 4px 8px rgba(76, 175, 80, 0.3);
-}
-
-.allele-group {
-  flex: 1;
-}
-
-.allele-group select {
-  width: 100%;
-  padding: 10px 15px;
-  border-radius: 8px;
-  border: 1px solid #c5d5e6;
-  background: white;
-  font-size: 1rem;
-  color: #2c3e50;
-  appearance: none;
-  background-position: right 15px center;
-  background-size: 16px;
-  transition: all 0.2s;
-}
-
-.allele-group select:focus {
-  outline: none;
-  border-color: #4a6fa5;
-  box-shadow: 0 0 0 3px rgba(74, 111, 165, 0.2);
-}
-
-.allele-group select:disabled {
-  background-color: #f5f7fa;
-  color: #90a4ae;
-  cursor: not-allowed;
-}
-
-.allele-group label {
-  display: block;
-  margin-bottom: 8px;
-  font-size: 0.9rem;
-  color: #546e7a;
-  font-weight: 500;
-}
-
-.allele-controls {
-  display: flex;
-  flex: 2;
-  gap: 15px;
-  min-width: 300px;
-}
-
-.locus-control {
-  display: flex;
-  flex: 1;
-  min-width: 150px;
-  gap: 10px;
-}
-
-.locus-select {
-  display: flex;
-  flex: 1;
-  min-width: 90px;
-}
-
-.locus-select select {
-  width: 100%;
-  padding: 10px 15px;
-  border-radius: 8px;
-  border: 1px solid #c5d5e6;
-  background: white;
-  font-size: 1rem;
-  color: #2c3e50;
-  background-position: right 15px center;
-  background-size: 16px;
-  transition: all 0.2s;
-}
-
-.locus-select select:focus {
-  outline: none;
-  border-color: #4a6fa5;
-  box-shadow: 0 0 0 3px rgba(74, 111, 165, 0.2);
-}
-
-.locus-select select:disabled {
-  background-color: #f5f7fa;
-  color: #90a4ae;
-  cursor: not-allowed;
 }
 </style>

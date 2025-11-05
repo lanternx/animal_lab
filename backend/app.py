@@ -1,7 +1,7 @@
 from flask import Flask, jsonify, request, send_file
 from flask_cors import CORS
 from datetime import datetime, date
-from models import db, Mouse, Cage, WeightRecord, StatusRecord, Pedigree, GeneLocus, Allele, Genotype, Location, ExperimentType, FieldDefinition, Experiment, ExperimentClass, ExperimentValue
+from models import db, Mouse, Cage, WeightRecord, StatusRecord, Pedigree, GeneLocus, Allele, Genotype, Location, ExperimentType, FieldDefinition, Experiment, ExperimentClass, ExperimentValue, PredefinedGroup
 import os
 import sys
 from pathlib import Path
@@ -220,7 +220,7 @@ def get_all_mice():
                 'father': father,
                 'mother': mother,
                 'strain': m.strain,
-                'tests_done': m.tests_done,
+                'tests_done': [t.experiment_id for t in m.tests_done] if m.tests_done else [],
                 'tests_planned': m.tests_planned,
                 'days_old': days,
                 'weeks_old': weeks
@@ -449,7 +449,6 @@ def batch_experiments_change():
                             ExperimentClass.mouse_id == m.tid,
                             ExperimentClass.experiment_id == t
                         ).delete()
-                m.tests_done = test_ids
         elif operation == "计划实验":
             for mtid in mice_ids:
                 m = Mouse.query.get(mtid)
@@ -2082,28 +2081,6 @@ def get_experiment_presets():
 
 
 
-@app.route('/api/grouping/presets', methods=['GET'])
-def get_preset_group():
-    presets = [
-        {
-        'name': '对照组',
-        'description': 'WT雄性小鼠',
-        'rules': [
-            {
-                'type': 'genotype',
-                'locus': 'WT'
-            },
-            {
-                'type': 'sex',
-                'value': 'M'
-            }
-            ]
-        }
-    ]
-    return jsonify(presets)
-
-
-
 #实验视图
 @app.route('/api/experiment/<int:experiment_id>', methods=['GET'])
 def get_experiment(experiment_id):
@@ -2151,157 +2128,55 @@ def get_experiment_data(experiment_id):
     except Exception as e:
         logger.error(f"获取实验数据失败: {str(e)}")
         return jsonify({'error': str(e)}), 500
-    
-@app.route('/api/experiment/<int:experiment_id>/candidate_mice', methods=['GET'])
-def get_candidate_mice(experiment_id):
-    """获取候选池小鼠 - 基于tests_done字段筛选"""
-    try:
-        
-        ExperimentType.query.get_or_404(experiment_id) # 验证实验
-        query = Mouse.query.filter_by(live_status=1)  # 只选择存活的小鼠
-        
-        candidate_mice = []
-        for mouse in query.all():
-            if experiment_id in mouse.tests_done:
-                candidate_mice.append(mouse)
-        
-        # 排除已经在分组中的小鼠
-        existing_mice_ids = [ec.mouse_id for ec in 
-                            ExperimentClass.query.filter_by(experiment_id=experiment_id).all()]
-        
-        candidate_mice = [mouse for mouse in candidate_mice if mouse.tid not in existing_mice_ids]
-        
-        return jsonify([mouse.to_dict() for mouse in candidate_mice])
-    except Exception as e:
-        logger.error(f"获取候选小鼠失败: {str(e)}")
-        return jsonify({'error': str(e)}), 500
 
 @app.route('/api/experiment/<int:experiment_id>/groups', methods=['GET'])
 def get_experiment_groups(experiment_id):
-    """获取实验的所有分组"""
+    """获取实验的分组信息"""
     try:
         ExperimentType.query.get_or_404(experiment_id)# 验证实验是否存在
-        
-        # 获取所有分组
-        groups = {}
-        experiment_classes = ExperimentClass.query.filter_by(experiment_id=experiment_id).options(
-            joinedload(ExperimentClass.mouse)
-        ).all()
-        
-        for ec in experiment_classes:
-            if ec.class_id not in groups:
-                groups[ec.class_id] = []
-            groups[ec.class_id].append(ec.to_dict())
-        
-        return jsonify(groups)
+        groups = PredefinedGroup.query.filter_by(experiment_id=experiment_id).first()
+        if groups:
+            return jsonify(groups.to_dict())
+        else:
+            return jsonify({'error': '尚未设定分组'}), 404
     except Exception as e:
         logger.error(f"获取实验分组失败: {str(e)}")
         return jsonify({'error': str(e)}), 500
-    
-@app.route('/api/experiment/<int:experiment_id>/groups/<oldGroupId>', methods=['PUT'])
-def rename_experiment_group(experiment_id, oldGroupId):
-    """实验分组改名"""
-    new_id = request.get_json()['newGroupId']
+
+@app.route('/api/experiment/<int:experiment_id>/groups', methods=['PUT'])
+def rename_experiment_group(experiment_id):
+    """修改实验分组"""
+    data = request.get_json()
     try:
         # 验证实验是否存在
-        ExperimentType.query.get_or_404(experiment_id)
-        experiment_classes = ExperimentClass.query.filter_by(experiment_id=experiment_id).filter_by(class_id=oldGroupId).all()
-        for ec in experiment_classes:
-            ec.class_id = new_id
+        exp = ExperimentType.query.get_or_404(experiment_id)
+        groups = PredefinedGroup.query.filter_by(experiment_id=experiment_id).first()
+        groups.name = data.get('')
+        groups.description = data.get('')
+        groups.type = data.get('')
+        groups.rules = data.get('')
         db.session.commit()
-        return jsonify({'message': f'分组 {oldGroupId} 已重命名为 {new_id}'})
+        return jsonify({'message': f'实验{exp.name}的分组信息已修改'})
     except Exception as e:
         db.session.rollback()
         logger.error(f"实验分组改名失败: {str(e)}")
         return jsonify({'error': str(e)}), 500
 
-@app.route('/api/experiment/<int:experiment_id>/class_change', methods=['POST'])
-def add_mouse_to_group(experiment_id):
-    """改变小鼠分组"""
-    try:
-        data = request.get_json()
-        mouse_id = data.get('mouse_id')
-        from_class_id = data.get('class_id')
-        to_class_id = data.get('class_new_id')
-        
-        if not mouse_id:
-            return jsonify({'error': 'mouse_id是必需的'}), 400
-        
-        # 验证实验和小鼠是否存在
-        ExperimentType.query.get_or_404(experiment_id)
-        Mouse.query.get_or_404(mouse_id)
-
-        if from_class_id:
-            # 检查小鼠是否已在分组中
-            existing = ExperimentClass.query.filter_by(
-                experiment_id=experiment_id, 
-                mouse_id=mouse_id,
-                class_id=from_class_id
-            ).first()
-            
-            if not existing:
-                return jsonify({'error': '该小鼠不在分组中'}), 400
-            
-            if to_class_id:
-                existing.class_id = to_class_id
-            else:
-                db.session.delete(existing)
-        else:
-            # 创建新的分组记录
-            experiment_class = ExperimentClass(
-                mouse_id=mouse_id,
-                experiment_id=experiment_id,
-                class_id=to_class_id
-            )
-            db.session.add(experiment_class)
-        db.session.commit()
-        return jsonify({'message': '小鼠已成功添加到分组'})
-    except Exception as e:
-        db.session.rollback()
-        logger.error(f"改变小鼠分组失败: {str(e)}")
-        return jsonify({'error': str(e)}), 500
-
-@app.route('/api/experiment/<int:experiment_id>/groups/<int:class_id>', methods=['DELETE'])
-def delete_group(experiment_id, class_id):
-    """删除整个分组"""
+@app.route('/api/experiment/<int:experiment_id>/groups', methods=['DELETE'])
+def delete_group(experiment_id):
+    """删除实验分组信息"""
     try:
         # 查找并删除该分组的所有记录
-        experiment_classes = ExperimentClass.query.filter_by(
-            experiment_id=experiment_id,
-            class_id=class_id
-        ).all()
-        
-        for ec in experiment_classes:
-            db.session.delete(ec)
-        
+        groups = PredefinedGroup.query.filter_by(experiment_id=experiment_id).first()
+        groups.delete()
         db.session.commit()
         
-        return jsonify({'message': f'分组 {class_id} 已删除', 'deleted_count': len(experiment_classes)})
+        return jsonify(), 204
     except Exception as e:
         db.session.rollback()
         logger.error(f"删除实验分组失败: {str(e)}")
         return jsonify({'error': str(e)}), 500
 
-@app.route('/api/experiment/<int:experiment_id>/groups/clear', methods=['DELETE'])
-def clear_all_groups(experiment_id):
-    """清除实验的所有分组"""
-    try:
-        # 查找并删除该实验的所有分组记录
-        experiment_classes = ExperimentClass.query.filter_by(
-            experiment_id=experiment_id
-        ).all()
-        
-        for ec in experiment_classes:
-            db.session.delete(ec)
-        
-        db.session.commit()
-        
-        return jsonify({'message': '所有分组已清除', 'deleted_count': len(experiment_classes)})
-    except Exception as e:
-        db.session.rollback()
-        logger.error(f"清除实验分组失败: {str(e)}")
-        return jsonify({'error': str(e)}), 500
-    
 @app.route('/api/experiments', methods=['POST'])
 def input_experiment_records():
     """录入实验数据"""
@@ -2678,6 +2553,33 @@ def add_summary_sheet(writer, experiment_dfs):
     worksheet = writer.sheets['汇总']
     auto_adjust_column_widths(worksheet)
     worksheet.freeze_panes = 'A2'
+
+@app.route('/api/experiments/<int:experiment_id>/grouped_mice', methods=['GET'])
+def get_experiment_grouped_mice(experiment_id):
+    """获取实验预设分组的信息和小鼠"""
+    try:
+        predefined_group = PredefinedGroup.query.filter_by(experiment_id=experiment_id).first()
+        if predefined_group and predefined_group.type == 'id':
+            return jsonify(predefined_group.to_dict()), 200
+        else:
+            return jsonify({'error': str(e)}), 404
+    except Exception as e:
+        logger.error(f"获取预设分组数据失败: {str(e)}")
+        return jsonify({'error': str(e)}), 500
+
+@app.route('/api/experiments/<int:experiment_id>/mice', methods=['GET'])
+def get_experiment_mice(experiment_id):
+    """获取实验预设分组的小鼠"""
+    try:
+        em = ExperimentClass.query.filter_by(experiment_id=experiment_id).all()
+        mid = [m.mouse_id for m in em]
+        mice = Mouse.query.filter(Mouse.tid._in(mid)).all()
+        return jsonify([m.to_dict() for m in mice]), 200
+    except Exception as e:
+        logger.error(f"获取实验小鼠数据失败: {str(e)}")
+        return jsonify({'error': str(e)}), 500
+        
+
 
 @app.route('/api/database/clear', methods=['POST'])
 def clear_database():
@@ -3096,9 +2998,147 @@ def get_temp_groups():
     except Exception as e:
         return jsonify({'error': f'服务器错误: {str(e)}'}), 500
     
-@app.route('/api/groups/predefined/<int:gIndex>', methods=['GET'])
-def get_predefined_groups(gIndex):
-    pass
+@app.route('/api/predefined/<int:groups_id>/mice', methods=['GET'])
+def get_predefined_mice(groups_id):
+    """获取预设分组的信息和小鼠编号"""
+    try:
+        predefined_group = PredefinedGroup.query.get_or_404(groups_id)
+        if predefined_group.type == 'id':
+            return jsonify(predefined_group.to_dict()), 200
+        elif predefined_group.type == 'rule':
+            group_result = []
+            all_mice = Mouse.query.all()
+            all_mice_tid = [m.tid for m in all_mice]
+            for group in predefined_group.rules:
+                group_info = {
+                    'name':group.get('name', ''),
+                    'color':group.get('color', ''),
+                }
+                group_mice_ids = set(all_mice_tid)
+                for rule in group.get('rules', []):
+                    rule_query = analyse_rule(rule)
+                    if rule_query is None:
+                        continue
+                    # 应用规则筛选,取交集（AND逻辑）
+                    rule_mice_ids = set(rule_query)
+                    group_mice_ids = group_mice_ids.intersection(rule_mice_ids)
+                group_info['mouseId'] = list(group_mice_ids)
+                group_result.append(group_info)
+            return jsonify(group_result), 200
+        else:
+            return jsonify(), 403
+    except Exception as e:
+        logger.error(f"获取预设分组数据失败: {str(e)}")
+        return jsonify({'error': str(e)}), 500
+
+def analyse_rule(rule):
+    if rule['type'] == 'genotype':
+        genes = rule.get('genes', [])
+        for gene in genes:
+            locus = GeneLocus.query.filter_by(symbol=gene["locus"]).first()
+            a1 = gene['allele1']
+            a2 = gene['allele2']
+            result = Genotype.query.filter(
+                Genotype.locus_id == locus.id,
+                or_(
+                    and_(Genotype.allele1_id == a1, Genotype.allele2_id == a2),
+                    and_(Genotype.allele1_id == a2, Genotype.allele2_id == a1)
+                )
+            )
+            return [r.mouse_id for r in result.all()]
+    elif rule['type'] == 'sex':
+        value = rule.get('value')
+        if value in ['M', 'F']:
+            return [r.tid for r in Mouse.query.filter(Mouse.sex == value).all()]
+    elif rule['type'] == 'strain':
+        value = rule.get('value')
+        if value:
+            return [r.tid for r in Mouse.query.filter(Mouse.strain == value).all()]
+    elif rule['type'] == 'cage':
+        cages = rule.get('cages')
+        if value:
+            return [r.tid for r in Mouse.query.filter(Mouse.cage_id.in_(cages)).all()]
+    elif rule['type'] == 'live_status':
+        value = rule.get('value')
+        if value is not None:
+            return [r.tid for r in Mouse.query.filter(Mouse.live_status == value).all()]
+    else:
+        return False
+    return False
+
+@app.route('/api/groups/predefined/<int:gIndex>', methods=['PUT'])
+def modify_predefined_groups(gIndex):
+    try:
+        editing = request.json
+        group_name = editing.get('name', '')
+        group_description = editing.get('description', '')
+        group_type = editing.get('type', '')
+        rules = editing.get('rules', [])
+        if not (group_name and group_type):
+            return jsonify(), 403
+        new_rule = PredefinedGroup.query.get_or_404(gIndex)
+        new_rule.name = group_name
+        new_rule.description = group_description
+        new_rule.type = group_type
+        new_rule.rules = rules
+        db.session.commit()
+        return jsonify(), 200
+    except json.JSONDecodeError:
+        return jsonify({'error': '分组参数JSON格式错误'}), 400
+    except Exception as e:
+        db.session.rollback()
+        logger.error(f"修改预设分组失败: {str(e)}")
+        return jsonify({'error': f'修改预设分组失败: {str(e)}'}), 500
+
+@app.route('/api/groups/predefined', methods=['POST'])
+def add_predefined_groups():
+    try:
+        editing = request.json
+        group_name = editing.get('name', '')
+        group_description = editing.get('description', '')
+        group_type = editing.get('type', '')
+        rules = editing.get('rules', [])
+        if group_name and group_type:
+            new_rule = PredefinedGroup(
+                name = group_name,
+                description = group_description,
+                rules = rules
+            )
+            db.session.add(new_rule)
+            db.session.commit()
+            return jsonify(), 200
+        else:
+            return jsonify(), 403
+    except json.JSONDecodeError:
+        return jsonify({'error': '分组参数JSON格式错误'}), 400
+    except Exception as e:
+        db.session.rollback()
+        logger.error(f"预设分组失败: {str(e)}")
+        return jsonify({'error': f'预设分组失败: {str(e)}'}), 500
+
+@app.route('/api/groups/predefined/review', methods=['POST'])
+def review_predefined_groups():
+    try:
+        editing = request.json.get("editing",{})
+        candidate = request.json.get("candidate",[])
+        if editing['type'] == 'rule':
+            group_result = []
+            for group in editing['rules']:
+                group_mice_ids = candidate
+                for rule in group.get('rules', []):
+                    rule_query = analyse_rule(rule)
+                    if rule_query is None:
+                        continue
+                    # 应用规则筛选取交集（AND逻辑）
+                    rule_mice_ids = set(rule_query)
+                    group_mice_ids = group_mice_ids.intersection(rule_mice_ids)
+                group_result.append(list(group_mice_ids))
+            return jsonify(group_result), 200
+        else:
+            return jsonify(), 403
+    except Exception as e:
+        logger.error(f"解析预设分组失败: {str(e)}")
+        return jsonify({'error': f'解析预设分组失败: {str(e)}'}), 404
 
 if __name__ == '__main__':
     app.run(debug=True, host='localhost', port=5000)

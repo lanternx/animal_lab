@@ -96,7 +96,7 @@
       <!-- 笼位网格区域 -->
       <div class="cage-grid" id="cageGrid">
         <div 
-          v-for="cage in filteredCages" 
+          v-for="cage in cageStore.filteredCages" 
           :key="cage.id" 
           class="cage-card"
           :data-cage-id="cage.id"
@@ -389,12 +389,6 @@ watch(searchTerm, (newVal) => {
   if (!newVal) {
     clearSearch()
   }
-})
-
-// 计算属性 - 过滤笼位
-const filteredCages = computed(() => {
-  if (!activeSection.value) return cages.value
-  return cages.value.filter(cage => cage.section === activeSection.value)
 })
 
 // 计算属性 - 按 order 排序后的部分

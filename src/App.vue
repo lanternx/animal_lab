@@ -63,9 +63,9 @@
       </router-link>
         </div>
         
-        <div class="nav-section" v-if="showedExperiments.length>0">
+        <div class="nav-section" v-if="experimentStore.showedExperiments.length>0">
           <div class="nav-title" v-if="!sidebarCollapsed">实验记录</div>
-          <div v-for="(expr, index) in showedExperiments" :key="index">
+          <div v-for="(expr, index) in experimentStore.showedExperiments" :key="index">
             <router-link 
               :to="{ name: 'Experiments', params: { experimentId: expr.id } }" 
               custom v-slot="{ navigate, isActive }"
@@ -169,7 +169,6 @@ import { useExperimentStore } from '@/stores'
 import { storeToRefs } from 'pinia'
 
 const experimentStore = useExperimentStore()
-const { showedExperiments } = storeToRefs(experimentStore)
 
 // 响应式数据
 const sidebarCollapsed = ref(true)

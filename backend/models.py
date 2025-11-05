@@ -13,12 +13,12 @@ class Mouse(db.Model):
     death_date = db.Column(db.Date)
     cage_id = db.Column(db.Integer, db.ForeignKey('cage.id'))
     strain = db.Column(db.String(50))
-    tests_done = db.Column(db.JSON)     #储存实验id的列表
     tests_planned = db.Column(db.JSON)  #储存实验id的列表
 
     # 关系
     cage = db.relationship('Cage', backref=db.backref('mice', lazy=True))
     genotypes = db.relationship('Genotype', backref='mouse', lazy='dynamic')
+    tests_done = db.relationship('ExperimentClass', backref='mouse', lazy='dynamic')
     
     def get_genotypes(self):
         genes = []
@@ -60,7 +60,7 @@ class Mouse(db.Model):
             'death_date': self.death_date.isoformat() if self.death_date else None,
             'cage_id': self.cage_id,
             'strain': self.strain,
-            'tests_done': self.tests_done,
+            'tests_done': [t.experiment_id for t in self.tests_done] if self.tests_done else [],
             'tests_planned': self.tests_planned
         }
     
@@ -209,7 +209,7 @@ class Genotype(db.Model):
     locus = db.relationship('GeneLocus')
     allele1 = db.relationship('Allele', foreign_keys=[allele1_id])
     allele2 = db.relationship('Allele', foreign_keys=[allele2_id])
-    
+
     def contains_allele(self, al_id):
         if self.allele1_id == al_id or self.allele2_id == al_id:
             return True
@@ -330,9 +330,6 @@ class Experiment(db.Model):
     date = db.Column(db.Date, nullable=False)
     notes = db.Column(db.Text)  # 备注
     
-    # 与小鼠的关系
-    mouse = db.relationship('Mouse', backref=db.backref('experiments', lazy=True))
-    
     # 与实验类型的关系
     experiment_type = db.relationship('ExperimentType', backref=db.backref('experiments', lazy=True))
     
@@ -396,12 +393,7 @@ class ExperimentValue(db.Model):
 class ExperimentClass(db.Model):
     id = db.Column(db.Integer, primary_key=True)
     mouse_id = db.Column(db.Integer, db.ForeignKey('mouse.tid'), nullable=False)
-    experiment_id = db.Column(db.Integer, db.ForeignKey('experiment.id'), nullable=False)
-    class_id = db.Column(db.String, nullable=False)
-
-    # 关系
-    mouse = db.relationship('Mouse', backref=db.backref('experiment_classes', lazy=True))
-    experiment = db.relationship('Experiment', backref=db.backref('experiment_classes', lazy=True))
+    experiment_id = db.Column(db.Integer, db.ForeignKey('experiment_type.id'), nullable=False)
     
     def to_dict(self):
         return {
@@ -411,20 +403,25 @@ class ExperimentClass(db.Model):
             'mouse_info': self.mouse.to_dict() if self.mouse else None
         }
     
-
 class PredefinedGroup(db.Model):
-    __tablename__ = 'group_rule'
+    __tablename__ = 'rule_of_predefined_groups'
     
     id = db.Column(db.Integer, primary_key=True)
     name = db.Column(db.String(100), unique=True, nullable=False)
     description = db.Column(db.String(200))
+    experiment_id = db.Column(db.Integer, db.ForeignKey('experiment_type.id'), unique=True)
+    type = db.Column(db.String(20), nullable=False) #id/rule
     rules = db.Column(db.JSON)  # 存储复杂分组规则
+    """ rule[{name:, color:, rules:[]},{...}]
+        id[{name:, color:, mouseId:[]},{...}]注意，按id分组显示时需要确定小鼠是否还存在"""
 
     def to_dict(self):
         return {
             'id': self.id,
             'name': self.name,
             'description': self.description,
+            'experiment_id': self.experiment_id,
+            'type': self.type,
             'rules': self.rules or []
         }
     

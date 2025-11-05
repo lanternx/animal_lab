@@ -1,5 +1,5 @@
 import { defineStore } from 'pinia'
-import { ref } from 'vue'
+import { ref, computed } from 'vue'
 import axios from 'axios'
 
 export const useCageStore = defineStore('cage', () => {
@@ -35,6 +35,11 @@ export const useCageStore = defineStore('cage', () => {
     const cages = ref([])
     const activeSection = ref('')
     const section_key = ref(false)
+    // 计算属性 - 过滤笼位
+    const filteredCages = computed(() => {
+        if (!activeSection.value) return cages.value
+        return cages.value.filter(cage => cage.section === activeSection.value)
+    })
     // 获取所有笼位数据
     async function fetchCages() {
     try {
@@ -56,14 +61,21 @@ export const useCageStore = defineStore('cage', () => {
     }
     }
 
+    const calculateCages = (section) => {
+        if (!section) return cages.value
+        return cages.value.filter(cage => cage.section === section)
+    }
+
     return {
         locations,
         cages,
+        filteredCages,
         activeSection,
         section_key,
 
         fetchLocations,
         fetchCages,
+        calculateCages,
         loadInitialData
     }
 })

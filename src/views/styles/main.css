@@ -289,13 +289,6 @@
   font-weight: 600;
 }
 
-/* 状态标识 */
-.censor-0 { color: #999; }  /* 自然死亡 */
-.censor-1 { color: #52c41a; } /* 存活 */
-.censor-2 { color: #faad14; } /* 计划处死 */
-.censor-3 { color: #f5222d; } /* 意外丢失 */
-.censor-4 { color: #722ed1; } /* 废弃 */
-
 /* 操作按钮 */
 .btn-detail, .btn-export {
   padding: 5px 10px;
@@ -447,4 +440,317 @@
     padding: 9px;
     border: 1px solid #ddd;
     border-radius: 4px;
+}
+
+.form-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 20px;
+  flex-wrap: wrap;
+  gap: 15px;
+}
+
+.form-header label {
+  font-size: 1.2rem;
+  font-weight: 600;
+  color: #2c3e50;
+  display: flex;
+  align-items: center;
+}
+
+.selected-gene {
+  display: inline-block;
+  background: #e3f2fd;
+  color: #1976d2;
+  padding: 8px 15px;
+  border-radius: 50px;
+  font-weight: 600;
+  margin-left: 15px;
+  font-size: 1rem;
+  box-shadow: 0 2px 5px rgba(25, 118, 210, 0.1);
+}
+
+.btn-remove {
+    background: #f44336;
+    color: white;
+    padding: 10px 10px;
+    border-radius: 8px;
+    font-weight: 600;
+    font-size: 0.95rem;
+    cursor: pointer;
+    transition: all 0.2s ease;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    border: none;
+    min-width: 50px;
+}
+
+.btn-remove i {
+    margin-right: 5px;
+    font-size: 0.9rem;
+}
+
+.btn-remove:hover {
+    background: #e53935 !important;
+    transform: translateY(-2px);
+    box-shadow: 0 4px 8px rgba(244, 67, 54, 0.3);
+}
+
+.btn-clear-all {
+  background: #ff9800 !important;
+}
+
+.btn-clear-all i {
+  margin-right: 8px;
+  font-size: 0.9rem;
+}
+
+.btn-clear-all:hover {
+  background: #f57c00 !important;
+  transform: translateY(-2px);
+  box-shadow: 0 4px 8px rgba(255, 152, 0, 0.3);
+}
+
+.btn-add-top {
+  background: #4caf50;
+}
+
+.btn-add-top i {
+  margin-right: 8px;
+  font-size: 0.9rem;
+}
+
+.btn-add-top:hover {
+  background: #43a047 !important;
+  transform: translateY(-2px);
+  box-shadow: 0 4px 8px rgba(76, 175, 80, 0.3);
+}
+
+.allele-group {
+  flex: 1;
+}
+
+.allele-group select {
+  width: 100%;
+  padding: 10px 15px;
+  border-radius: 8px;
+  border: 1px solid #c5d5e6;
+  background: white;
+  font-size: 1rem;
+  color: #2c3e50;
+  appearance: none;
+  background-position: right 15px center;
+  background-size: 16px;
+  transition: all 0.2s;
+}
+
+.allele-group select:focus {
+  outline: none;
+  border-color: #4a6fa5;
+  box-shadow: 0 0 0 3px rgba(74, 111, 165, 0.2);
+}
+
+.allele-group select:disabled {
+  background-color: #f5f7fa;
+  color: #90a4ae;
+  cursor: not-allowed;
+}
+
+.allele-group label {
+  display: block;
+  margin-bottom: 8px;
+  font-size: 0.9rem;
+  color: #546e7a;
+  font-weight: 500;
+}
+
+.allele-controls {
+  display: flex;
+  flex: 2;
+  gap: 15px;
+  min-width: 300px;
+}
+
+.locus-control {
+  display: flex;
+  flex: 1;
+  min-width: 150px;
+  gap: 10px;
+}
+
+.locus-select {
+  display: flex;
+  flex: 1;
+  min-width: 90px;
+}
+
+.locus-select select {
+  width: 100%;
+  padding: 10px 15px;
+  border-radius: 8px;
+  border: 1px solid #c5d5e6;
+  background: white;
+  font-size: 1rem;
+  color: #2c3e50;
+  background-position: right 15px center;
+  background-size: 16px;
+  transition: all 0.2s;
+}
+
+.locus-select select:focus {
+  outline: none;
+  border-color: #4a6fa5;
+  box-shadow: 0 0 0 3px rgba(74, 111, 165, 0.2);
+}
+
+.locus-select select:disabled {
+  background-color: #f5f7fa;
+  color: #90a4ae;
+  cursor: not-allowed;
+}
+
+.genotype-select-container {
+  background: white;
+  border-radius: 10px;
+  padding: 15px;
+  margin-bottom: 15px;
+  box-shadow: 0 3px 10px rgba(0, 0, 0, 0.05);
+  border: 1px solid #e1e8f0;
+  transition: all 0.3s ease;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 15px;
+  align-items: center;
+}
+
+.genotype-select-container:hover {
+  box-shadow: 0 5px 15px rgba(0, 0, 0, 0.08);
+  border-color: #c5d5e6;
+}
+
+.primary-btn {
+  padding: 10px 20px;
+  background: #4a9bff;
+  color: white;
+  border: none;
+  border-radius: 6px;
+  cursor: pointer;
+  font-weight: 500;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  transition: background 0.3s;
+}
+
+.primary-btn:hover:not(:disabled) {
+  background: #3a8beb;
+}
+
+.primary-btn:disabled {
+  opacity: 0.7;
+  cursor: not-allowed;
+}
+
+.cancel-btn {
+  padding: 10px 20px;
+  background: #f8fafc;
+  color: #4a5568;
+  border: 1px solid #e2e8f0;
+  border-radius: 6px;
+  cursor: pointer;
+  font-weight: 500;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  transition: background 0.3s;
+}
+
+.combinations-list {
+  padding-left: 20px;
+}
+
+.combination-item {
+  padding: 6px 12px;
+  border-bottom: 1px solid #f8f9fa;
+}
+
+.combination-item:last-child {
+  border-bottom: none;
+}
+
+.combination-label {
+  display: flex;
+  align-items: center;
+  margin: 0;
+  cursor: pointer;
+}
+
+.combination-checkbox {
+  margin-right: 8px;
+}
+
+.combination-name {
+  color: #6c757d;
+  font-size: 0.7em;
+}
+
+.combination-checkbox:checked + .combination-name {
+  color: #28a745;
+  font-weight: 500;
+}
+
+.combination-label:hover {
+  background-color: #f8f9fa;
+}
+
+.genotype-tree {
+  border: 1px solid #ced4da;
+  border-radius: 4px;
+  max-height: 200px;
+  overflow-y: auto;
+  background-color: #fff;
+}
+
+.locus-item {
+  border-bottom: 1px solid #f0f0f0;
+}
+
+.locus-item:last-child {
+  border-bottom: none;
+}
+
+.locus-header {
+  padding: 8px 12px;
+  background-color: #f8f9fa;
+  border-bottom: 1px solid #e9ecef;
+}
+
+.locus-label {
+  display: flex;
+  align-items: center;
+  font-weight: 600;
+  margin: 0;
+  cursor: pointer;
+}
+
+.locus-checkbox {
+  margin-right: 8px;
+}
+
+.locus-name {
+    font-size: 0.8rem;
+  color: #495057;
+}
+
+/* 悬停效果 */
+.locus-label:hover,
+.combination-label:hover {
+  background-color: #f8f9fa;
+}
+
+/* 选中状态 */
+.locus-checkbox:checked + .locus-name {
+  color: #007bff;
 }

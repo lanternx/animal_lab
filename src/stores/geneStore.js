@@ -1,5 +1,5 @@
 import { defineStore } from 'pinia'
-import { ref } from 'vue'
+import { ref, computed } from 'vue'
 import axios from 'axios'
 
 export const useGeneStore = defineStore('genotype', () => {
@@ -44,6 +44,50 @@ export const useGeneStore = defineStore('genotype', () => {
     const genotypes = ref([])
     const allGenotypes = ref([])
 
+    // 基因型选择
+    const selectedGenes = ref([])
+    const selectedGeneName = computed(() => {
+        return selectedGenes.value.map(g => {
+            // 处理野生型情况
+            if (g.locus === "WT") {
+            return "WT"
+            }
+            if (g.locus) {
+            const alleles = genotypes.value.find(gt => gt.symbol === g.locus).alleles
+            const allele1 = g.allele1 ? alleles.find(a => a.id === g.allele1)?.symbol : ""
+            const allele2 = g.allele2 ? alleles.find(a => a.id === g.allele2)?.symbol : ""
+            return `${g.locus}<sup>${allele1}/${allele2}</sup>`
+            } else {
+            return ''
+            }
+        }).join(";")
+    })
+    const locusSuggestions = computed(() => {
+        const hasWT = selectedGenes.value.some(g => g.locus === "WT");
+        return selectedGenes.value.map((gene, index) => {
+            
+            const selectedLoci = selectedGenes.value
+            .filter((_, i) => i !== index)
+            .map(g => g.locus);
+            
+            if (hasWT) {
+            if (gene.locus === "WT") {
+                return genotypes.value.filter(genotype => 
+                !selectedLoci.includes(genotype.symbol)
+                );
+            } else {
+                return [genotypes.value.find(genotype => genotype.symbol === "WT")];
+            }
+            } else {
+            return genotypes.value.filter(genotype => 
+                !selectedLoci.includes(genotype.symbol)
+                );
+            }
+        });
+    });
+    const alleleSuggestions = ref([])
+    const addable = ref(true)
+
     const loadAllGenotypes = async () => {
         const genotypeResponse = await axios.get('/api/genotypes')
         allGenotypes.value = genotypeResponse.data
@@ -56,6 +100,76 @@ export const useGeneStore = defineStore('genotype', () => {
         } catch (error) {
             console.error('加载基因型失败:', error)
         }
+    }
+
+    const onFormLocusChange = (index, locus) => {
+        // 查找匹配的基因位点
+        const matchedLocus = genotypes.value.find(g => g.symbol === locus);
+        // 更新等位基因建议
+        alleleSuggestions.value[index] = matchedLocus ? [matchedLocus.alleles, matchedLocus.alleles] : [[], []];
+        if (matchedLocus.alleles.length == 1) {
+            selectedGenes.value[index].allele1 = matchedLocus.alleles[0].id
+            selectedGenes.value[index].allele2 = matchedLocus.alleles[0].id
+        } else {
+            selectedGenes.value[index].allele1 = null
+            selectedGenes.value[index].allele2 = null
+        }
+        if (locus === "WT") {
+            selectedGenes.value = [{'locus': 'WT', 'allele1': null, 'allele2': null}]
+            addable.value = false
+        } else {
+            addable.value = true
+        }
+    };
+
+    const onFormAlleleChange = (isFirstAllele, index, allele) => {
+        const locus = genotypes.value.find(g => g.symbol === selectedGenes.value[index].locus)
+        if (!locus) {
+            return
+        }
+        const selectedAllele = locus.alleles.find(a => a.id === allele);
+        if (!selectedAllele) {
+            return
+        }
+        const targetArray = isFirstAllele 
+            ? alleleSuggestions.value[index][1] 
+            : alleleSuggestions.value[index][0];
+        if (selectedAllele.is_wildtype) {
+            const newArray = targetArray.filter(a => !a.is_wildtype);
+            if (isFirstAllele) {
+            alleleSuggestions.value[index][1] = newArray;
+            } else {
+            alleleSuggestions.value[index][0] = newArray;
+            }
+        } else {
+            const alls = locus.alleles
+            if (isFirstAllele) {
+            alleleSuggestions.value[index][1] = alls
+            } else {
+            alleleSuggestions.value[index][0] = alls
+            }
+        }
+
+        if (isFirstAllele && alleleSuggestions.value[index][1].length === 1) {
+            selectedGenes.value[index].allele2 = alleleSuggestions.value[index][1][0].id
+        }
+    }
+
+    const deleteGene = (index) => {
+        if ( selectedGenes.value[index].locus === "WT") {
+            addable.value = true
+        }
+        selectedGenes.value.splice(index, 1)
+    }
+
+    const addGene = () => {
+        selectedGenes.value.push({"locus":'', "allele1":null, "allele2":null})
+        alleleSuggestions.value.push([])
+    }
+
+    const deleteGenes = () => {
+        selectedGenes.value = []
+        addable.value = true
     }
 
 
@@ -131,6 +245,11 @@ export const useGeneStore = defineStore('genotype', () => {
         genotypes,
         allGenotypes,
         tempGroups,
+        selectedGenes,
+        selectedGeneName,
+        locusSuggestions,
+        alleleSuggestions,
+        addable,
         
         colors,
         groupLetters,
@@ -139,6 +258,11 @@ export const useGeneStore = defineStore('genotype', () => {
         loadSurvival,
         loadGenotypes,
         loadInitialData,
+        onFormLocusChange,
+        onFormAlleleChange,
+        deleteGene,
+        addGene,
+        deleteGenes,
 
         addGroup,
         removeGroup,
