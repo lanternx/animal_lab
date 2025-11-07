@@ -403,7 +403,7 @@ def add_mice_from_template(mouse_tid):
     """基于模板小鼠批量添加新小鼠"""
     data = request.json
     try:
-        template_mouse = Mouse.query.get(mouse_tid)
+        template_mouse = Mouse.query.get_or_404(mouse_tid)
         template_mouse_parent = Pedigree.query.filter_by(mouse_id=mouse_tid).all()
         genes = Genotype.query.filter_by(mouse_id=mouse_tid).all()
         for m in data:
@@ -655,7 +655,7 @@ def update_cage_order():
 def get_mice_info(mouse_tid):
     content = {}
     try:
-        mouse = Mouse.query.get(mouse_tid)
+        mouse = Mouse.query.get_or_404(mouse_tid)
         if mouse.cage_id is None:
             c_cage = None
         else:
@@ -1096,12 +1096,8 @@ def update_allele(allele_id):
 def delete_gene(id):
     try:
         gene = GeneLocus.query.get_or_404(id)
-        genotypes = Genotype.query.filter_by(locus_id=gene.id).all()
-        for genotype in genotypes:
-            db.session.delete(genotype)
-        alleles = Allele.query.filter_by(locus_id=gene.id).all()
-        for al in alleles:
-            db.session.delete(al)
+        Genotype.query.filter_by(locus_id=gene.id).delete()
+        Allele.query.filter_by(locus_id=gene.id).delete()
         db.session.delete(gene)
         db.session.commit()
         return '', 204
@@ -1715,7 +1711,7 @@ def import_pedigree_data(df, result, conflict_resolution):
 # 添加获取小鼠简要信息的API
 @app.route('/api/mice/<int:mouse_tid>/brief', methods=['GET'])
 def get_mouse_brief(mouse_tid):
-    mouse = Mouse.query.get(mouse_tid)
+    mouse = Mouse.query.get_or_404(mouse_tid)
     if not mouse:
         return jsonify({'error': 'Mouse not found'}), 404
     
@@ -1888,10 +1884,7 @@ def update_weight_record(id):
 @app.route('/api/weight_records/<int:id>', methods=['DELETE'])
 def delete_weight_record(id):
     try:
-        record = WeightRecord.query.get(id)
-        if not record:
-            return jsonify({'error': '记录不存在'}), 404
-            
+        record = WeightRecord.query.get_or_404(id)
         db.session.delete(record)
         db.session.commit()
         
@@ -1968,9 +1961,7 @@ def update_experiment_type(id):
             return jsonify({'error': '已存在同名实验类型'}), 400
         
         # 清除存在的实验数据
-        expr_data = Experiment.query.filter_by(experiment_type_id = id).all()
-        for ed in expr_data:
-            db.session.delete(ed)
+        Experiment.query.filter_by(experiment_type_id = id).delete()
 
         # 更新实验类型基本信息
         experiment_type.name = data['name']
@@ -2158,12 +2149,12 @@ def rename_experiment_group(experiment_id):
     data = request.get_json()
     try:
         # 验证实验是否存在
-        exp = ExperimentType.query.get_or_404(experiment_id)
+        ExperimentType.query.get_or_404(experiment_id)
         groups = PredefinedGroup.query.filter_by(experiment_id=experiment_id).first()
-        groups.name = data.get('')
-        groups.description = data.get('')
-        groups.type = data.get('')
-        groups.rules = data.get('')
+        groups.name = data.get('name')
+        groups.description = data.get('description')
+        groups.Gtype = data.get('Gtype')
+        groups.rules = data.get('rules')
         db.session.commit()
         return jsonify({'message': f'实验{exp.name}的分组信息已修改'})
     except Exception as e:
@@ -2176,8 +2167,7 @@ def delete_group(experiment_id):
     """删除实验分组信息"""
     try:
         # 查找并删除该分组的所有记录
-        groups = PredefinedGroup.query.filter_by(experiment_id=experiment_id).first()
-        groups.delete()
+        PredefinedGroup.query.filter_by(experiment_id=experiment_id).delete()
         db.session.commit()
         
         return jsonify(), 204
@@ -2368,9 +2358,7 @@ def update_experiment(experiment_id):
 def delete_experiment(experiment_id):
     try:
         # 获取实验记录
-        experiment = Experiment.query.get(experiment_id)
-        if not experiment:
-            return jsonify({'error': '实验记录未找到'}), 404
+        experiment = Experiment.query.get_or_404(experiment_id)
         
         # 删除实验记录（关联的实验值会自动删除，因为有 cascade='all, delete-orphan'）
         db.session.delete(experiment)
@@ -2568,7 +2556,7 @@ def get_experiment_grouped_mice(experiment_id):
     """获取实验预设分组的信息和小鼠"""
     try:
         predefined_group = PredefinedGroup.query.filter_by(experiment_id=experiment_id).first()
-        if predefined_group and predefined_group.type == 'id':
+        if predefined_group and predefined_group.Gtype == 'id':
             return jsonify(predefined_group.to_dict()), 200
         else:
             return jsonify({'error': str(e)}), 404
@@ -3012,9 +3000,9 @@ def get_predefined_mice(groups_id):
     """获取预设分组的信息和小鼠编号"""
     try:
         predefined_group = PredefinedGroup.query.get_or_404(groups_id)
-        if predefined_group.type == 'id':
+        if predefined_group.Gtype == 'id':
             return jsonify(predefined_group.to_dict()), 200
-        elif predefined_group.type == 'rule':
+        elif predefined_group.Gtype == 'rule':
             group_result = []
             all_mice = Mouse.query.all()
             all_mice_tid = [m.tid for m in all_mice]
@@ -3041,7 +3029,7 @@ def get_predefined_mice(groups_id):
         return jsonify({'error': str(e)}), 500
 
 def analyse_rule(rule):
-    if rule['type'] == 'genotype':
+    if rule['Rtype'] == 'genotype':
         gene_set = rule.get('genes', [])
         result = []
         for genes in gene_set:
@@ -3083,22 +3071,33 @@ def analyse_rule(rule):
         for subq in result[1:]:
             common_mice = common_mice.union(subq)
         return [r.mouse_id for r in common_mice.all()]
-    elif rule['type'] == 'sex':
+    elif rule['Rtype'] == 'sex':
         value = rule.get('value')
         if value in ['M', 'F']:
             return [r.tid for r in Mouse.query.filter(Mouse.sex == value).all()]
-    elif rule['type'] == 'strain':
+    elif rule['Rtype'] == 'strain':
         value = rule.get('value')
         if value:
             return [r.tid for r in Mouse.query.filter(Mouse.strain == value).all()]
-    elif rule['type'] == 'cage':
+    elif rule['Rtype'] == 'cage':
         cages = rule.get('cages')
         if value:
             return [r.tid for r in Mouse.query.filter(Mouse.cage_id.in_(cages)).all()]
-    elif rule['type'] == 'live_status':
+    elif rule['Rtype'] == 'live_status':
         value = rule.get('value')
         if value is not None:
             return [r.tid for r in Mouse.query.filter(Mouse.live_status == value).all()]
+    elif rule['Rtype'] == 'test_planned':
+        value = rule.get('test_planned')
+        if value is not None:
+            result = []
+            for t in value:
+                m = Mouse.query.filter(Mouse.tests_planned.contains([t]))
+                result.append(m)
+            common_mice = result[0]
+            for subq in result[1:]:
+                common_mice = common_mice.union(subq)
+            return [r.tid for r in common_mice.all()]
     else:
         return False
     return False
@@ -3109,14 +3108,14 @@ def modify_predefined_groups(gIndex):
         editing = request.json
         group_name = editing.get('name', '')
         group_description = editing.get('description', '')
-        group_type = editing.get('type', '')
+        group_type = editing.get('Gtype', '')
         rules = editing.get('rules', [])
         if not (group_name and group_type):
             return jsonify(), 403
         new_rule = PredefinedGroup.query.get_or_404(gIndex)
         new_rule.name = group_name
         new_rule.description = group_description
-        new_rule.type = group_type
+        new_rule.Gtype = group_type
         new_rule.rules = rules
         db.session.commit()
         return jsonify(), 200
@@ -3133,12 +3132,13 @@ def add_predefined_groups():
         editing = request.json
         group_name = editing.get('name', '')
         group_description = editing.get('description', '')
-        group_type = editing.get('type', '')
+        group_type = editing.get('Gtype', '')
         rules = editing.get('rules', [])
         if group_name and group_type:
             new_rule = PredefinedGroup(
                 name = group_name,
                 description = group_description,
+                Gtype = group_type,
                 rules = rules
             )
             db.session.add(new_rule)
@@ -3158,7 +3158,7 @@ def review_predefined_groups():
     try:
         editing = request.json.get("editing",{})
         candidate = request.json.get("candidate",[])
-        if editing['type'] == 'rule':
+        if editing['Gtype'] == 'rule':
             group_result = []
             for group in editing['rules']:
                 group_mice_ids = set(candidate)
@@ -3176,6 +3176,26 @@ def review_predefined_groups():
     except Exception as e:
         logger.error(f"解析预设分组失败: {str(e)}")
         return jsonify({'error': f'解析预设分组失败: {str(e)}'}), 404
+
+@app.route('/api/groups/predefined', methods=['GET'])
+def get_predefined_groups():
+    try:
+        groups = PredefinedGroup.query.all()
+        return jsonify([group.to_dict() for group in groups]), 200
+    except Exception as e:
+        logger.error(f"获取预设分组失败: {str(e)}")
+        return jsonify({'error': f'获取预设分组失败: {str(e)}'}), 404
+
+@app.route('/api/groups/predefined/<int:g_id>', methods=['DELETE'])
+def delete_predefined_groups(g_id):
+    try:
+        pre_group = PredefinedGroup.query.get_or_404(g_id)
+        db.session.delete(pre_group)
+        db.session.commit()
+        return jsonify(), 200
+    except Exception as e:
+        logger.error(f"删除预设分组失败: {str(e)}")
+        return jsonify({'error': f'删除预设分组失败: {str(e)}'}), 404
 
 if __name__ == '__main__':
     app.run(debug=True, host='localhost', port=5000)

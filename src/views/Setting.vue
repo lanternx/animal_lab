@@ -780,7 +780,7 @@
 
                 <div class="form-group">
                     <label>分组类型</label>
-                    <select v-model="editingGroup.type" @change="changeGroupType" class="group-type-selector">
+                    <select v-model="editingGroup.Gtype" @change="changeGroupType" class="group-type-selector">
                         <option class="radio-label" value="" disabled selected>--请选择分组--</option>
                         <option value="rule" class="radio-label">
                             规则分组
@@ -792,7 +792,7 @@
                 </div>
             </form>
             <form class="form-group-row">
-                <div class="form-group" v-if="editingGroup.type === 'id'">
+                <div class="form-group" v-if="editingGroup.Gtype === 'id'">
                     <label>是否为实验预设分组？</label>
                     <div class="group-type-selector">
                         <select v-model="editingGroup.experiment">
@@ -803,7 +803,7 @@
                     </div>
                 </div>
                 <div class="form-group">
-                    <button @click="saveGroup" class="btn btn-primary">
+                    <button @click="saveGroup(editingGroup.Gtype)" class="btn btn-primary">
                         {{ editingGroup.id ? '更新' : '添加' }}
                     </button>
                     <button v-if="editingGroup.id" type="button" class="btn btn-outline" @click="cancelEditGroup">
@@ -812,9 +812,9 @@
                 </div>
             </form>
             <!-- 规则配置 -->
-            <div v-if="editingGroup.type" class="form-section-rule">
+            <div v-if="editingGroup.Gtype" class="form-section-rule">
                 <!-- 规则分组小组管理 -->
-                <div v-if="editingGroup.type === 'rule'" class="subgroups-container">
+                <div v-if="editingGroup.Gtype === 'rule'" class="subgroups-container">
                     <h4>规则设置</h4>
                     <div v-for="(subgroup, subgroupIndex) in editingGroup.rules" 
                         :key="subgroupIndex" 
@@ -863,21 +863,22 @@
                                         <div class="form-group-row">
                                             <div class="form-group">
                                                 <label>规则类型</label>
-                                                <select v-model="rule.type" @change="resetRuleValues(rule)">
+                                                <select v-model="rule.Rtype" @change="resetRuleValues(rule)">
                                                     <option value="genotype">基因型</option>
                                                     <option value="sex">性别</option>
                                                     <option value="strain">品系</option>
                                                     <option value="cage">笼位</option>
                                                     <option value="live_status">存活状态</option>
+                                                    <option value="test_planned">计划实验</option>
                                                 </select>
                                             </div>
-                                                <button class="action-btn" v-if="rule.type === 'genotype'" :disabled="!genotypeAddable" @click="addGenotype(subgroupIndex, ruleIndex)">
+                                                <button class="action-btn" v-if="rule.Rtype === 'genotype'" :disabled="!genotypeAddable" @click="addGenotype(subgroupIndex, ruleIndex)">
                                                     添加基因型
                                                 </button>
                                         </div>
 
                                         <!-- 基因型规则 -->
-                                        <div v-if="rule.type === 'genotype'" class="form-group-row" style="width: 100%;">
+                                        <div v-if="rule.Rtype === 'genotype'" class="form-group-row" style="width: 100%;">
                                             <div v-for="(gene, geneIndex) in rule.genes">
                                                 <!-- 基因型选择 -->
                                                 <div class="gene-form-group">
@@ -939,7 +940,7 @@
                                         </div>
                                         
                                         <!-- 性别规则 -->
-                                        <div v-if="rule.type === 'sex'" class="form-group">
+                                        <div v-if="rule.Rtype === 'sex'" class="form-group">
                                             <label>性别</label>
                                             <select v-model="rule.value">
                                                 <option value="M">雄性</option>
@@ -948,13 +949,13 @@
                                         </div>
                                         
                                         <!-- 品系规则 -->
-                                        <div v-if="rule.type === 'strain'" class="form-group">
+                                        <div v-if="rule.Rtype === 'strain'" class="form-group">
                                             <label>品系</label>
                                             <input type="text" v-model="rule.value" placeholder="例如: C57BL/6">
                                         </div>
                                         
                                         <!-- 笼位规则 -->
-                                        <div v-if="rule.type === 'cage'" class="form-group-location">
+                                        <div v-if="rule.Rtype === 'cage'" class="form-group-location">
                                             <label>笼位标识</label>
                                             <div class="genotype-tree">
                                                 <div v-for="section in locations" :key="section.id" class="locus-item">
@@ -987,7 +988,7 @@
                                         </div>
                                         
                                         <!-- 存活状态规则 -->
-                                        <div v-if="rule.type === 'live_status'" class="form-group">
+                                        <div v-if="rule.Rtype === 'live_status'" class="form-group">
                                             <label>存活状态</label>
                                             <select v-model="rule.value">
                                                 <option value="1">存活</option>
@@ -996,6 +997,26 @@
                                                 <option value="3">意外消失</option>
                                                 <option value="4">丢弃</option>
                                             </select>
+                                        </div>
+
+                                        <!-- 存活状态规则 -->
+                                        <div v-if="rule.Rtype === 'test_planned'" class="form-group-location">
+                                            <label>计划实验</label>
+                                                <div class="genotype-tree">
+                                                <div v-for="test in experiments" :key="test.id" class="locus-item">
+                                                <div class="locus-header">
+                                                    <label class="locus-label">
+                                                    <input 
+                                                        type="checkbox" 
+                                                        :value="test.id" 
+                                                        v-model="rule.test_planned"
+                                                        class="locus-checkbox"
+                                                    >
+                                                    <span class="locus-name">{{test.name}}</span>
+                                                    </label>
+                                                </div>
+                                                </div>
+                                            </div>
                                         </div>
                                     </div>
                                 </div>
@@ -1006,7 +1027,7 @@
                         </div>
                     </div>
                     <div class="form-group-row">
-                    <button :disabled="showIDList" @click="addGroup(editingGroup.type)" class="btn btn-outline add-subgroup-btn">
+                    <button :disabled="showIDList" @click="addGroup(editingGroup.Gtype)" class="btn btn-outline add-subgroup-btn">
                         <i class="material-icons">add</i> 添加小组
                     </button>
                     <button v-if="!showIDList" @click="reviewRules" class="btn btn-primary add-subgroup-btn">
@@ -1015,13 +1036,13 @@
                     <button v-else @click="reviewRulesClose" class="btn btn-danger add-subgroup-btn">
                         <i class="material-icons">book</i> 取消预览
                     </button>
-                    <button @click="saveGroup" class="btn btn-success add-subgroup-btn">
+                    <button @click="saveGroup('rule')" class="btn btn-success add-subgroup-btn">
                         <i class="material-icons">save</i> 按规则存储
                     </button>
                     </div>
                 </div>
                 <!-- ID分组 -->
-                <div v-if="showIDList || editingGroup.type === 'id'" class="mouse-group-manager">
+                <div v-if="showIDList || editingGroup.Gtype === 'id'" class="mouse-group-manager">
                     <h2 class="section-title">ID分组管理</h2>
                     
                     <div class="id-grouping-container">
@@ -1074,7 +1095,7 @@
                             <div class="mouse-info">
                             <div class="mouse-id">{{ mouse.id }}</div>
                             <div class="mouse-details" v-html="mouse.genotype.symbol"></div>
-                            <div class="mouse-details">{{ mouse.sex }} · {{ mouse.strain }} · {{ mouse.birthDate }}出生</div>
+                            <div class="mouse-details">{{ mouse.sex }} · {{ mouse.strain }} · {{ mouse.birthDate }}</div>
                             </div>
                         </div>
                         </div>
@@ -1085,11 +1106,11 @@
                         <h3>分组管理</h3>
                         <div class="groups-container">
                         <div 
-                            v-for="(group, index) in editingGroup.rules" 
-                            :key="index"
+                            v-for="(group, groupIndex) in editingGroup.rules" 
+                            :key="groupIndex"
                             class="group-item"
                             @dragover="onDragOver"
-                            @drop="onDrop($event, index)"
+                            @drop="onDrop($event, groupIndex)"
                         >
                             <div class="group-header">
                             <div class="group-name">
@@ -1115,7 +1136,7 @@
                             <div class="group-actions">
                                 <button 
                                 class="action-btn btn-danger"
-                                @click="removeGroup(index)"
+                                @click="removeGroup(groupIndex)"
                                 :disabled="editingGroup.rules.length <= 1"
                                 >
                                 <i class="material-icons">delete</i>
@@ -1124,21 +1145,23 @@
                             </div>
                             <div class="group-mice">
                             <div 
-                                v-for="mouseId in group.mice" 
-                                :key="mouseId"
+                                v-for="mouse in groupedMice[groupIndex]" 
+                                :key="mouse.tid"
                                 class="assigned-mouse"
                             >
-                                <div class="mouse-id">{{ getMouseById(mouseId)?.id }}</div>
+                                <div class="mouse-id">{{ mouse.id }}</div>
+                                <div class="mouse-details" v-html="mouse.genotype.symbol"></div>
+                                <div class="mouse-details">{{ mouse.sex }} · {{ mouse.strain }} · {{ mouse.birthDate }}</div>
                                 <div class="mouse-actions">
                                 <button 
                                     class="action-btn btn-outline"
-                                    @click="removeMouseFromGroup(mouseId, index)"
+                                    @click="removeMouseFromGroup(mouse.tid, groupIndex)"
                                 >
                                     <i class="material-icons">remove_circle</i>
                                 </button>
                                 </div>
                             </div>
-                            <div v-if="group.mice.length === 0" class="empty-group">
+                            <div v-if="group.mouseId.length === 0" class="empty-group">
                                 暂无小鼠，请从左侧拖拽或选择添加
                             </div>
                             </div>
@@ -1146,10 +1169,10 @@
                         </div>
                         
                         <div class="grouping-actions">
-                        <button v-if="!showIDList" class="btn btn-outline" @click="addGroup(editingGroup.type)">
+                        <button v-if="!showIDList" class="btn btn-outline" @click="addGroup(editingGroup.Gtype)">
                             <i class="material-icons">add</i> 添加新分组
                         </button>
-                        <button class="btn btn-success" @click="saveGroup">
+                        <button class="btn btn-success" @click="saveGroup('id')">
                             <i class="material-icons">save</i> 保存ID分组
                         </button>
                         </div>
@@ -1170,60 +1193,54 @@
                             <th>描述</th>
                             <th>分组类型</th>
                             <th>小组数量</th>
-                            <th>创建时间</th>
                             <th>操作</th>
                         </tr>
                     </thead>
                     <tbody>
-                        <tr v-for="group in predefinedGroups" :key="group.id">
+                        <template v-for="group in predefinedGroups" :key="group.id">
+                        <tr >
                             <td>{{ group.name }}</td>
                             <td>{{ group.description }}</td>
                             <td>
-                                <span class="group-type-badge" :class="group.is_id_group ? 'id-group' : 'rule-group'">
-                                    {{ group.is_id_group ? 'ID分组' : '规则分组' }}
+                                <span class="group-type-badge" :class="group.Gtype === 'id' ? 'id-group' : 'rule-group'">
+                                    {{ group.Gtype === 'id' ? 'ID分组' : '规则分组' }}
                                 </span>
                             </td>
                             <td>{{ group.rules ? group.rules.length : 0 }}</td>
-                            <td>{{ group.created_at || '未知' }}</td>
                             <td class="action-cell">
+                                <div class="btn-group">
                                 <button class="action-btn" @click="editGroup(group)">编辑</button>
                                 <button class="action-btn btn-danger" @click="deleteGroup(group.id)">删除</button>
-                                <button class="action-btn btn-info" @click="testGroup(group.id)">测试</button>
                                 <button class="action-btn btn-success" @click="toggleGroupDetails(group.id)">
-                                    {{ expandedGroup === group.id ? '收起' : '详情' }}
+                                    {{ expandedGroup.includes(group.id) ? '收起' : '详情' }}
                                 </button>
-                            </td>
-                        </tr>
-                        
-                        <!-- 分组详情展开行 -->
-                        <tr v-if="expandedGroup" class="detail-row">
-                            <td colspan="5">
-                                <div class="detail-content">
-                                    <div class="detail-header">
-                                        <h3 class="detail-title">分组详情 - {{ getGroupName(expandedGroup) }}</h3>
-                                        <button class="btn btn-outline" @click="expandedGroup = null">
-                                            <i class="material-icons">close</i> 收起
-                                        </button>
-                                    </div>
-                                    
-                                    <div class="detail-section">
-                                        <h4>规则详情</h4>
-                                        <div v-if="getGroupRules(expandedGroup).length > 0" class="rules-list">
-                                            <div v-for="(rule, index) in getGroupRules(expandedGroup)" :key="index" class="rule-detail">
-                                                <div class="rule-type">{{ getRuleTypeLabel(rule.type) }}</div>
-                                                <div class="rule-conditions">
-                                                    {{ formatRuleCondition(rule) }}
-                                                </div>
-                                            </div>
-                                        </div>
-                                        <div v-else class="no-rules">
-                                            暂无规则
-                                        </div>
-                                    </div>
-                                    
                                 </div>
                             </td>
                         </tr>
+                        <tr v-if="expandedGroup.includes(group.id)" class="alleles-subtable">
+                        <td colspan="5">
+                            <div class="subtable-container">
+                            <table class="subtable">
+                                <thead>
+                                <tr>
+                                    <th>组名</th>
+                                    <th>主题色</th>
+                                    <th v-if="group.Gtype === 'id'">组内小鼠数量</th>
+                                    <th v-else>规则数量</th>
+                                </tr>
+                                </thead>
+                                <tbody>
+                                <tr v-for="g in group.rules" :key="g.name">
+                                    <td>{{ g.name }}</td>
+                                    <td :style="{ backgroundColor: g.color }"></td>
+                                    <td>{{ group.Gtype === 'id' ? g.mouseId?.length : g.rules?.length }}</td>
+                                </tr>
+                                </tbody>
+                            </table>
+                            </div>
+                        </td>
+                        </tr>
+                        </template>
                     </tbody>
                 </table>
             </div>
@@ -1735,15 +1752,23 @@ const editingGroup = reactive({
     id: null,
     name: '',
     description: '',
-    type: '',
+    Gtype: '',
     rules: []
 })
-const expandedGroup = ref(null)
-const testMouseId = ref('')
-const testResult = ref(null)
+const expandedGroup = ref([])
 const genotypeAddable = ref(false)
 const candidateMice = ref([])//候选小鼠
 const showIDList = ref(false)
+
+const groupedMice = computed(() =>{
+    if(showIDList || editingGroup.Gtype === 'id') {
+        return editingGroup.rules.map(group => {
+            return group.mouseId.map(mId => mice.value.find(m => m.tid === mId))
+        })
+    } else {
+        return null
+    }
+})
 
 const toggleAlleles = (id) => {
     const index = expandedLoci.value.indexOf(id)
@@ -2570,12 +2595,12 @@ const addGroup = (type) => {
         editingGroup.rules.push({name: `新分组${editingGroup.rules.length + 1}`, color: availableColor, rules:[], expanded: true})
         genotypeAddable.value = true
     } else {
-        editingGroup.rules.push({name: `新分组${editingGroup.rules.length + 1}`, color: availableColor, mice: []})
+        editingGroup.rules.push({name: `新分组${editingGroup.rules.length + 1}`, color: availableColor, mouseId: []})
     }
 }
 
 const changeGroupType = async () => {
-    if (editingGroup.type === 'id') {
+    if (editingGroup.Gtype === 'id') {
         showIDList.value = true
         if (editingGroup.experiment) {
             const miceExperiment = await axios.post(`/api/experiments/${editingGroup.experiment}/mice`)
@@ -2583,7 +2608,7 @@ const changeGroupType = async () => {
         } else {
             candidateMice.value = mice.value
         }
-    } else if (editingGroup.type === 'rule') {
+    } else if (editingGroup.Gtype === 'rule') {
         showIDList.value = false
         selectedGenes.value = []
         alleleSuggestions.value = []
@@ -2592,6 +2617,7 @@ const changeGroupType = async () => {
     }
     editingGroup.rules = []
     isRepeated.value = true
+    showIDList.value = false
 }
 
 const toggleSubgroupRules = (subgroupIndex) => {
@@ -2600,7 +2626,7 @@ const toggleSubgroupRules = (subgroupIndex) => {
 
 const addRule = (subgroupIndex) => {
     editingGroup.rules[subgroupIndex].rules.push({
-        type: 'genotype',
+        Rtype: 'genotype',
         genes:[],
     })
 }
@@ -2656,7 +2682,7 @@ const reviewRulesClose = () => {
     editingGroup.rules.forEach(g => g.expanded = true)
 }
 
-const saveGroup = async () => {
+const saveGroup = async (groupType) => {
     if (!editingGroup.name) {
         toast.info('请填写分组名称')
         return
@@ -2674,9 +2700,17 @@ const saveGroup = async () => {
     const method = editingGroup.id ? 'put' : 'post'
 
     try {
-        await axios[method](url, editingGroup)
-        toast.success('预设分组保存成功')
+        if (groupType === 'id') {
+            editingGroup.Gtype = 'id'
+            await axios[method](url, editingGroup)
+            toast.success('预设ID分组保存成功')
+        } else {
+            editingGroup.Gtype = 'rule'
+            await axios[method](url, editingGroup)
+            toast.success('预设规则分组保存成功')
+        }
         cancelEditGroup()
+        fetchPredefinedGroups()
     } catch (error) {
         console.error('保存分组失败:', error)
         toast.error(error.response?.data?.error || '保存分组失败')
@@ -2684,14 +2718,17 @@ const saveGroup = async () => {
 }
 
 const editGroup = (group) => {
-    Object.assign(editingGroup, JSON.parse(JSON.stringify(group)))
+    Object.assign(editingGroup, group)
+    const tempRules = editingGroup.rules
+    changeGroupType()
+    editingGroup.rules = tempRules
 }
 
 const cancelEditGroup = () => {
     editingGroup.id = null
     editingGroup.name = ''
     editingGroup.description = ''
-    editingGroup.type = ''
+    editingGroup.Gtype = ''
     editingGroup.experiment = null
     editingGroup.rules = []
 }
@@ -2700,8 +2737,9 @@ const deleteGroup = async (id) => {
     if (!confirm('确定要删除这个分组吗？')) return
 
     try {
-        await axios.delete(`/api/genotype-groups/${id}`)
+        await axios.delete(`/api/groups/predefined/${id}`)
         toast.success('删除成功')
+        fetchPredefinedGroups()
     } catch (error) {
         console.error('删除分组失败:', error)
         toast.error('删除分组失败')
@@ -2710,82 +2748,28 @@ const deleteGroup = async (id) => {
 
 const resetRuleValues = (rule) => {
     // 根据规则类型重置值
-    if (rule.type === 'genotype') {
+    if (rule.Rtype === 'genotype') {
         rule.genes = []
         genotypeAddable.value = true
-    } else if (rule.type === 'sex') {
+    } else if (rule.Rtype === 'sex') {
         rule.value = 'M'
-    } else if (rule.type === 'strain') {
+    } else if (rule.Rtype === 'strain') {
         rule.value = ''
-    } else if (rule.type === 'cage') {
+    } else if (rule.Rtype === 'cage') {
         rule.cages = []
-    } else if (rule.type === 'live_status') {
+    } else if (rule.Rtype === 'live_status') {
         rule.value = '1'
+    } else if (rule.Rtype === 'test_planned') {
+        rule.test_planned = []
     }
 }
 
 const toggleGroupDetails = (groupId) => {
-    if (expandedGroup.value === groupId) {
-        expandedGroup.value = null
-        testResult.value = null
-        testMouseId.value = ''
+    const index = expandedGroup.value.indexOf(groupId)
+    if (index === -1) {
+        expandedGroup.value.push(groupId)
     } else {
-        expandedGroup.value = groupId
-    }
-}
-
-const getGroupName = (groupId) => {
-    const group = predefinedGroups.value.find(g => g.id === groupId)
-    return group ? group.name : ''
-}
-
-const getGroupRules = (groupId) => {
-    const group = predefinedGroups.value.find(g => g.id === groupId)
-    return group ? group.rules : []
-}
-
-const formatRuleCondition = (rule) => {
-    switch (rule.type) {
-        case 'genotype': 
-            return "基因型：" + rule.genes.map(g => {
-            if (g.locus === "WT") {
-                return "WT"
-            }
-            if (g.locus) {
-            const alleles = genotypes.value.find(gt => gt.symbol === g.locus).alleles
-            const allele1 = g.allele1 ? alleles.find(a => a.id === g.allele1)?.symbol : ""
-            const allele2 = g.allele2 ? alleles.find(a => a.id === g.allele2)?.symbol : ""
-            return `${g.locus}<sup>${allele1}/${allele2}</sup>`
-            } else {
-            return ''
-            }
-            }).join(";")
-        case 'sex':
-            return `性别: ${rule.value === 'M' ? '雄性' : '雌性'}`
-            
-        case 'strain':
-            return `品系: ${rule.value}`
-            
-        case 'cage':
-            return `笼位: ${rule.value}`
-            
-        case 'live_status':
-            const statusLabels = {
-                '1': '存活', '0': '死亡', '2': '解剖', '3': '意外消失', '4': '丢弃'
-            }
-            return `存活状态: ${statusLabels[rule.value] || rule.value}`
-            
-        case 'age_range':
-            let ageCondition = `年龄范围: ${rule.min_days || 0}天`
-            if (rule.max_days) {
-                ageCondition += ` - ${rule.max_days}天`
-            } else {
-                ageCondition += '以上'
-            }
-            return ageCondition
-            
-        default:
-            return JSON.stringify(rule)
+        expandedGroup.value.splice(index, 1)
     }
 }
 
@@ -2798,9 +2782,9 @@ const isRepeated = ref(true)
 const filteredMice = computed(() => {
     const term = searchTerm.value.trim().toLowerCase()
     if (!term) {
-    return candidateMice.value.filter(mouse => 
-        !isMouseInAnyGroup(mouse.tid)
-    )
+        return candidateMice.value.filter(mouse => 
+            !isMouseInAnyGroup(mouse.tid)
+        )
     }
     return candidateMice.value.filter(mouse => {
         if (isMouseInAnyGroup(mouse.tid)) {
@@ -2822,7 +2806,7 @@ const filteredMice = computed(() => {
 // 计算属性：已选择的小鼠数量
 const selectedMiceCount = computed(() => selectedMouseIds.value.size)
 const isRepeatedAble = computed(() => {
-    return editingGroup.rules.some(group => group.mice.length>0)
+    return editingGroup.rules.some(group => group.mouseId?.length>0)
 })
 
 // 检查小鼠是否在任意分组中
@@ -2830,14 +2814,9 @@ const isMouseInAnyGroup = (mouseId) => {
     if (isRepeated.value) {
         return false
     } else {
-        return editingGroup.rules.some(group => group.mice.includes(mouseId))
+        return editingGroup.rules.some(group => group.mouseId.includes(mouseId))
     }
 
-}
-
-// 根据ID获取小鼠信息
-const getMouseById = (mouseId) => {
-    return candidateMice.value.find(mouse => mouse.tid === mouseId)
 }
 
 // 检查小鼠是否被选中
@@ -2868,9 +2847,9 @@ const deselectAllMice = () => {
 
 // 从分组中移除小鼠
 const removeMouseFromGroup = (mouseId, groupIndex) => {
-    const mouseIndex = editingGroup.rules[groupIndex].mice.indexOf(mouseId)
+    const mouseIndex = editingGroup.rules[groupIndex].mouseId.indexOf(mouseId)
     if (mouseIndex > -1) {
-    editingGroup.rules[groupIndex].mice.splice(mouseIndex, 1)
+    editingGroup.rules[groupIndex].mouseId.splice(mouseIndex, 1)
     }
 }
 
@@ -2919,8 +2898,8 @@ const onDrop = (event, groupIndex) => {
             // 检查小鼠是否已经在其他分组中
             if (!isMouseInAnyGroup(mouseId)) {
                 // 确保小鼠不在当前分组中（避免重复）
-                if (!editingGroup.rules[groupIndex].mice.includes(mouseId)) {
-                    editingGroup.rules[groupIndex].mice.push(mouseId);
+                if (!editingGroup.rules[groupIndex].mouseId.includes(mouseId)) {
+                    editingGroup.rules[groupIndex].mouseId.push(mouseId);
                 }
             }
         });
@@ -2931,12 +2910,21 @@ const onDrop = (event, groupIndex) => {
         console.error('拖拽放置失败:', error);
     }
 }
-    
+
+const fetchPredefinedGroups = async () => {
+    try {
+        const response = await axios.get('/api/groups/predefined')
+        predefinedGroups.value = response.data
+    } catch (error) {
+        console.error('获取分组失败:', error);
+    }
+}  
 
 // 初始化数据
 onMounted(() => {
 fetchDbInfo()
 refreshDbInfo()
+fetchPredefinedGroups()
 })
 </script>
 

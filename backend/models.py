@@ -410,7 +410,7 @@ class PredefinedGroup(db.Model):
     name = db.Column(db.String(100), unique=True, nullable=False)
     description = db.Column(db.String(200))
     experiment_id = db.Column(db.Integer, db.ForeignKey('experiment_type.id'), unique=True)
-    type = db.Column(db.String(20), nullable=False) #id/rule
+    Gtype = db.Column(db.String(20), nullable=False) #id/rule
     rules = db.Column(db.JSON)  # 存储复杂分组规则
     """ rule[{name:, color:, rules:[]},{...}]
         id[{name:, color:, mouseId:[]},{...}]注意，按id分组显示时需要确定小鼠是否还存在"""
@@ -421,6 +421,6 @@ class PredefinedGroup(db.Model):
             'name': self.name,
             'description': self.description,
             'experiment_id': self.experiment_id,
-            'type': self.type,
+            'Gtype': self.Gtype,
             'rules': self.rules or []
         }

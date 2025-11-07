@@ -118,6 +118,145 @@
         </div>
     </div>
     </div>
+
+    <!-- ID分组 -->
+    <div v-if="showGroupModal" class="modal-backdrop" @click.self="closeGroupModal">
+    <div class="mouse-group-manager">
+        <h2 class="section-title">ID分组管理</h2>
+        
+        <div class="id-grouping-container">
+        <!-- 候选小鼠列表 -->
+        <div class="candidate-mice">
+            <h3>候选小鼠</h3>
+            <div class="selection-controls">
+                <div class="selection-info">
+                    已选择 {{ selectedMiceCount }} 只小鼠
+                </div>
+                <div class="selection-buttons">
+                    <button class="btn btn-outline" @click="selectAllMice">
+                    全选
+                    </button>
+                    <button class="btn btn-outline" @click="deselectAllMice">
+                    全不选
+                    </button>
+                </div>
+            </div>
+            <div class="detail-item">
+                <div class="checkbox-group">
+                    <input type="checkbox" v-model="isRepeated" id="edit-repeat-checkbox" :disabled="isRepeatedAble">
+                    <label for="edit-repeat-checkbox">是否可重复选择小鼠</label>
+                </div>
+            </div>
+            <div class="search-container">
+                <input 
+                    type="text" 
+                    class="search-input" 
+                    placeholder="搜索小鼠ID或基因型..."
+                    v-model="searchTerm"
+                >
+            </div>
+            <div class="mice-list">
+            <div 
+                v-for="mouse in filteredMice" 
+                :key="mouse.tid"
+                class="mouse-item"
+                :class="{ selected: isMouseSelected(mouse.tid) }"
+                @click="toggleMouseSelection(mouse.tid)"
+                draggable="true"
+                @dragstart="onDragStart($event, mouse.tid)"
+            >
+                <input 
+                type="checkbox" 
+                class="mouse-checkbox"
+                :checked="isMouseSelected(mouse.tid)"
+                @click.stop
+                >
+                <div class="mouse-info">
+                <div class="mouse-id">{{ mouse.id }}</div>
+                <div class="mouse-details" v-html="mouse.genotype.symbol"></div>
+                <div class="mouse-details">{{ mouse.sex }} · {{ mouse.strain }} · {{ mouse.birthDate }}出生</div>
+                </div>
+            </div>
+            </div>
+        </div>
+        
+        <!-- 分组管理 -->
+        <div class="grouping-section">
+            <h3>分组管理</h3>
+            <div class="groups-container">
+            <div 
+                v-for="(group, index) in editingGroup.rules" 
+                :key="index"
+                class="group-item"
+                @dragover="onDragOver"
+                @drop="onDrop($event, index)"
+            >
+                <div class="group-header">
+                <div class="group-name">
+                    <input 
+                    type="text" 
+                    class="group-name-input" 
+                    v-model="group.name"
+                    placeholder="分组名称"
+                    >
+                    <div class="color-picker">
+                    <div 
+                        v-for="color in colors" 
+                        :key="color"
+                        class="color-option"
+                        :class="{ selected: group.color === color }"
+                        :style="{ backgroundColor: color }"
+                        @click="group.color = color"
+                    >
+                        <i class="material-icons" v-if="group.color === color">check</i>
+                    </div>
+                    </div>
+                </div>
+                <div class="group-actions">
+                    <button 
+                    class="action-btn btn-danger"
+                    @click="removeGroup(index)"
+                    :disabled="editingGroup.rules.length <= 1"
+                    >
+                    <i class="material-icons">delete</i>
+                    </button>
+                </div>
+                </div>
+                <div class="group-mice">
+                <div 
+                    v-for="mouseId in group.mice" 
+                    :key="mouseId"
+                    class="assigned-mouse"
+                >
+                    <div class="mouse-id">{{ getMouseById(mouseId)?.id }}</div>
+                    <div class="mouse-actions">
+                    <button 
+                        class="action-btn btn-outline"
+                        @click="removeMouseFromGroup(mouseId, index)"
+                    >
+                        <i class="material-icons">remove_circle</i>
+                    </button>
+                    </div>
+                </div>
+                <div v-if="group.mice.length === 0" class="empty-group">
+                    暂无小鼠，请从左侧拖拽或选择添加
+                </div>
+                </div>
+            </div>
+            </div>
+            
+            <div class="grouping-actions">
+            <button class="btn btn-outline" @click="addGroup">
+                <i class="material-icons">add</i> 添加新分组
+            </button>
+            <button class="btn btn-success" @click="saveGroup">
+                <i class="material-icons">save</i> 保存ID分组
+            </button>
+            </div>
+        </div>
+        </div>
+    </div>
+    </div>
 </div>
 </template>
 
@@ -1646,5 +1785,14 @@ box-shadow: 0 2px 8px rgba(0,0,0,0.1);
     flex: 0 0 100%;
     min-width: auto;
   }
+}
+
+.mouse-group-manager {
+  max-width: 1200px;
+  margin: 0 auto;
+  background: white;
+  border-radius: 8px;
+  box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+  padding: 20px;
 }
 </style>
