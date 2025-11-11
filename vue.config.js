@@ -37,15 +37,10 @@ module.exports = defineConfig({
   },
   
   // 生产环境配置
-  publicPath: process.env.NODE_ENV === 'production' 
-    ? '/static/'  // 生产环境静态文件路径
-    : '/',
+  publicPath: './',
   
   // 构建输出目录
   outputDir: 'dist',
-  
-  // 静态资源目录
-  assetsDir: 'assets',
   
   // 是否生成 source map
   productionSourceMap: process.env.NODE_ENV !== 'production',

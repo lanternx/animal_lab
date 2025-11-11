@@ -10,33 +10,42 @@
     </div>
     <div class="card-body">
         <!-- 控制按钮区域 -->
-        <div class="d-flex justify-content-between mb-4">
-        <div>
-            <button class="btn btn-primary me-2" @click="showChart">
-            <i class="material-icons">insights</i>
-            生成图表
-            </button>
-        </div>
-        <div>
-            <button class="btn btn-primary" @click="openRecordModal">
+        <div class="d-flex mb-4">
+        <select v-model="showChartType" style="min-width:200px;">
+            <option value="pred">使用预设分组</option>
+            <option value="temp">使用临时分组</option>
+        </select>
+        <button class="btn btn-primary" @click="openRecordModal">
             <i class="material-icons btn-icon">add</i>
             录入体重
+        </button>
+        </div>
+        <div v-if="showChartType === 'pred'" class="d-flex justify-content-between mb-4">
+            <select v-model="selectedPredefinedGroupId" style="min-width:100px;">
+                <option v-for="group in predefinedGroups" value="group.id" key="group.id">
+                    {{ group.name }}
+                </option>
+            </select>
+            <button class="btn btn-primary me-2" @click="showChart('pred')">
+            <i class="material-icons">insights</i>
+            以预设分组生成图表
             </button>
         </div>
-        <div>
+        <div v-if="showChartType === 'temp'" class="d-flex justify-content-between mb-4">
+            <button class="btn btn-primary me-2" @click="showChart('temp')">
+            <i class="material-icons">insights</i>
+            以临时分组生成图表
+            </button>
             <button id="addGroupBtn" class="btn btn-sm btn-outline" @click="addGroup">
             <i class="material-icons">add</i> 添加分组
             </button>
-        </div>
-        <div>
             <button id="addGroupBtn" class="btn btn-sm btn-danger" @click="clearGroups">
             <i class="material-icons">add</i> 清空分组
             </button>
         </div>
-        </div>
         
-            <!-- 分组设置 -->
-        <div class="mb-4">
+        <!-- 分组设置 -->
+        <div v-if="showChartType === 'temp'" class="mb-4">
             <h5>分组设置</h5>
             <div class="groups-container">
             <div 
@@ -297,12 +306,15 @@ import Chart from 'chart.js/auto'
 import regression from 'regression'
 import { toast } from 'vue3-toastify'
 import 'vue3-toastify/dist/index.css'
-import { useGeneStore } from '@/stores'
+import { useGeneStore, useExperimentStore } from '@/stores'
 import { storeToRefs } from 'pinia'
 
 const geneStore = useGeneStore()
 const { allGenotypes, tempGroups, mice } = storeToRefs(geneStore)
-const { addGroup, removeGroup, clearGroups, getTempGroups, getPredefinedGroups, onLocusSelect, onCombinationSelect } = geneStore
+const { addGroup, removeGroup, clearGroups, getTempGroups, onLocusSelect, onCombinationSelect } = geneStore
+const experimentStore = useExperimentStore()
+const { predefinedGroups, selectedPredefinedGroupId, showChartType } = storeToRefs(experimentStore)
+const { getPredefinedGroups } = experimentStore
 
 // 小鼠数据
 const lived_mice = ref([])
@@ -345,115 +357,119 @@ try {
 
 // 打开录入模态框
 const openRecordModal = () => {
-showModal.value = true
-nextTick(() => {
-    // 自动聚焦到第一个输入框
-    const firstInput = document.querySelector('.weight-input')
-    if (firstInput) firstInput.focus()
-})
+    showModal.value = true
+    nextTick(() => {
+        // 自动聚焦到第一个输入框
+        const firstInput = document.querySelector('.weight-input')
+        if (firstInput) firstInput.focus()
+    })
 }
 
 // 关闭模态框
 const closeModal = () => {
-showModal.value = false
+    showModal.value = false
 }
 
 // 处理Tab键
 const handleTab = (index) => {
-const inputs = document.querySelectorAll('.weight-input')
-if (index < inputs.length - 1) {
-    inputs[index + 1].focus()
-}
+    const inputs = document.querySelectorAll('.weight-input')
+    if (index < inputs.length - 1) {
+        inputs[index + 1].focus()
+    }
 }
 
 // 保存体重记录的处理方法
 const handleSaveWeight = () => {
-const records = []
+    const records = []
 
-lived_mice.value.forEach((mouse) => {
-    const weight = weightValues.value[mouse.tid]
-    // 只添加有有效体重值的记录
-    if (weight && weight > 0) {
-    records.push({
-        mouse_id: mouse.tid,
-        weight: parseFloat(weight),
-        record_date: recordDate.value
+    lived_mice.value.forEach((mouse) => {
+        const weight = weightValues.value[mouse.tid]
+        // 只添加有有效体重值的记录
+        if (weight && weight > 0) {
+        records.push({
+            mouse_id: mouse.tid,
+            weight: parseFloat(weight),
+            record_date: recordDate.value
+        })
+        }
     })
+
+    if (records.length === 0) {
+        toast.error('请至少填写一条有效的记录')
+        return
     }
-})
 
-if (records.length === 0) {
-    toast.error('请至少填写一条有效的记录')
-    return
-}
-
-confirmRecordCount.value = records.length
-confirmDate.value = recordDate.value
-showConfirmModal.value = true
+    confirmRecordCount.value = records.length
+    confirmDate.value = recordDate.value
+    showConfirmModal.value = true
 }
 
 // 确认保存
 const confirmSave = async () => {
-const records = []
+    const records = []
 
-lived_mice.value.forEach((mouse) => {
-    const weight = weightValues.value[mouse.tid]
-    // 只添加有有效体重值的记录
-    if (weight && weight > 0) {
-    records.push({
-        mouse_id: mouse.tid,
-        weight: parseFloat(weight),
-        record_date: recordDate.value
+    lived_mice.value.forEach((mouse) => {
+        const weight = weightValues.value[mouse.tid]
+        // 只添加有有效体重值的记录
+        if (weight && weight > 0) {
+        records.push({
+            mouse_id: mouse.tid,
+            weight: parseFloat(weight),
+            record_date: recordDate.value
+        })
+        }
     })
+    try {
+        // 发送批量请求
+        await axios.post('/api/weight', { records })
+        toast.success(`成功保存 ${records.length} 条记录！`)
+        weightValues.value = {}
+        showModal.value = false
+        
+        // 重新获取体重记录
+        const recordsResponse = await axios.get('/api/weight')
+        weightRecords.value = recordsResponse.data
+    } catch (error) {
+        console.error('保存体重记录失败:', error)
+        toast.error('保存失败: ' + (error.response?.data?.error || error.message))
+    } finally {
+        confirmRecordCount.value = 0
+        confirmDate.value = null
+        showConfirmModal.value = false
     }
-})
-try {
-    // 发送批量请求
-    await axios.post('/api/weight', { records })
-    toast.success(`成功保存 ${records.length} 条记录！`)
-    weightValues.value = {}
-    showModal.value = false
-    
-    // 重新获取体重记录
-    const recordsResponse = await axios.get('/api/weight')
-    weightRecords.value = recordsResponse.data
-} catch (error) {
-    console.error('保存体重记录失败:', error)
-    toast.error('保存失败: ' + (error.response?.data?.error || error.message))
-} finally {
-    confirmRecordCount.value = 0
-    confirmDate.value = null
-    showConfirmModal.value = false
-}
 }
 
 // 取消确认
 const cancelConfirm = () => {
-confirmRecordCount.value = 0
-confirmDate.value = null
-showConfirmModal.value = false
+    confirmRecordCount.value = 0
+    confirmDate.value = null
+    showConfirmModal.value = false
 }
 
-const showChart = async () => {
-if (tempGroups.value.length === 0) {
-    toast.error('请至少添加一个分组')
-    return
-}
-
-try {
-    if (weightRecords.value.length === 0) {
-    toast.error('没有可用的体重记录数据')
-    return
+const showChart = async (groupType) => {
+    if (tempGroups.value.length === 0) {
+        toast.error('请至少添加一个分组')
+        return
     }
-    
-    hasData.value = true
-    const groups = await getTempGroups()
-    await nextTick();
-    generateChart(weightRecords.value, groups)
-} catch (error) {
-    console.error('生成图表失败:', error)
-    toast.error('生成图表失败: ' + error.message)
-}
+    try {
+        if (weightRecords.value.length === 0) {
+        toast.error('没有可用的体重记录数据')
+        return
+        }
+        
+        hasData.value = true
+        let groups = []
+        if (groupType === 'temp') {
+            groups = await getTempGroups()
+        } else if (groupType === 'pred') {
+            groups = await getPredefinedGroups()
+        }
+        await nextTick();
+        generateChart(weightRecords.value, groups)
+    } catch (error) {
+        console.error('生成图表失败:', error)
+        toast.error('生成图表失败: ' + error.message)
+    }
 }
 
 // 生成图表
@@ -461,13 +477,13 @@ const generateChart = (records, groups) => {
 try {
     const ctx = document.getElementById('weightChart')
     if (!ctx) {
-    console.error('图表容器未找到')
-    return
+        console.error('图表容器未找到')
+        return
     }
     
     // 销毁现有图表
     if (weightChart) {
-    weightChart.destroy()
+        weightChart.destroy()
     }
     const datasets = []
     
@@ -1078,18 +1094,6 @@ margin-top: 1rem;
 position: relative;
 height: 400px;
 width: 100%;
-}
-
-.d-flex {
-display: flex;
-}
-
-.justify-content-between {
-justify-content: space-between;
-}
-
-.justify-content-end {
-justify-content: flex-end;
 }
 
 .mb-4 {

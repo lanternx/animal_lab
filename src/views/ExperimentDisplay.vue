@@ -633,7 +633,7 @@ function resetFilters() {
 const groupedMice = ref({})
 const fetchGroups = async () => {
 try {
-    const response = await axios.get(`/api/experiment/${experimentId.value}/grouped_mice`, {cancelToken: currentRequestToken.token});
+    const response = await axios.get(`/api/experiments/${experimentId.value}/grouped_mice`, {cancelToken: currentRequestToken.token});
     groupedMice.value = response.data;
 } catch (error) {
     console.error('获取小鼠错误:', error);

@@ -34,7 +34,7 @@ export const useGeneStore = defineStore('genotype', () => {
     const loadSurvival = async () => {
         try {
             // 获取所有生存数据
-            const miceResponse = await api.get('/api/survival');
+            const miceResponse = await api.get('/survival');
             return miceResponse.data;
         } catch (error) {
             console.error('获取基因型数据失败:', error);
@@ -89,7 +89,7 @@ export const useGeneStore = defineStore('genotype', () => {
     const addable = ref(true)
 
     const loadAllGenotypes = async () => {
-        const genotypeResponse = await axios.get('/api/genotypes')
+        const genotypeResponse = await api.get('/genotypes')
         allGenotypes.value = genotypeResponse.data
     }
 
@@ -209,12 +209,6 @@ export const useGeneStore = defineStore('genotype', () => {
         }))
     }
 
-    const getPredefinedGroups = async (gIndex) => {
-        // 筛选符合分组条件的小鼠
-        const response = await api.get(`/groups/predefined/${gIndex}`)
-        return response.data
-    }
-
     // 处理位点选择
     const onLocusSelect = (index, locus) => {
         const isSelected = tempGroups.value[index].genotype.includes(locus)
@@ -268,7 +262,6 @@ export const useGeneStore = defineStore('genotype', () => {
         removeGroup,
         clearGroups,
         getTempGroups,
-        getPredefinedGroups,
         onLocusSelect,
         onCombinationSelect
     }

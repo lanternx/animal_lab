@@ -17,6 +17,7 @@ export const useExperimentStore = defineStore('experiment', () => {
     const loadInitialData = async () => {
         fetchExperiments()
         fetchExperimentPresets()
+        fetchPredefinedGroups()
     }
 
     const experiments = ref([])
@@ -44,14 +45,41 @@ export const useExperimentStore = defineStore('experiment', () => {
         }
     }
 
-    
+    const selectedPredefinedGroupId = ref(null)
+    const predefinedGroups = ref([])
+    const showChartType = ref('pred')
+
+    const fetchPredefinedGroups = async () => {
+        try {
+            const response = await api.get('/groups/predefined')
+            predefinedGroups.value = response.data
+        } catch (error) {
+            console.error('获取分组失败:', error);
+        }
+    } 
+
+    const getPredefinedGroups = async () => {
+        // 筛选符合分组条件的小鼠
+        const response = await api.get(`/groups/predefined/${selectedPredefinedGroupId.value}/mice`)
+        return response.data
+    }
+
+    const databaseNotChanged = ref(true)
+    const trueCurrentDatabase = ref('')
 
     return {
         experiments,
         showedExperiments,
         experimentPresets,
+        selectedPredefinedGroupId,
+        predefinedGroups,
+        showChartType,
+        databaseNotChanged,
+        trueCurrentDatabase,
 
         fetchExperiments,
-        loadInitialData
+        loadInitialData,
+        getPredefinedGroups,
+        fetchPredefinedGroups
     }
 })

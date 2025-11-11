@@ -754,3 +754,12 @@
 .locus-checkbox:checked + .locus-name {
   color: #007bff;
 }
+
+.justify-content-between {
+justify-content: flex-start;
+}
+
+.d-flex {
+display: flex;
+gap: 20px;
+}

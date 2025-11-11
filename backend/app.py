@@ -10,6 +10,7 @@ from io import BytesIO
 from sqlalchemy import text, inspect, or_, and_
 from sqlalchemy.orm import joinedload
 import re
+from migration_script import DatabaseMigrator
 
 import socket
 
@@ -2589,7 +2590,7 @@ def clear_database():
         total_records_before = get_total_records_count()
         
         # 清空所有表数据但保留表结构
-        cleared_tables = clear_all_tables()
+        cleared_tables = clear_all_tables(db)
         
         # 获取清空后的记录数
         total_records_after = get_total_records_count()
@@ -2647,7 +2648,7 @@ def get_total_records_count():
         logger.error(f"获取记录总数失败: {str(e)}")
         return 0
 
-def clear_all_tables():
+def clear_all_tables(db):
     """清空所有表的数据但保留表结构"""
     try:
         # 获取数据库引擎
@@ -2661,10 +2662,6 @@ def clear_all_tables():
         user_tables = [table for table in tables if not table.startswith('sqlite_')]
         
         cleared_tables = []
-        
-        # 开始事务
-        db.session.begin_nested()
-        
         try:
             # 禁用外键约束（SQLite 特定）
             db.session.execute(text("PRAGMA foreign_keys = OFF"))
@@ -2674,12 +2671,10 @@ def clear_all_tables():
                 db.session.execute(text(f"DELETE FROM {table}"))
                 cleared_tables.append(table)
                 logger.info(f"清空表: {table}")
-            
-            # 提交事务
-            db.session.commit()
-            
             # 重新启用外键约束
             db.session.execute(text("PRAGMA foreign_keys = ON"))
+            # 提交事务
+            db.session.commit()
             
             logger.info(f"成功清空 {len(cleared_tables)} 个表")
             return cleared_tables
@@ -2707,8 +2702,8 @@ def create_database():
     db_item = request.get_json()
     database = {
         'projectName': db_item['projectName'],
-        'startAt': db_item['startAt'].isoformat() if db_item['startAt'] else None,
-        'endAt': db_item['endAt'].isoformat() if db_item['endAt'] else None,
+        'startAt': db_item['startAt'],
+        'endAt': db_item['endAt'],
         'readOnly': db_item['readOnly']
     }
     timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
@@ -2765,8 +2760,8 @@ def modify_database(db_key):
     
     database = {
         'projectName': db_item['projectName'],
-        'startAt': db_item['startAt'].isoformat() if db_item['startAt'] else None,
-        'endAt': db_item['endAt'].isoformat() if db_item['endAt'] else None,
+        'startAt': db_item['startAt'],
+        'endAt': db_item['endAt'],
         'readOnly': db_item['readOnly']
     }
     db_list[db_key].update(database)
@@ -2860,24 +2855,40 @@ def import_database():
         
         if not file.filename.endswith('.db'):
             return jsonify({'error': '请选择.db格式的数据库文件'}), 400
-
         
-        timestamp_name = datetime.now().strftime("%Y%m%d_%H%M%S") + '.db'
-        # 保存上传的文件
-        file.save(timestamp_name)
-
         db_item = json.loads(request.form.get('project_info'))
+        version_change = db_item['databaseUpdate']
+        timestamp_name = datetime.now().strftime("%Y%m%d_%H%M%S") + '.db'
+        if version_change:
+            # 保存上传的文件
+            import shutil
+            file.save(timestamp_name+timestamp_name)
+            new_db_path = base_dir / timestamp_name
+            shutil.copy2(db_path, new_db_path)
+            new_db_url = f"sqlite:///{new_db_path}"
+            app.config['SQLALCHEMY_DATABASE_URI'] = new_db_url
+        else:
+            file.save(timestamp_name)
         database = {
             'projectName': db_item['projectName'],
-            'startAt': db_item['startAt'].isoformat() if db_item['startAt'] else None,
-            'endAt': db_item['endAt'].isoformat() if db_item['endAt'] else None,
+            'startAt': db_item['startAt'],
+            'endAt': db_item['endAt'],
             'readOnly': db_item['readOnly']
         }
-        db_list[timestamp_name].update(database)
+        db_list[timestamp_name] = database
         config['db']['db_list'] = db_list
+        config['db']['default_db'] = timestamp_name
+        
         with open('config.json', 'w', encoding='utf-8') as f:
             json.dump(config, f, indent=4)
+        
+        if version_change:
+            OLD_DB_URL = f"sqlite:///{base_dir / (timestamp_name + timestamp_name)}"
+            NEW_DB_URL = f"sqlite:///{base_dir / timestamp_name}"
 
+            migrator = DatabaseMigrator(OLD_DB_URL, NEW_DB_URL)
+            clear_all_tables(migrator.for_clear_new_tables())
+            migrator.run_migration()
         return jsonify({
             'success': True,
             'message': '数据库导入成功'
@@ -3019,7 +3030,7 @@ def get_predefined_mice(groups_id):
                     # 应用规则筛选,取交集（AND逻辑）
                     rule_mice_ids = set(rule_query)
                     group_mice_ids = group_mice_ids.intersection(rule_mice_ids)
-                group_info['mouseId'] = list(group_mice_ids)
+                group_info['mice'] = list(group_mice_ids)
                 group_result.append(group_info)
             return jsonify(group_result), 200
         else:

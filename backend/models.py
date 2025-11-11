@@ -17,8 +17,8 @@ class Mouse(db.Model):
 
     # 关系
     cage = db.relationship('Cage', backref=db.backref('mice', lazy=True))
-    genotypes = db.relationship('Genotype', backref='mouse', lazy='dynamic')
-    tests_done = db.relationship('ExperimentClass', backref='mouse', lazy='dynamic')
+    genotypes = db.relationship('Genotype', backref='mouse', lazy='dynamic', cascade='all, delete-orphan')
+    tests_done = db.relationship('ExperimentClass', backref='mouse', lazy='dynamic', cascade='all, delete-orphan')
     
     def get_genotypes(self):
         genes = []
@@ -68,8 +68,8 @@ class Pedigree(db.Model):
     __tablename__ = 'pedigree'
 
     id = db.Column(db.Integer, primary_key=True)
-    mouse_id = db.Column(db.Integer, db.ForeignKey('mouse.tid'))
-    parent_id = db.Column(db.Integer, db.ForeignKey('mouse.tid'))
+    mouse_id = db.Column(db.Integer, db.ForeignKey('mouse.tid', ondelete='CASCADE'))
+    parent_id = db.Column(db.Integer, db.ForeignKey('mouse.tid', ondelete='CASCADE'))
     parent_type = db.Column(db.String(10))  # 'father' or 'mother'
 
     # 关系
@@ -392,7 +392,7 @@ class ExperimentValue(db.Model):
 #实验分组表
 class ExperimentClass(db.Model):
     id = db.Column(db.Integer, primary_key=True)
-    mouse_id = db.Column(db.Integer, db.ForeignKey('mouse.tid'), nullable=False)
+    mouse_id = db.Column(db.Integer, db.ForeignKey('mouse.tid', ondelete='CASCADE'), nullable=False)
     experiment_id = db.Column(db.Integer, db.ForeignKey('experiment_type.id'), nullable=False)
     
     def to_dict(self):

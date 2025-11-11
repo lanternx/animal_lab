@@ -1616,6 +1616,13 @@
                     <label for="edit-readonly-checkbox">启用只读模式</label>
                 </div>
             </div>
+            <div class="detail-item">
+                <span class="detail-label">数据库升级</span>
+                <div class="checkbox-group">
+                    <input type="checkbox" v-model="editingDatabase.databaseUpdate" id="edit-update-checkbox">
+                    <label for="edit-update-checkbox">从V2.X版本升级（基因型无法更新）</label>
+                </div>
+            </div>
         </div>
         </div>
         <div class="dialog-buttons">
@@ -1646,8 +1653,8 @@ const { loadGenotypes, colors, onFormLocusChange, onFormAlleleChange, deleteGene
 const {locations} = storeToRefs(cageStore)
 const {loadInitialData, calculateCages} = cageStore
 
-const {experiments, experimentPresets} = storeToRefs(experimentStore)
-const {fetchExperiments} = experimentStore
+const {experiments, experimentPresets, predefinedGroups, trueCurrentDatabase, databaseNotChanged} = storeToRefs(experimentStore)
+const {fetchExperiments, fetchPredefinedGroups} = experimentStore
 
 // UI状态
 const activeTab = ref('genotype')
@@ -1726,7 +1733,8 @@ const editingDatabase = ref({
 projectName: '',
 startAt: '',
 endAt: '',
-readOnly: false
+readOnly: false,
+databaseUpdate: false
 })
 const currentDatabase = ref('')
 const databases = ref({})
@@ -1747,7 +1755,6 @@ watch(deleteConfirmation, (newValue) => {
 })
 
 // 分组设置相关状态
-const predefinedGroups = ref([])
 const editingGroup = reactive({
     id: null,
     name: '',
@@ -2273,7 +2280,8 @@ const importDatabase = () => {
         projectName: '',
         startAt: '',
         endAt: '',
-        readOnly: false
+        readOnly: false,
+        databaseUpdate: false
     }
 }
 
@@ -2284,7 +2292,8 @@ const cancelImportDatabase = () => {
         projectName: '',
         startAt: '',
         endAt: '',
-        readOnly: false
+        readOnly: false,
+        databaseUpdate: false
     }
 }
 
@@ -2296,7 +2305,7 @@ const handleDbImportComplete = async () => {
     dbImportResultDialogVisible.value = false
     const formData = new FormData()
     formData.append('file', selectedDbFile.value)
-    formData.append('project_info', editingDatabase.value)
+    formData.append('project_info', JSON.stringify(editingDatabase.value))
 
     try {
         const response = await axios.post('/api/database/import', formData, {
@@ -2392,7 +2401,12 @@ const refreshDbInfo = async () => {
     try {
         const response = await axios.get('/api/database/info')
         const dbInfo = response.data
-        databases.value[currentDatabase.value] = {...databases.value[currentDatabase.value], ...dbInfo}
+        
+        if (databaseNotChanged.value) {
+            databases.value[currentDatabase.value] = {...databases.value[currentDatabase.value], ...dbInfo}
+        } else {
+            databases.value[trueCurrentDatabase.value] = {...databases.value[trueCurrentDatabase.value], ...dbInfo}
+        }
     } catch (error) {
         console.error('获取数据库信息失败:', error)
         toast.error('获取数据库信息失败')
@@ -2441,7 +2455,8 @@ const addDatabase = async () => {
         projectName: '',
         startAt: '',
         endAt: '',
-        readOnly: false
+        readOnly: false,
+        databaseUpdate: false
     }
     addingDatabase.value = true
 }
@@ -2452,7 +2467,8 @@ const createDatabase = async () => {
         projectName: '',
         startAt: '',
         endAt: '',
-        readOnly: false
+        readOnly: false,
+        databaseUpdate: false
     }
     if (response.status === 201) {
         // 确保响应包含必要的数据
@@ -2473,7 +2489,8 @@ const cancelCreateDatabase = () => {
         projectName: '',
         startAt: '',
         endAt: '',
-        readOnly: false
+        readOnly: false,
+        databaseUpdate: false
     }
     addingDatabase.value = false
 }
@@ -2532,9 +2549,11 @@ const getStatusClasses = (db, key) => {
 
 // 选择数据库
 const selectDatabase = async (key) => {
+    trueCurrentDatabase.value = currentDatabase.value
     currentDatabase.value = key
     await axios.put(`/api/database/${key}`)
     toast.success('数据库切换成功，重新启动应用后生效')
+    databaseNotChanged.value = false
 }
 
 // 切换只读状态
@@ -2796,7 +2815,6 @@ const filteredMice = computed(() => {
             mouse.sex || '',
             mouse.genotype.symbol || ''
         ]
-        alert(searchableFields)
         return searchableFields.some(field => 
             field.toLowerCase().includes(term)
         )
@@ -2911,20 +2929,10 @@ const onDrop = (event, groupIndex) => {
     }
 }
 
-const fetchPredefinedGroups = async () => {
-    try {
-        const response = await axios.get('/api/groups/predefined')
-        predefinedGroups.value = response.data
-    } catch (error) {
-        console.error('获取分组失败:', error);
-    }
-}  
-
 // 初始化数据
 onMounted(() => {
 fetchDbInfo()
 refreshDbInfo()
-fetchPredefinedGroups()
 })
 </script>
 

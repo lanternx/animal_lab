@@ -10,27 +10,42 @@
       </div>
       <div class="card-body">
         <!-- 控制按钮区域 -->
-        <div class="d-flex justify-content-between mb-4">
-          <div>
-            <button class="btn btn-primary" @click="fetchData">
+        <div class="d-flex mb-4">
+        <select v-model="showChartType" style="min-width:200px;">
+            <option value="pred">使用预设分组</option>
+            <option value="temp">使用临时分组</option>
+        </select>
+        <button class="btn btn-primary" @click="openRecordModal">
+            <i class="material-icons btn-icon">add</i>
+            录入体重
+        </button>
+        </div>
+        <div v-if="showChartType === 'pred'" class="d-flex justify-content-between mb-4">
+          <select v-model="selectedPredefinedGroupId" style="min-width:100px;">
+            <option v-for="group in predefinedGroups" value="group.id" key="group.id">
+                {{ group.name }}
+            </option>
+          </select>
+          <button class="btn btn-primary" @click="fetchData('pred')">
+            <i class="material-icons">insights</i>
+            以预设分组生成生存曲线
+          </button>
+        </div>
+        <div v-if="showChartType === 'temp'" class="d-flex justify-content-between mb-4">
+            <button class="btn btn-primary" @click="fetchData('temp')">
               <i class="material-icons">insights</i>
-              生成生存曲线
+              以临时分组生成生存曲线
             </button>
-          </div>
-          <div>
             <button class="btn btn-sm btn-outline" @click="addGroup">
               <i class="material-icons">add</i> 添加分组
             </button>
-          </div>
-          <div>
             <button id="addGroupBtn" class="btn btn-sm btn-danger" @click="clearGroups">
             <i class="material-icons">add</i> 清空分组
             </button>
-          </div>
         </div>
         
         <!-- 分组设置 -->
-        <div class="mb-4">
+        <div v-if="showChartType === 'temp'" class="mb-4">
           <h5>分组设置</h5>
           <div class="groups-container">
             <div 
@@ -242,14 +257,15 @@ import axios from 'axios';
 import Chart from 'chart.js/auto';
 import { toast } from 'vue3-toastify';
 import 'vue3-toastify/dist/index.css';
-import { useGeneStore } from '@/stores'
+import { useGeneStore, useExperimentStore } from '@/stores'
 import { storeToRefs } from 'pinia'
-import { color } from 'd3';
 
 const geneStore = useGeneStore()
 const { allGenotypes, tempGroups } = storeToRefs(geneStore)
 const { addGroup, removeGroup, clearGroups, getTempGroups, onLocusSelect, onCombinationSelect } = geneStore
-
+const experimentStore = useExperimentStore()
+const { predefinedGroups, selectedPredefinedGroupId, showChartType } = storeToRefs(experimentStore)
+const { getPredefinedGroups } = experimentStore
 
 // 响应式数据
 const groups = ref([]);
@@ -259,13 +275,18 @@ const currentPage = ref(1);
 const pageSize = 10;
 
 // 获取生存数据
-const fetchData = async () => {
+const fetchData = async (groupType) => {
   try {
     if (tempGroups.length === 0) {
       toast.error('请至少添加一个分组');
       return;
     }
-    const groupData = await getTempGroups()
+    let groupData = []
+    if (groupType === 'temp') {
+      groupData = await getTempGroups()
+    } else if (groupType === 'pred') {
+      groupData = await getPredefinedGroups()
+    }
     const response = await axios.post('/api/survival-analysis', {
       groups: groupData.map(g => g.mice)
     });
@@ -577,18 +598,6 @@ const displayedMice = computed(() => {
   border: 1px solid #ced4da;
   border-radius: 4px;
   height: auto;
-}
-
-.d-flex {
-  display: flex;
-}
-
-.justify-content-between {
-  justify-content: space-between;
-}
-
-.justify-content-end {
-  justify-content: flex-end;
 }
 
 .mb-4 {
