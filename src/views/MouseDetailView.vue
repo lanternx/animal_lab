@@ -130,7 +130,7 @@ Chart.register(...registerables)
 export default {
 name: 'MouseDetailModal',
 props: {
-    mouseId: { type: String, required: true }
+    mouseId: { type: Number, required: true }
 },
 setup(props, { emit }) {
     const prevMouseId = ref(null);

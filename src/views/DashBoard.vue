@@ -343,7 +343,7 @@ import { useCageStore } from '@/stores'
 import { storeToRefs } from 'pinia'
 
 const cageStore = useCageStore()
-const {locations, activeSection, cages, section_key} = storeToRefs(cageStore)
+const {locations, activeSection, cages} = storeToRefs(cageStore)
 const {fetchCages} = cageStore
 
 // 响应式状态
@@ -409,9 +409,7 @@ onMounted(async () => {
   console.log('DashBoard组件已挂载，开始初始化...')
   console.log('当前URL:', window.location.href)
   console.log('User Agent:', navigator.userAgent)
-  
-  section_key.value = true
-  
+
   // 延迟0.1秒再开始加载，确保所有依赖都准备好
   setTimeout(async () => {
     console.log('开始延迟加载数据...')

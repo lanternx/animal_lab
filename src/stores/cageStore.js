@@ -16,6 +16,7 @@ export const useCageStore = defineStore('cage', () => {
 
     const loadInitialData = async () => {
         await fetchLocations()
+        section_key.value = true
         await fetchCages()
     }
 
@@ -46,7 +47,6 @@ export const useCageStore = defineStore('cage', () => {
         console.log('开始获取笼位数据...')
         
         const response = await api.get('/cages')
-        console.log('获取到cages数据:', response.data)
         cages.value = response.data
         
         // 设置默认选中的section为第一个

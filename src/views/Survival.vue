@@ -22,7 +22,7 @@
         </div>
         <div v-if="showChartType === 'pred'" class="d-flex justify-content-between mb-4">
           <select v-model="selectedPredefinedGroupId" style="min-width:100px;">
-            <option v-for="group in predefinedGroups" value="group.id" key="group.id">
+            <option v-for="group in predefinedGroups" :value="group.id" :key="group.id">
                 {{ group.name }}
             </option>
           </select>

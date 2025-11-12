@@ -139,7 +139,7 @@
           <span v-if="!sidebarCollapsed">折叠侧边栏</span>
         </div>
       </div>
-      <main>
+      <main @click="sidebarCollapsed=true">
         <router-view></router-view>
       </main>
   <!-- 页脚 -->
@@ -159,14 +159,11 @@
       </div>
   </footer>
       </div>
-
-
 </template>
 
 <script setup>
-import { ref, onMounted } from 'vue'
+import { ref, onMounted, watch } from 'vue'
 import { useExperimentStore } from '@/stores'
-import { storeToRefs } from 'pinia'
 
 const experimentStore = useExperimentStore()
 
@@ -187,6 +184,13 @@ onMounted(() => {
   if (savedState !== null) {
     sidebarCollapsed.value = savedState === 'true'
   }
+})
+
+import { useRoute } from 'vue-router'
+const route = useRoute()
+
+watch(() => route.path, () => {
+  sidebarCollapsed.value = true
 })
 </script>
 

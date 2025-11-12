@@ -769,6 +769,27 @@
             <h3>{{ editingGroup.id ? '编辑分组' : '添加新分组' }}</h3>
             <form class="form-group-row">
                 <div class="form-group">
+                    <label>是否为实验预设分组？</label>
+                    <div class="group-type-selector">
+                        <select v-model="editingGroup.experiment_id" @change="changeGroupExperiment" :disabled="editingGroup.id">
+                            <option :value=null>不为实验预设分组</option>
+                            <option v-for="experiment in experiments" :value="experiment.id" :key="experiment.id" >
+                            {{ experiment.name }}
+                            </option>
+                        </select>
+                    </div>
+                </div>
+                <div class="form-group">
+                    <button @click="saveGroup(editingGroup.Gtype)" class="btn btn-primary">
+                        {{ editingGroup.id ? '更新' : '添加' }}
+                    </button>
+                    <button v-if="editingGroup.id" type="button" class="btn btn-outline" @click="cancelEditGroup">
+                        取消
+                    </button>
+                </div>
+            </form>
+            <form class="form-group-row">
+                <div class="form-group">
                     <label>分组名称 *</label>
                     <input type="text" v-model="editingGroup.name" placeholder="例如: WT vs TP53 ♀" required>
                 </div>
@@ -789,26 +810,6 @@
                             ID分组
                         </option>
                     </select>
-                </div>
-            </form>
-            <form class="form-group-row">
-                <div class="form-group" v-if="editingGroup.Gtype === 'id'">
-                    <label>是否为实验预设分组？</label>
-                    <div class="group-type-selector">
-                        <select v-model="editingGroup.experiment">
-                            <option v-for="experiment in experiments" value="experiment.id" key="experiment.id" >
-                            {{ experiment.name }}
-                            </option>
-                        </select>
-                    </div>
-                </div>
-                <div class="form-group">
-                    <button @click="saveGroup(editingGroup.Gtype)" class="btn btn-primary">
-                        {{ editingGroup.id ? '更新' : '添加' }}
-                    </button>
-                    <button v-if="editingGroup.id" type="button" class="btn btn-outline" @click="cancelEditGroup">
-                        取消
-                    </button>
                 </div>
             </form>
             <!-- 规则配置 -->
@@ -1097,6 +1098,9 @@
                             <div class="mouse-details" v-html="mouse.genotype.symbol"></div>
                             <div class="mouse-details">{{ mouse.sex }} · {{ mouse.strain }} · {{ mouse.birthDate }}</div>
                             </div>
+                        </div>
+                        <div v-if="filteredMice.length === 0" style="color:gray;">
+                            暂无可选小鼠，请在小鼠页面为小鼠添加“完成实验”
                         </div>
                         </div>
                     </div>
@@ -1760,6 +1764,7 @@ const editingGroup = reactive({
     name: '',
     description: '',
     Gtype: '',
+    experiment_id: null,
     rules: []
 })
 const expandedGroup = ref([])
@@ -2618,11 +2623,18 @@ const addGroup = (type) => {
     }
 }
 
+const changeGroupExperiment = () => {
+    editingGroup.Gtype = ''
+    editingGroup.rules = []
+    isRepeated.value = true
+    showIDList.value = false
+}
+
 const changeGroupType = async () => {
     if (editingGroup.Gtype === 'id') {
         showIDList.value = true
-        if (editingGroup.experiment) {
-            const miceExperiment = await axios.post(`/api/experiments/${editingGroup.experiment}/mice`)
+        if (editingGroup.experiment_id) {
+            const miceExperiment = await axios.get(`/api/experiments/${editingGroup.experiment_id}/mice`)
             candidateMice.value = miceExperiment.data
         } else {
             candidateMice.value = mice.value
@@ -2675,8 +2687,8 @@ const saveGenes = (subgroupIndex, ruleIndex, index) => {
 }
 
 const reviewRules = async () => {
-    if (editingGroup.experiment) {
-        const miceExperiment = await axios.post(`/api/experiments/${editingGroup.experiment}/grouped_mice`)
+    if (editingGroup.experiment_id) {
+        const miceExperiment = await axios.post(`/api/experiments/${editingGroup.experiment_id}/grouped_mice`)
         candidateMice.value = miceExperiment.data
     } else {
         candidateMice.value = mice.value
@@ -2688,7 +2700,7 @@ const reviewRules = async () => {
     const response = await axios.post(`/api/groups/predefined/review`, { editing : editingGroup, candidate: candidateMice.value.map(m => m.tid)})
     response.data.forEach((g, gIndex) => {
         if (editingGroup.rules[gIndex]) {
-            Object.assign(editingGroup.rules[gIndex], { mice: g })
+            Object.assign(editingGroup.rules[gIndex], { mouseId: g })
         }
     })
     isRepeated.value = true
@@ -2737,6 +2749,7 @@ const saveGroup = async (groupType) => {
 }
 
 const editGroup = (group) => {
+    cancelEditGroup()
     Object.assign(editingGroup, group)
     const tempRules = editingGroup.rules
     changeGroupType()
@@ -2748,8 +2761,10 @@ const cancelEditGroup = () => {
     editingGroup.name = ''
     editingGroup.description = ''
     editingGroup.Gtype = ''
-    editingGroup.experiment = null
+    editingGroup.experiment_id = null
     editingGroup.rules = []
+    isRepeated.value = true
+    showIDList.value = false
 }
 
 const deleteGroup = async (id) => {
@@ -2759,6 +2774,7 @@ const deleteGroup = async (id) => {
         await axios.delete(`/api/groups/predefined/${id}`)
         toast.success('删除成功')
         fetchPredefinedGroups()
+        cancelEditGroup()
     } catch (error) {
         console.error('删除分组失败:', error)
         toast.error('删除分组失败')

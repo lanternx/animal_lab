@@ -53,6 +53,7 @@
             display: flex;
             align-items: center;
             margin-right: 30px;
+            user-select: none;
         }
         
         .logo-icon {
@@ -127,6 +128,7 @@
             transition: transform 0.3s ease, width 0.3s ease;
             z-index: 1000;
             overflow: hidden;
+            user-select: none;
             }
         .sidebar.collapsed {
             transform: translateX(calc(-100% + var(--sidebar-collapsed-width)));

@@ -577,7 +577,7 @@ def move_mouse():
 # 删除笼位API
 @app.route('/api/cages/<int:age_id>', methods=['DELETE'])
 def delete_cage(cage_id):
-    cage = Cage.query.get(cage_id)
+    cage = Cage.query.get_or_404(cage_id)
     if not cage:
         return jsonify({'error': 'Cage not found'}), 404
     try:
@@ -596,7 +596,7 @@ def delete_cage(cage_id):
 # 更新笼位API
 @app.route('/api/cages/<int:cage_id>', methods=['PUT'])
 def update_cage(cage_id):
-    cage = Cage.query.get(cage_id)
+    cage = Cage.query.get_or_404(cage_id)
     if not cage:
         return jsonify({'error': 'Cage not found'}), 404
     data = request.json
@@ -636,8 +636,8 @@ def update_cage_order():
     try:
         id_from = request.json['id_from']
         id_to = request.json['id_to']
-        cage_from = Cage.query.get(id_from)
-        cage_to = Cage.query.get(id_to)
+        cage_from = Cage.query.get_or_404(id_from)
+        cage_to = Cage.query.get_or_404(id_to)
         temporary = cage_from.order
         cage_from.order = cage_to.order
         cage_to.order = temporary
@@ -660,7 +660,7 @@ def get_mice_info(mouse_tid):
         if mouse.cage_id is None:
             c_cage = None
         else:
-            c_cage = Cage.query.get(mouse.cage_id)
+            c_cage = Cage.query.get_or_404(mouse.cage_id)
         if mouse:
             content['id'] = mouse.id
             content['genotype'] = mouse.get_full_genotype()
@@ -2560,7 +2560,7 @@ def get_experiment_grouped_mice(experiment_id):
         if predefined_group and predefined_group.Gtype == 'id':
             return jsonify(predefined_group.to_dict()), 200
         else:
-            return jsonify({'error': str(e)}), 404
+            return jsonify(), 404
     except Exception as e:
         logger.error(f"获取预设分组数据失败: {str(e)}")
         return jsonify({'error': str(e)}), 500
@@ -2571,7 +2571,7 @@ def get_experiment_mice(experiment_id):
     try:
         em = ExperimentClass.query.filter_by(experiment_id=experiment_id).all()
         mid = [m.mouse_id for m in em]
-        mice = Mouse.query.filter(Mouse.tid._in(mid)).all()
+        mice = Mouse.query.filter(Mouse.tid.in_(mid)).all()
         return jsonify([m.to_dict() for m in mice]), 200
     except Exception as e:
         logger.error(f"获取实验小鼠数据失败: {str(e)}")
@@ -3006,7 +3006,7 @@ def get_temp_groups():
     except Exception as e:
         return jsonify({'error': f'服务器错误: {str(e)}'}), 500
     
-@app.route('/api/predefined/<int:groups_id>/mice', methods=['GET'])
+@app.route('/api/groups/predefined/<int:groups_id>/mice', methods=['GET'])
 def get_predefined_mice(groups_id):
     """获取预设分组的信息和小鼠编号"""
     try:
@@ -3121,6 +3121,9 @@ def modify_predefined_groups(gIndex):
         group_description = editing.get('description', '')
         group_type = editing.get('Gtype', '')
         rules = editing.get('rules', [])
+        experiment_id = editing.get('experiment_id', None)
+        if experiment_id:
+            ExperimentType.get_or_404(experiment_id)
         if not (group_name and group_type):
             return jsonify(), 403
         new_rule = PredefinedGroup.query.get_or_404(gIndex)
@@ -3128,6 +3131,7 @@ def modify_predefined_groups(gIndex):
         new_rule.description = group_description
         new_rule.Gtype = group_type
         new_rule.rules = rules
+        new_rule.experiment_id = experiment_id
         db.session.commit()
         return jsonify(), 200
     except json.JSONDecodeError:
@@ -3145,12 +3149,16 @@ def add_predefined_groups():
         group_description = editing.get('description', '')
         group_type = editing.get('Gtype', '')
         rules = editing.get('rules', [])
+        experiment_id = editing.get('experiment_id', None)
+        if experiment_id:
+            ExperimentType.get_or_404(experiment_id)
         if group_name and group_type:
             new_rule = PredefinedGroup(
                 name = group_name,
                 description = group_description,
                 Gtype = group_type,
-                rules = rules
+                rules = rules,
+                experiment_id = experiment_id
             )
             db.session.add(new_rule)
             db.session.commit()
