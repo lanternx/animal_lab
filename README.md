@@ -1,5 +1,15 @@
-# 鼠管家MurisPro——专业的动物房管理系统
+<div align="center">
 
+<img src="./1.png" alt="Logo" width="100">
+
+# 鼠管家MurisPro
+
+**专业的动物房管理系统**
+
+[![版本](https://img.shields.io/badge/版本-3.0.0-blue)]()
+[![状态](https://img.shields.io/badge/状态-活跃-success)]()
+
+</div>
 一个基于 Flask 和 Vue.js 开发的本地实验动物管理系统，专为生物医学研究设计，提供完整的动物管理、数据分析和可视化功能，造福广大有实验动物需求的朋友。适配 windows 、mac系统。
 
 介绍和[教学视频](https://b23.tv/5fQetkk)
