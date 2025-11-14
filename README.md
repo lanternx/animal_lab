@@ -1,6 +1,16 @@
-# 动物房管理系统
+<div align="center">
 
-一个基于 Flask 和 Vue.js 开发的本地实验动物管理系统，专为生物医学研究设计，提供完整的动物管理、数据分析和可视化功能，造福广大有实验动物需求的朋友。可以直接在 windows 上使用，而在 mac 上也可以根据开发教程安装。
+<img src="./1.png" alt="Logo" width="100">
+
+# 鼠管家MurisPro
+
+**专业的动物房管理系统**
+
+[![版本](https://img.shields.io/badge/版本-3.0.0-blue)]()
+[![状态](https://img.shields.io/badge/状态-活跃-success)]()
+
+</div>
+一个基于 Flask 和 Vue.js 开发的本地实验动物管理系统，专为生物医学研究设计，提供完整的动物管理、数据分析和可视化功能，造福广大有实验动物需求的朋友。适配 windows 、mac系统。
 
 介绍和[教学视频](https://b23.tv/5fQetkk)
 
@@ -93,32 +103,25 @@ cd ..
 npm install
 ```
 
-5. 构建生产版本：
+5. 启动开发服务器：
 
 ```cmd
-npm run build
+npm run serve
 ```
 
-6. 将编译后的 `dist` 文件夹移动到 `backend` 中：
-
-7. 运行后端：
+6. 运行后端：
 
 ```bash
 cd backend
-python main.py
+python app.py
 ```
-
-### 安装完成后的运行：
-
-```cmd
-cd backend
-venv\Scripts\activate.bat
-python main.py
-```
+然后可在浏览器中打开本项目（localhost:8080）
 
 8. 打包为可执行文件：
 
 ```cmd
+npm run build
+move dist ..\backend\
 python build.py
 ```
 
@@ -165,40 +168,29 @@ cd ..
 npm install
 ```
 
-6. 构建生产版本：
+6. 启动开发服务器：
 
 ```bash
-npm run build
+npm run serve
 ```
 
-7. 将编译后的 `dist` 文件夹移动到 `backend` 中：
-
-```bash
-mv -i dist ../backend/
-```
-
-8. 运行后端：
+7. 运行后端：
 
 ```bash
 cd backend
-python3 main.py
+python3 app.py
 ```
 
-我一般在 `localhost:5000` 上直接访问，不会使用桌面程序。也可以编译为可执行文件：
+在 `localhost:8080` 上直接访问
 
 打包为可执行文件(打包不要使用mac自带的python)：
 
 ```bash
+npm run build
+mv -i dist ../backend/
 python3 build_mac.py --disable-console --app-name "AL_V2.2"
 ```
 
-### 安装完成后的运行：
-
-```bash
-source ~/.python/sglang/bin/activate
-cd backend
-python3 main.py
-```
 
 ## 项目结构
 
