@@ -1163,32 +1163,6 @@ function isCageHighlighted(cageId) {
   gap: 10px;
 }
 
-.btn {
-  padding: 8px 16px;
-  border-radius: 4px;
-  border: none;
-  cursor: pointer;
-  display: flex;
-  align-items: center;
-  font-size: 14px;
-  transition: background-color 0.2s;
-}
-
-.btn-primary {
-  background-color: var(--primary);
-  color: white;
-}
-
-.btn-outline {
-  background-color: transparent;
-  border: 1px solid var(--primary);
-  color: var(--primary);
-}
-
-.btn-icon {
-  margin-right: 5px;
-}
-
 /* 笼位卡片样式 */
 .cage-card {
   border: 1px solid var(--border);
@@ -1658,7 +1632,9 @@ function isCageHighlighted(cageId) {
 }
 
 .result-info {
-  flex: 1;
+  display: flex;
+  gap: 10px;
+  align-items: center;
 }
 
 .result-info .mouse-id {

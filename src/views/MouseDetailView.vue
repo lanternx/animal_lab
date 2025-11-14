@@ -1028,26 +1028,6 @@ cursor: pointer;
 transition: all 0.2s;
 }
 
-.btn-outline {
-background: transparent;
-border: 1px solid #4285f4;
-color: #4285f4;
-}
-
-.btn-outline:hover {
-background: rgba(66, 133, 244, 0.1);
-}
-
-.btn-primary {
-background: #4285f4;
-color: white;
-border: none;
-}
-
-.btn-primary:hover {
-background: #3367d6;
-}
-
 /* 响应式设计 */
 @media (max-width: 1200px) {
 .mouse-detail-modal {

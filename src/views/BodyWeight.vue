@@ -447,10 +447,6 @@ const cancelConfirm = () => {
 }
 
 const showChart = async (groupType) => {
-    if (tempGroups.value.length === 0) {
-        toast.error('请至少添加一个分组')
-        return
-    }
     try {
         if (weightRecords.value.length === 0) {
         toast.error('没有可用的体重记录数据')
@@ -460,8 +456,16 @@ const showChart = async (groupType) => {
         hasData.value = true
         let groups = []
         if (groupType === 'temp') {
+            if (tempGroups.value.length === 0) {
+                toast.error('请至少添加一个分组');
+                return;
+            }  
             groups = await getTempGroups()
         } else if (groupType === 'pred') {
+            if (!selectedPredefinedGroupId.value) {
+                toast.error('请选择预设分组');
+                return;
+            }
             groups = await getPredefinedGroups()
         }
         await nextTick();
@@ -930,52 +934,6 @@ display: flex;
 gap: 10px;
 }
 
-.btn {
-padding: 8px 16px;
-border-radius: 4px;
-border: none;
-cursor: pointer;
-display: flex;
-align-items: center;
-font-size: 14px;
-transition: all 0.2s;
-}
-
-.btn-card {
-padding: 4px 8px;
-border: none;
-cursor: pointer;
-display: flex;
-align-items: center;
-font-size: 1px;
-transition: all 0.2s;
-}
-
-.btn-primary {
-background-color: var(--primary);
-color: white;
-}
-
-.btn-outline {
-background-color: transparent;
-border: 1px solid var(--primary);
-color: var(--primary);
-}
-
-.btn-sm {
-padding: 6px 12px;
-font-size: 0.875rem;
-}
-
-.btn-icon {
-margin-right: 5px;
-}
-
-.btn-danger {
-background-color: var(--danger);
-color: white;
-}
-
 .form-group {
 margin-bottom: 1rem;
 }
@@ -1027,17 +985,6 @@ align-items: center;
 .modal-title {
 margin: 0;
 font-size: 1.25rem;
-}
-
-.btn-close {
-background: none;
-border: none;
-color: white;
-cursor: pointer;
-display: flex;
-align-items: center;
-justify-content: center;
-padding: 0.5rem;
 }
 
 .modal-body {

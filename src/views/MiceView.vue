@@ -53,9 +53,10 @@
                   v-for="experiment in experiments" 
                   :key="experiment.id" 
                   class="select-option"
+                  :class="{is_show: experiment.is_show}"
                   @click="selectTest('batch', experiment)"
                 >
-                  {{ experiment.name }}
+                  {{ experiment.id }}-{{ experiment.name }}
                 </div>
               </div>
             </div>
@@ -432,9 +433,10 @@
                   v-for="experiment in availableTestsDone" 
                   :key="experiment.id" 
                   class="select-option"
+                  :class="{is_show: experiment.is_show}"
                   @click="selectTest('done', experiment)"
                 >
-                  {{ experiment.name }}
+                  {{ experiment.id }}-{{ experiment.name }}
                 </div>
                 <div v-if="availableTestsDone.length === 0" class="select-option disabled">
                   没有可选的测试
@@ -469,9 +471,10 @@
                   v-for="experiment in availableTestsPlan" 
                   :key="experiment.id" 
                   class="select-option"
+                  :class="{is_show: experiment.is_show}"
                   @click="selectTest('plan', experiment)"
                 >
-                  {{ experiment.name }}
+                  {{ experiment.id }}-{{ experiment.name }}
                 </div>
                 <div v-if="availableTestsPlan.length === 0" class="select-option disabled">
                   没有可选的测试
@@ -2118,6 +2121,10 @@ onMounted(async () => {
 
 .select-option.disabled:hover {
   background-color: transparent;
+}
+
+.select-option.is_show {
+  background-color: palegoldenrod;
 }
 
 .selection-info {

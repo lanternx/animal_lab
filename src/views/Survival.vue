@@ -277,14 +277,18 @@ const pageSize = 10;
 // 获取生存数据
 const fetchData = async (groupType) => {
   try {
-    if (tempGroups.length === 0) {
-      toast.error('请至少添加一个分组');
-      return;
-    }
     let groupData = []
     if (groupType === 'temp') {
+      if (tempGroups.value.length === 0) {
+        toast.error('请至少添加一个分组');
+        return;
+      }
       groupData = await getTempGroups()
     } else if (groupType === 'pred') {
+      if (!selectedPredefinedGroupId.value) {
+        toast.error('请选择预设分组');
+        return;
+      }
       groupData = await getPredefinedGroups()
     }
     const response = await axios.post('/api/survival-analysis', {
@@ -533,33 +537,6 @@ const displayedMice = computed(() => {
   font-size: 1.5rem;
   font-weight: 600;
   margin: 0;
-}
-
-.btn {
-  padding: 8px 16px;
-  border-radius: 4px;
-  border: none;
-  cursor: pointer;
-  display: flex;
-  align-items: center;
-  font-size: 14px;
-  transition: all 0.2s;
-}
-
-.btn-primary {
-  background-color: var(--primary);
-  color: white;
-}
-
-.btn-outline {
-  background-color: transparent;
-  border: 1px solid var(--primary);
-  color: var(--primary);
-}
-
-.btn-sm {
-  padding: 6px 12px;
-  font-size: 0.875rem;
 }
 
 .btn-icon {
@@ -1036,10 +1013,5 @@ const displayedMice = computed(() => {
 .combination-checkbox:checked + .combination-name {
   color: #28a745;
   font-weight: 500;
-}
-
-.btn-danger {
-background-color: var(--danger);
-color: white;
 }
 </style>

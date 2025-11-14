@@ -451,18 +451,20 @@ def batch_experiments_change():
         operation = data.get("batchTest", "")
         if operation == "完成实验":
             for mtid in mice_ids:
-                m = Mouse.query.get(mtid)
+                m = Mouse.query.get_or_404(mtid)
                 if not m:
                     continue
                 if m.tests_done:
-                    for t in m.tests_done:
-                        ExperimentClass.query.filter(
-                            ExperimentClass.mouse_id == m.tid,
-                            ExperimentClass.experiment_id == t
-                        ).delete()
+                    m.tests_done.delete()
+                for test_id in test_ids:
+                    enter_experiment = ExperimentClass(
+                        mouse_id = m.tid,
+                        experiment_id = test_id
+                    )
+                    db.session.add(enter_experiment)
         elif operation == "计划实验":
             for mtid in mice_ids:
-                m = Mouse.query.get(mtid)
+                m = Mouse.query.get_or_404(mtid)
                 if not m:
                     continue
                 m.tests_planned = test_ids
@@ -1265,28 +1267,35 @@ def export_data(export_type):
                 query = query.filter(Mouse.birth_date.between(start_dt, end_dt))
             elif export_type == 'weights':
                 query = query.filter(WeightRecord.record_date.between(start_dt, end_dt))
+            elif export_type == 'records':
+                query = query.filter(StatusRecord.record_date.between(start_dt, end_dt))
         except ValueError:
             return jsonify({'error': '无效的日期格式'}), 400
     
-    # 获取数据并转换为DataFrame
     data = [row.to_dict() for row in query.all()]
-    for index in range(len(data)):
-        tid = data[index]['cage_id']
-        if not tid:
-            data[index]['cage_id'] = ""
-            data[index]['location'] = ""
-        else:
-            cage = Cage.query.get_or_404(tid)
-            data[index]['cage_id'] = cage.cage_id
-            data[index]['location'] = cage.section
-    for index in range(len(data)):
-        genotype_str = ""
-        mouse = Mouse.query.get(data[index]['tid'])
-        if mouse:
-            genotype_str = mouse.get_genotype_str()
-        data[index]['genotype_description'] = data[index]['genotype']
-        data[index]['genotype'] = genotype_str
-    df = pd.DataFrame(data)
+    if export_type == 'mice':
+        for index in range(len(data)):
+            tid = data[index]['cage_id']
+            if not tid:
+                data[index]['cage_id'] = ""
+                data[index]['location'] = ""
+            else:
+                cage = Cage.query.get_or_404(tid)
+                data[index]['cage_id'] = cage.cage_id
+                data[index]['location'] = cage.section
+        for index in range(len(data)):
+            genotype_str = ""
+            mouse = Mouse.query.get_or_404(data[index]['tid'])
+            if mouse:
+                genotype_str = mouse.get_genotype_str()
+            data[index]['genotype_description'] = data[index]['genotype']
+            data[index]['genotype'] = genotype_str
+        df = pd.DataFrame(data)
+        base_columns = ['id', 'sex', 'genotype_description', 'live_status', 'birth_date', 'death_date', 'location', 'cage_id', 'strain']
+        info_columns = ["tid", "genotype", "tests_done", "tests_planned"]
+        df = df[base_columns + info_columns]
+    else:
+        df = pd.DataFrame(data)
     
     return create_export_file(df, export_format, filename)
 
@@ -1863,7 +1872,7 @@ def update_weight_record(id):
             record.record_date = datetime.strptime(data['record_date'], '%Y-%m-%d')
             
             # 重新计算生存天数
-            mouse = Mouse.query.get(record.mouse_id)
+            mouse = Mouse.query.get_or_404(record.mouse_id)
             if mouse and mouse.birth_date:
                 record.record_livingdays = (record.record_date.date() - mouse.birth_date).days
         
@@ -2043,10 +2052,10 @@ def get_experiment_presets():
             "description": "裸鼠肿瘤生长测量实验",
             "is_show": True,
             "fields": [
-                {"field_name": "肿瘤长径", "data_type": "REAL", "unit": "mm", "is_required": True, "display_order": 1},
-                {"field_name": "肿瘤短径", "data_type": "REAL", "unit": "mm", "is_required": True, "display_order": 2},
-                {"field_name": "肿瘤体积", "data_type": "REAL", "unit": "mm³", "is_required": False, "display_order": 3},
-                {"field_name": "照片路径", "data_type": "TEXT", "is_required": False, "display_order": 4}
+                {"field_name": "肿瘤长径", "data_type": "REAL", "unit": "mm", "is_required": True, "display_order": 1, "visualize_type":"y"},
+                {"field_name": "肿瘤短径", "data_type": "REAL", "unit": "mm", "is_required": True, "display_order": 2, "visualize_type":"y"},
+                {"field_name": "肿瘤体积", "data_type": "REAL", "unit": "mm³", "is_required": False, "display_order": 3, "visualize_type":"y"},
+                {"field_name": "照片路径", "data_type": "TEXT", "is_required": False, "display_order": 4, "visualize_type":""}
             ]
         },
         "rotarod": {
@@ -2054,10 +2063,10 @@ def get_experiment_presets():
             "description": "小鼠运动协调能力测试",
             "is_show": True,
             "fields": [
-                {"field_name": "潜伏期", "data_type": "REAL", "unit": "s", "is_required": True, "display_order": 1},
-                {"field_name": "跌落速度", "data_type": "REAL", "unit": "rpm", "is_required": True, "display_order": 2},
-                {"field_name": "跌落次数", "data_type": "INTEGER", "unit": "次", "is_required": False, "display_order": 3},
-                {"field_name": "最大速度", "data_type": "REAL", "unit": "rpm", "is_required": False, "display_order": 4}
+                {"field_name": "潜伏期", "data_type": "REAL", "unit": "s", "is_required": True, "display_order": 1, "visualize_type":"y"},
+                {"field_name": "跌落速度", "data_type": "REAL", "unit": "rpm", "is_required": True, "display_order": 2, "visualize_type":"y"},
+                {"field_name": "跌落次数", "data_type": "INTEGER", "unit": "次", "is_required": False, "display_order": 3, "visualize_type":"y"},
+                {"field_name": "最大速度", "data_type": "REAL", "unit": "rpm", "is_required": False, "display_order": 4,  "visualize_type":"x"}
             ]
         },
         "open_field": {
@@ -2065,17 +2074,19 @@ def get_experiment_presets():
             "description": "小鼠焦虑和探索行为测试",
             "is_show": True,
             "fields": [
-                {"field_name": "总活动距离", "data_type": "REAL", "unit": "cm", "is_required": True, "display_order": 1},
-                {"field_name": "中央区域时间", "data_type": "REAL", "unit": "s", "is_required": True, "display_order": 2},
-                {"field_name": "站立次数", "data_type": "INTEGER", "unit": "次", "is_required": True, "display_order": 3},
-                {"field_name": "粪便粒数", "data_type": "INTEGER", "unit": "粒", "is_required": False, "display_order": 4}
+                {"field_name": "总活动距离", "data_type": "REAL", "unit": "cm", "is_required": True, "display_order": 1, "visualize_type":"y"},
+                {"field_name": "中央区域时间", "data_type": "REAL", "unit": "s", "is_required": True, "display_order": 2, "visualize_type":"y"},
+                {"field_name": "站立次数", "data_type": "INTEGER", "unit": "次", "is_required": True, "display_order": 3, "visualize_type":""},
+                {"field_name": "粪便粒数", "data_type": "INTEGER", "unit": "粒", "is_required": False, "display_order": 4, "visualize_type":""}
             ]
         },
         "weight_tracking": {
             "name": "体重追踪",
             "description": "用于小鼠体重变化记录分组",
             "is_show": False,
-            "fields": []
+            "fields": [
+                {"field_name": "体重", "data_type": "REAL", "unit": "g", "is_required": True, "display_order": 1, "visualize_type":"y"}
+            ]
         }
     }
     return jsonify(presets)
@@ -2093,88 +2104,54 @@ def get_experiment(experiment_id):
     
 @app.route('/api/experiment/<int:experiment_id>/data', methods=['GET'])
 def get_experiment_data(experiment_id):
-    """获取实验数据，以字段为列的形式返回"""
+    """获取实验数据，并在后端完全处理"""
     try:
+        candidate_mice = [ex.mouse_id for ex in ExperimentClass.query.filter_by(experiment_id=experiment_id).all()]
+        groups = PredefinedGroup.query.filter_by(experiment_id=experiment_id).first().rules
+        mouse_to_group = {}
+        for g in groups:
+            for m in g['mouseId']:
+                if m in candidate_mice:
+                    if m in mouse_to_group.keys():
+                        mouse_to_group[m].append([g['name'], g['color']])
+                    else:
+                        mouse_to_group[m] = [[g['name'], g['color']]]
         # 获取实验记录
         experiments = Experiment.query.filter_by(experiment_type_id=experiment_id).all()
         results = []
         for expr in experiments:
             # 获取所有相关值
             values = ExperimentValue.query.filter_by(experiment_id=expr.id).all()
+            mid = expr.mouse_id
             # 构建结果字典
-            result = {
-                'id': expr.id,
-                'mouse_id': expr.mouse_id,
-                'experiment_type_id': expr.experiment_type_id,
-                'researcher': expr.researcher,
-                'date': expr.date.isoformat() if expr.date else None,
-                'notes': expr.notes
-            }
-            # 添加字段值
-            for value in values:
-                field_name = value.field_definition.field_name
-                # 根据数据类型获取值
-                if value.field_definition.data_type == 'INTEGER':
-                    result[field_name] = value.value_int
-                elif value.field_definition.data_type == 'REAL':
-                    result[field_name] = value.value_real
-                elif value.field_definition.data_type == 'TEXT':
-                    result[field_name] = value.value_text
-                elif value.field_definition.data_type == 'BOOLEAN':
-                    result[field_name] = value.value_bool
-                elif value.field_definition.data_type == 'DATE':
-                    result[field_name] = value.value_date.isoformat() if value.value_date else None
-            results.append(result)
+            for g in mouse_to_group[mid]:
+                result = {
+                    '__experimentId': expr.id,
+                    'id': mid,
+                    'group': g[0],
+                    'color': g[1],
+                    'researcher': expr.researcher,
+                    'field_date': expr.date.isoformat() if expr.date else None,
+                    'notes': expr.notes
+                }
+                # 添加字段值
+                for value in values:
+                    field_name = "field_" + str(value.field_definition.id)
+                    # 根据数据类型获取值
+                    if value.field_definition.data_type == 'INTEGER':
+                        result[field_name] = value.value_int
+                    elif value.field_definition.data_type == 'REAL':
+                        result[field_name] = value.value_real
+                    elif value.field_definition.data_type == 'TEXT':
+                        result[field_name] = value.value_text
+                    elif value.field_definition.data_type == 'BOOLEAN':
+                        result[field_name] = value.value_bool
+                    elif value.field_definition.data_type == 'DATE':
+                        result[field_name] = value.value_date.isoformat() if value.value_date else None
+                results.append(result)
         return jsonify(results)
     except Exception as e:
         logger.error(f"获取实验数据失败: {str(e)}")
-        return jsonify({'error': str(e)}), 500
-
-@app.route('/api/experiment/<int:experiment_id>/groups', methods=['GET'])
-def get_experiment_groups(experiment_id):
-    """获取实验的分组信息"""
-    try:
-        ExperimentType.query.get_or_404(experiment_id)# 验证实验是否存在
-        groups = PredefinedGroup.query.filter_by(experiment_id=experiment_id).first()
-        if groups:
-            return jsonify(groups.to_dict())
-        else:
-            return jsonify({'error': '尚未设定分组'}), 404
-    except Exception as e:
-        logger.error(f"获取实验分组失败: {str(e)}")
-        return jsonify({'error': str(e)}), 500
-
-@app.route('/api/experiment/<int:experiment_id>/groups', methods=['PUT'])
-def rename_experiment_group(experiment_id):
-    """修改实验分组"""
-    data = request.get_json()
-    try:
-        # 验证实验是否存在
-        ExperimentType.query.get_or_404(experiment_id)
-        groups = PredefinedGroup.query.filter_by(experiment_id=experiment_id).first()
-        groups.name = data.get('name')
-        groups.description = data.get('description')
-        groups.Gtype = data.get('Gtype')
-        groups.rules = data.get('rules')
-        db.session.commit()
-        return jsonify({'message': f'实验{exp.name}的分组信息已修改'})
-    except Exception as e:
-        db.session.rollback()
-        logger.error(f"实验分组改名失败: {str(e)}")
-        return jsonify({'error': str(e)}), 500
-
-@app.route('/api/experiment/<int:experiment_id>/groups', methods=['DELETE'])
-def delete_group(experiment_id):
-    """删除实验分组信息"""
-    try:
-        # 查找并删除该分组的所有记录
-        PredefinedGroup.query.filter_by(experiment_id=experiment_id).delete()
-        db.session.commit()
-        
-        return jsonify(), 204
-    except Exception as e:
-        db.session.rollback()
-        logger.error(f"删除实验分组失败: {str(e)}")
         return jsonify({'error': str(e)}), 500
 
 @app.route('/api/experiments', methods=['POST'])
@@ -2273,10 +2250,7 @@ def update_experiment(experiment_id):
             return jsonify({'error': '没有提供更新数据'}), 400
         
         # 获取实验记录
-        experiment = Experiment.query.get(experiment_id)
-        if not experiment:
-            return jsonify({'error': '实验记录未找到'}), 404
-        
+        experiment = Experiment.query.get_or_404(experiment_id)
         # 更新基本字段
         if 'researcher' in data:
             experiment.researcher = data['researcher']
@@ -2293,17 +2267,15 @@ def update_experiment(experiment_id):
             value_update = data['value'].get('field_value')
             fdi = data['value'].get('field_definition_id')
             # 验证字段定义是否存在
-            field_def = FieldDefinition.query.get(fdi)
-            if not field_def:
-                return jsonify({'error': f'字段定义 {fdi} 不存在'}), 400
+            field_def = FieldDefinition.query.get_or_404(fdi)
             
             # 查找或创建实验值记录
             experiment_value = ExperimentValue.query.filter_by(
                 experiment_id=experiment_id,
                 field_definition_id=fdi
             ).first()
-            
             if not experiment_value:
+                breakpoint()
                 experiment_value = ExperimentValue(
                     experiment_id=experiment_id,
                     field_definition_id=fdi
@@ -2380,34 +2352,39 @@ def get_experiment_data_by_type(experiment_ids):
     '''获取某些实验类型的所有实验数据，返回DataFrame形式'''
     exp_types = []
     for t in experiment_ids:
-        exp_types.append(ExperimentType.query.get(t))
+        exp_types.append(ExperimentType.query.get_or_404(t))
         
     # 存储每种实验类型的数据
     experiment_dfs = {}
     for exp_type in exp_types:
+        experiment_id = exp_type.id
         # 获取该实验类型的所有字段定义（按显示顺序排序）
         field_defs = (db.session.query(FieldDefinition)
-                        .filter(FieldDefinition.experiment_type_id == exp_type.id)
+                        .filter(FieldDefinition.experiment_type_id == experiment_id)
                         .order_by(FieldDefinition.display_order)
                         .all())
         
         # 获取该类型的所有实验记录
-        experiments = (db.session.query(Experiment)
-                        .filter(Experiment.experiment_type_id == exp_type.id)
-                        .all())
+        experiments = Experiment.query.filter(Experiment.experiment_type_id == experiment_id).all()
         
         # 准备数据容器
         data_rows = []
-        classes_info = ExperimentClass.query.filter_by(experiment_id = exp_type.id)
+        candidate_mice = [ex.mouse_id for ex in ExperimentClass.query.filter_by(experiment_id=experiment_id).all()]
+        groups = PredefinedGroup.query.filter_by(experiment_id=experiment_id).first().rules
+        mouse_to_group = {}
+        for g in groups:
+            for m in g['mouseId']:
+                if m in candidate_mice:
+                    if m in mouse_to_group.keys():
+                        mouse_to_group[m].append(g['name'])
+                    else:
+                        mouse_to_group[m] = [g['name']]
         for exp in experiments:
-            # 获取分组信息
-            class_info = classes_info.filter_by(mouse_id = exp.mouse_id).first()
-            
             # 获取实验的基本信息
             row_data = {
                 'experiment_id': exp.id,
-                'mouse_id': Mouse.query.get(exp.mouse_id).id if exp.mouse_id else None,
-                'class_id': class_info.class_id if class_info else None,
+                'mouse_id': Mouse.query.get_or_404(exp.mouse_id).id,
+                'group_name': mouse_to_group[exp.mouse_id][0] if len(mouse_to_group[exp.mouse_id])==1 else str(mouse_to_group[exp.mouse_id]),
                 'researcher': exp.researcher,
                 'date': exp.date,
                 'notes': exp.notes
@@ -2454,7 +2431,7 @@ def get_experiment_data_by_type(experiment_ids):
                     col_name = f"{col_name} ({field_def.unit})"
             
             # 重新排序列
-            base_columns = ['experiment_id', 'class_id', 'mouse_id', 'researcher', 'date', 'notes']
+            base_columns = ['experiment_id', 'group_name', 'mouse_id', 'researcher', 'date', 'notes']
             field_columns = [f"{fd.field_name} ({fd.unit})" if fd.unit else fd.field_name 
                             for fd in field_defs]
             df = df[base_columns + field_columns]
@@ -2560,7 +2537,7 @@ def get_experiment_grouped_mice(experiment_id):
         if predefined_group and predefined_group.Gtype == 'id':
             return jsonify(predefined_group.to_dict()), 200
         else:
-            return jsonify(), 404
+            return jsonify({'error': True})
     except Exception as e:
         logger.error(f"获取预设分组数据失败: {str(e)}")
         return jsonify({'error': str(e)}), 500
@@ -2577,6 +2554,7 @@ def get_experiment_mice(experiment_id):
         logger.error(f"获取实验小鼠数据失败: {str(e)}")
         return jsonify({'error': str(e)}), 500
         
+
 
 
 @app.route('/api/database/clear', methods=['POST'])
@@ -3123,7 +3101,7 @@ def modify_predefined_groups(gIndex):
         rules = editing.get('rules', [])
         experiment_id = editing.get('experiment_id', None)
         if experiment_id:
-            ExperimentType.get_or_404(experiment_id)
+            ExperimentType.query.get_or_404(experiment_id)
         if not (group_name and group_type):
             return jsonify(), 403
         new_rule = PredefinedGroup.query.get_or_404(gIndex)
@@ -3151,7 +3129,7 @@ def add_predefined_groups():
         rules = editing.get('rules', [])
         experiment_id = editing.get('experiment_id', None)
         if experiment_id:
-            ExperimentType.get_or_404(experiment_id)
+            ExperimentType.query.get_or_404(experiment_id)
         if group_name and group_type:
             new_rule = PredefinedGroup(
                 name = group_name,

@@ -27,7 +27,7 @@
     <!-- 可视化标签页 -->
     <div v-show="activeTab === 'visualization'" class="tab-content">
     <div class="action-buttons">
-        <button class="btn btn-primary" @click="showGroupModal = true">
+        <button class="btn btn-primary" @click="showGroupModal = true" :disabled="!allGroups.id">
         <i class="material-icons">group</i>
         修改分组
         </button>
@@ -49,7 +49,7 @@
         <i class="material-icons">note_add</i>
         录入数据
         </button>
-        <button class="btn btn-primary" @click="exportData">
+        <button class="btn btn-success" @click="exportData">
         <i class="material-icons">download</i>
         导出数据
         </button>
@@ -70,7 +70,7 @@
             <div class="column-filters">
                 <select v-model="groupFilter" id="group-filter" @change="onGroupFilterChange">
                     <option value="">所有分组</option>
-                    <option v-for="group in Object.keys(groupedMice)" :key="group" :value="group">
+                    <option v-for="group in groupNames" :key="group" :value="group">
                         {{ group }}
                     </option>
                 </select>
@@ -120,142 +120,14 @@
     </div>
 
     <!-- ID分组 -->
-    <div v-if="showGroupModal" class="modal-backdrop" @click.self="closeGroupModal">
-    <div class="mouse-group-manager">
-        <h2 class="section-title">ID分组管理</h2>
-        
-        <div class="id-grouping-container">
-        <!-- 候选小鼠列表 -->
-        <div class="candidate-mice">
-            <h3>候选小鼠</h3>
-            <div class="selection-controls">
-                <div class="selection-info">
-                    已选择 {{ selectedMiceCount }} 只小鼠
-                </div>
-                <div class="selection-buttons">
-                    <button class="btn btn-outline" @click="selectAllMice">
-                    全选
-                    </button>
-                    <button class="btn btn-outline" @click="deselectAllMice">
-                    全不选
-                    </button>
-                </div>
-            </div>
-            <div class="detail-item">
-                <div class="checkbox-group">
-                    <input type="checkbox" v-model="isRepeated" id="edit-repeat-checkbox" :disabled="isRepeatedAble">
-                    <label for="edit-repeat-checkbox">是否可重复选择小鼠</label>
-                </div>
-            </div>
-            <div class="search-container">
-                <input 
-                    type="text" 
-                    class="search-input" 
-                    placeholder="搜索小鼠ID或基因型..."
-                    v-model="searchTerm"
-                >
-            </div>
-            <div class="mice-list">
-            <div 
-                v-for="mouse in filteredMice" 
-                :key="mouse.tid"
-                class="mouse-item"
-                :class="{ selected: isMouseSelected(mouse.tid) }"
-                @click="toggleMouseSelection(mouse.tid)"
-                draggable="true"
-                @dragstart="onDragStart($event, mouse.tid)"
-            >
-                <input 
-                type="checkbox" 
-                class="mouse-checkbox"
-                :checked="isMouseSelected(mouse.tid)"
-                @click.stop
-                >
-                <div class="mouse-info">
-                <div class="mouse-id">{{ mouse.id }}</div>
-                <div class="mouse-details" v-html="mouse.genotype.symbol"></div>
-                <div class="mouse-details">{{ mouse.sex }} · {{ mouse.strain }} · {{ mouse.birthDate }}出生</div>
-                </div>
-            </div>
-            </div>
-        </div>
-        
-        <!-- 分组管理 -->
-        <div class="grouping-section">
-            <h3>分组管理</h3>
-            <div class="groups-container">
-            <div 
-                v-for="(group, index) in editingGroup.rules" 
-                :key="index"
-                class="group-item"
-                @dragover="onDragOver"
-                @drop="onDrop($event, index)"
-            >
-                <div class="group-header">
-                <div class="group-name">
-                    <input 
-                    type="text" 
-                    class="group-name-input" 
-                    v-model="group.name"
-                    placeholder="分组名称"
-                    >
-                    <div class="color-picker">
-                    <div 
-                        v-for="color in colors" 
-                        :key="color"
-                        class="color-option"
-                        :class="{ selected: group.color === color }"
-                        :style="{ backgroundColor: color }"
-                        @click="group.color = color"
-                    >
-                        <i class="material-icons" v-if="group.color === color">check</i>
-                    </div>
-                    </div>
-                </div>
-                <div class="group-actions">
-                    <button 
-                    class="action-btn btn-danger"
-                    @click="removeGroup(index)"
-                    :disabled="editingGroup.rules.length <= 1"
-                    >
-                    <i class="material-icons">delete</i>
-                    </button>
-                </div>
-                </div>
-                <div class="group-mice">
-                <div 
-                    v-for="mouseId in group.mice" 
-                    :key="mouseId"
-                    class="assigned-mouse"
-                >
-                    <div class="mouse-id">{{ getMouseById(mouseId)?.id }}</div>
-                    <div class="mouse-actions">
-                    <button 
-                        class="action-btn btn-outline"
-                        @click="removeMouseFromGroup(mouseId, index)"
-                    >
-                        <i class="material-icons">remove_circle</i>
-                    </button>
-                    </div>
-                </div>
-                <div v-if="group.mice.length === 0" class="empty-group">
-                    暂无小鼠，请从左侧拖拽或选择添加
-                </div>
-                </div>
-            </div>
-            </div>
-            
-            <div class="grouping-actions">
-            <button class="btn btn-outline" @click="addGroup">
-                <i class="material-icons">add</i> 添加新分组
-            </button>
-            <button class="btn btn-success" @click="saveGroup">
-                <i class="material-icons">save</i> 保存ID分组
-            </button>
-            </div>
-        </div>
-        </div>
-    </div>
+    <div v-if="showGroupModal" class="modal-backdrop" @click.self="showGroupModal=false">
+        <IdGroupingManager
+            :candidate-mice="candidateMice"
+            :editing-group="allGroups"
+            :colors="colors"
+            @update:editing-group="handleGroupUpdate"
+            @save-group="saveGroup"
+        />
     </div>
 </div>
 </template>
@@ -270,12 +142,18 @@ import { TabulatorFull as Tabulator } from 'tabulator-tables';
 import 'tabulator-tables/dist/css/tabulator.min.css';
 import { Chart } from 'chart.js/auto';
 import regression from 'regression';
-import { useGeneStore } from '@/stores'
+import { useGeneStore, useExperimentStore } from '@/stores'
 import { storeToRefs } from 'pinia'
+import IdGroupingManager from '@/components/IdGroupingManager.vue'
 
 const geneStore = useGeneStore()
 const {mice} = storeToRefs(geneStore)
-const {} = geneStore
+const {colors} = geneStore
+
+const experimentStore = useExperimentStore()
+const {experiments} = storeToRefs(experimentStore)
+const {fetchPredefinedGroups} = experimentStore
+
 
 //切换实验时
 onBeforeRouteUpdate(async (to, from) => {
@@ -283,7 +161,15 @@ onBeforeRouteUpdate(async (to, from) => {
         currentRequestToken.cancel('取消上一个请求');
     }
     experimentData.value = [];
-    groupedMice.value = {};
+    candidateMice.value = [];
+    allGroups.value = {
+        id: null,
+        name: '',
+        description: '',
+        Gtype: '',
+        experiment_id: null,
+        rules: []
+    }
     if (to.params.experimentId !== from.params.experimentId) {
         experimentId.value = to.params.experimentId;
         await init();
@@ -303,6 +189,15 @@ const activeTab = ref('visualization');
 const experimentData = ref([]);
 const fieldDefinitions = ref([]);
 const hasData = ref(false);
+const candidateMice = ref([])
+const allGroups = ref({
+    id: null,
+    name: '',
+    description: '',
+    Gtype: '',
+    experiment_id: null,
+    rules: []
+})
 
 // 分组管理状态
 const showGroupModal = ref(false);
@@ -325,29 +220,9 @@ const recordTabulatorRef = ref(null);
 const recordTabulatorInstance = ref(null);
 const recordRowData = ref([]);
 
-// 计算属性
-const processedData = computed(() => {
-    return experimentData.value.map(item => { 
-        const group = groupedMice.value.rules.find(group => { 
-            group.mouseId.some(item.mouse_id)
-        }); 
-        const rowData = { 
-            __experimentId: item.id, 
-            id: mice.value.find(m => m.tid === item.mouse_id).id, 
-            group: group.name,
-            color: group.color,
-            field_date: item.date, 
-            researcher: item.researcher, 
-            notes: item.notes
-        }; 
-        // 添加字段数据 
-        fieldDefinitions.value.forEach(field => { 
-            rowData[`field_${field.id}`] = item[field.field_name] !== undefined ? item[field.field_name] : null; 
-        }); 
-
-        return rowData; 
-    }); 
-});
+const groupNames = computed(() => {
+    return allGroups.value.rules.map(group => group.name)
+})
 
 var cellContextMenu = [
     {
@@ -378,6 +253,7 @@ var cellContextMenu = [
                 try {
                     await axios.patch(`/api/experiments/${rowData.__experimentId}`, updateData);
                     toast.success('记录更新成功');
+                    await fetchData();
                 } catch (error) {
                     console.error('更新记录失败:', error);
                     toast.error('更新失败: ' + (error.response?.data?.error || error.message));
@@ -510,13 +386,47 @@ const recordColumnDefs = computed(() => {
     return columns;
 });
 
+const fetchGroups = async () => {
+try {
+    const response = await axios.get(`/api/experiments/${experimentId.value}/grouped_mice`, {cancelToken: currentRequestToken.token});
+    if (response.data.error) {
+        toast.error("请在设置页面为本实验设置预设分组")
+        return
+    }
+    allGroups.value = response.data;
+} catch (error) {
+    console.error('获取小鼠错误:', error);
+    toast.error('获取小鼠错误: ' + error.message);
+}
+}
+
+const handleGroupUpdate = (updatedGroup) => {
+    Object.assign(allGroups, updatedGroup)
+}
+
+const saveGroup = async () => {
+    if (allGroups.value.rules.some(group => !group.name)) {
+        toast.info('请填写分组名称')
+        return
+    }
+    try {
+        await axios.put(`/api/groups/predefined/${allGroups.value.id}`, allGroups.value)
+        toast.success('预设ID分组保存成功')
+        fetchPredefinedGroups()
+        showGroupModal.value = false
+    } catch (error) {
+        console.error('保存分组失败:', error)
+        toast.error(error.response?.data?.error || '保存分组失败')
+    }
+}
+
 // 生命周期钩子
 onMounted(() => {
 init();
 });
 
 // 监听器
-watch(processedData, (newData) => {
+watch(experimentData, (newData) => {
 if (tabulatorInstance.value) {
     tabulatorInstance.value.setData(newData);
 }
@@ -526,10 +436,11 @@ if (tabulatorInstance.value) {
 async function init() {
 currentRequestToken = axios.CancelToken.source();
 try {
-    const expResponse = await axios.get(`/api/experiment/${experimentId.value}`, {cancelToken: currentRequestToken.token});
-    experimentName.value = expResponse.data.name;
-    fieldDefinitions.value = expResponse.data.fields;
+    const experiment = experiments.value.find(ex => ex.id === Number(experimentId.value))
+    experimentName.value = experiment.name;
+    fieldDefinitions.value = experiment.fields;
 
+    await fetchCandidate();
     await fetchGroups();
     await fetchData();
     
@@ -551,7 +462,7 @@ if (tabulatorInstance.value) {
 tabulatorInstance.value.destroy();
 }
 tabulatorInstance.value = new Tabulator(tabulatorRef.value, {
-    data: processedData.value,
+    data: experimentData.value,
     columns: columnDefs.value.map(col => ({
         ...col,
         editable: false, // 默认所有列不可编辑
@@ -630,23 +541,13 @@ function resetFilters() {
     }
 }
 
-const groupedMice = ref({})
-const fetchGroups = async () => {
-try {
-    const response = await axios.get(`/api/experiments/${experimentId.value}/grouped_mice`, {cancelToken: currentRequestToken.token});
-    groupedMice.value = response.data;
-} catch (error) {
-    console.error('获取小鼠错误:', error);
-    toast.error('获取小鼠错误: ' + error.message);
-}
-}
 async function exportData () {
     if (tabulatorInstance.value) {
         const params = {
                 experiment_ids: [experimentId.value],
                 format: 'xlsx'
             };
-        response = await axios.get(`/api/export/experiment`, { 
+        const response = await axios.get(`/api/export/experiment`, { 
             params,
             responseType: 'blob'
         })
@@ -686,6 +587,16 @@ try {
 }
 }
 
+async function fetchCandidate() {
+try{
+    const miceExperiment = await axios.get(`/api/experiments/${experimentId.value}/mice`)
+    candidateMice.value = miceExperiment.data
+} catch (error) {
+    console.error('获取数据:', error);
+    toast.error('获取数据: ' + error.message);
+}
+}
+
 async function generateChart() {
     if (!hasData.value) {
         toast.error('暂无实验数据，无法生成图表');
@@ -717,7 +628,7 @@ async function generateChart() {
 
     // 处理数据分组
     const groupedData = {};
-    processedData.value.forEach(item => {
+    experimentData.value.forEach(item => {
         const group = item.group;
         if (!groupedData[group]) {
         groupedData[group] = [];
@@ -849,8 +760,8 @@ function createXYChart(canvas, xField, yField, groupedData) {
     }
         
     Object.keys(groupedData).forEach((groupName, index) => {
-        const color = groupedData[groupName].color
         const groupData = groupedData[groupName];
+        const color = groupData[0]?.color;
         const data = [];
 
         groupData.forEach(item => {
@@ -890,7 +801,8 @@ function createXYChart(canvas, xField, yField, groupedData) {
             label: groupName,
             data: data,
             borderColor: color,
-            backgroundColor: 'rgba(0, 0, 0, 0)',
+            backgroundColor: color+ '80',
+            pointBackgroundColor: color,
             tension: 0.1,
             pointRadius: 5,
             pointHoverRadius: 7,
@@ -976,7 +888,7 @@ function createXYChart(canvas, xField, yField, groupedData) {
                         if (isDateField) {
                             return Math.round(value); // 四舍五入到最接近的整数
                         }
-                        return value;
+                        return typeof value === 'number' ? value.toFixed(3) : value;
                     },
                     stepSize: isDateField ? 1 : undefined // 对于日期字段，设置步长为1
                 }
@@ -1017,16 +929,20 @@ function createBoxPlotWithPoints(canvas, columnField, groupedData) {
   
   // 准备数据
   const groupNames = Object.keys(groupedData);
-  const groupColors = groupNames.map(gn => groupedData[gn].color)
-  const scatterData = [];
+  const groupColors = {};
+  groupNames.forEach(gname => {
+    groupColors[gname] = groupedData[gname][0]?.color;
+  });
+  
+  const scatterDatasets = [];  // 改为存储多个散点图数据集
   const boxPlotStats = [];
   let globalMin = Infinity;
   let globalMax = -Infinity;
 
-  // 为每个分组计算统计数据
+  // 为每个分组计算统计数据并创建散点图数据集
   groupNames.forEach((groupName, groupIndex) => {
     const groupItems = groupedData[groupName];
-    const groupColor = groupedData[groupName].color;
+    const groupColor = groupColors[groupName];
 
     // 获取该分组所有小鼠在该字段上的值
     const values = groupItems
@@ -1047,27 +963,48 @@ function createBoxPlotWithPoints(canvas, columnField, groupedData) {
       const q3 = calculateQuartile(values, 0.75);
       const max = values[values.length - 1];
       
-      boxPlotStats.push({
-        min, q1, median, q3, max
-      });
+      boxPlotStats.push({ min, q1, median, q3, max });
       
-      // 散点数据（显示原始数据点）
-      values.forEach((value, index) => {
+      // 为每个分组创建单独的散点图数据集
+      const scatterData = values.map((value, index) => {
         // 为散点添加一些随机偏移，避免重叠
         const xOffset = (Math.random() - 0.5) * 0.2;
-        scatterData.push({
+        return {
           x: groupIndex + xOffset,
-          y: value,
-          groupIndex: groupIndex,
-          color: groupColor
-        });
+          y: value
+        };
       });
+      
+      scatterDatasets.push({
+        type: 'scatter',
+        label: groupName,  // 使用分组名称作为标签
+        data: scatterData,
+        backgroundColor: groupColor + 'AA',  // 使用分组颜色
+        borderColor: '#FFFFFF',
+        borderWidth: 1,
+        pointRadius: 4,
+        pointHoverRadius: 6
+      });
+      
     } else {
       boxPlotStats.push({ min: 0, q1: 0, median: 0, q3: 0, max: 0 });
+      // 即使没有数据也添加一个空的数据集以保持图例一致
+      scatterDatasets.push({
+        type: 'scatter',
+        label: groupName,
+        data: [],
+        backgroundColor: groupColor + 'AA',
+        borderColor: '#FFFFFF',
+        borderWidth: 1,
+        pointRadius: 4,
+        pointHoverRadius: 6
+      });
     }
 
-    globalMin = Math.min(globalMin, ...values);
-    globalMax = Math.max(globalMax, ...values);
+    if (values.length > 0) {
+      globalMin = Math.min(globalMin, ...values);
+      globalMax = Math.max(globalMax, ...values);
+    }
   });
 
   // 如果全局最小值和最大值仍然是Infinity，则设置为0
@@ -1083,23 +1020,9 @@ function createBoxPlotWithPoints(canvas, columnField, groupedData) {
   new Chart(ctx, {
     data: {
       labels: groupNames,
-      datasets: [
-        // 散点图（显示原始数据点）
-        {
-          type: 'scatter',
-          label: '原始数据点',
-          data: scatterData.map(point => ({
-            x: point.x,
-            y: point.y
-          })),
-          backgroundColor: scatterData.map(point => point.color + 'AA'), // 半透明
-          borderColor: '#FFFFFF',
-          borderWidth: 1,
-          pointRadius: 4,
-          pointHoverRadius: 6
-        }
-      ]
+      datasets: scatterDatasets  // 使用多个散点图数据集
     },
+    // ... 其余配置保持不变
     options: {
       responsive: true,
       maintainAspectRatio: false,
@@ -1138,19 +1061,18 @@ function createBoxPlotWithPoints(canvas, columnField, groupedData) {
         tooltip: {
           callbacks: {
             label: function(context) {
-              if (context.dataset.type === 'scatter') {
-                return `数据点: ${context.parsed.y.toFixed(2)}`;
-              }
-              return `${context.dataset.label}: ${context.parsed.y.toFixed(2)}`;
+              // 现在可以根据datasetIndex获取对应的分组名称
+              const groupName = scatterDatasets[context.datasetIndex]?.label || '未知分组';
+              return `${groupName}: ${context.parsed.y.toFixed(2)}`;
             }
           }
-        },
+        }
+      },
         legend: {
           position: 'top'
         }
-      }
     },
-    plugins: [{
+        plugins: [{
       // 自定义插件绘制箱线图
       afterDraw: function(chart) {
         const ctx = chart.ctx;
@@ -1167,8 +1089,8 @@ function createBoxPlotWithPoints(canvas, columnField, groupedData) {
           const whiskerWidth = 10;
           
           // 设置颜色
-          ctx.strokeStyle = groupColors[groupIndex];
-          ctx.fillStyle = groupColors[groupIndex] + '40'; // 半透明填充
+          ctx.strokeStyle = groupColors[groupName];
+          ctx.fillStyle = groupColors[groupName] + '40'; // 半透明填充
           ctx.lineWidth = 1.5;
           
           // 绘制箱体 (Q1到Q3)
@@ -1184,7 +1106,7 @@ function createBoxPlotWithPoints(canvas, columnField, groupedData) {
           ctx.beginPath();
           ctx.moveTo(xCenter - boxWidth/2, medianY);
           ctx.lineTo(xCenter + boxWidth/2, medianY);
-          ctx.strokeStyle = groupColors[groupIndex];
+          ctx.strokeStyle = groupColors[groupName];
           ctx.lineWidth = 2;
           ctx.stroke();
           
@@ -1315,7 +1237,7 @@ function createDistributionChart(canvas, xField, groupedData) {
         const n = 200;
         const step = range / n;
         const points = [];
-        const color = groupedData[groupName].color;
+        const color = groupedData[groupName][0]?.color;
         
         for (let i = 0; i <= n; i++) {
             const x = globalMin + i * step;
@@ -1383,7 +1305,7 @@ function createDistributionChart(canvas, xField, groupedData) {
 function initRecordData() {
     const rowData = [];
 
-    groupedMice.value.rules.forEach(group => {
+    allGroups.value.rules.forEach(group => {
         group.mouseId.forEach(mTid => {
         const row = {
             group: group.name,
@@ -1493,6 +1415,7 @@ try {
     
     showRecordModal.value = false;
     await fetchData();
+    generateChart()
 } catch (error) {
     console.error('保存实验记录失败:', error);
     toast.error('保存失败: ' + (error.response?.data?.error || error.message));
@@ -1584,17 +1507,6 @@ margin: 0;
 font-size: 1.25rem;
 }
 
-.btn-close {
-background: none;
-border: none;
-color: white;
-cursor: pointer;
-display: flex;
-align-items: center;
-justify-content: center;
-padding: 0.5rem;
-}
-
 .modal-body {
 padding: 1.5rem;
 }
@@ -1624,32 +1536,6 @@ border-radius: 4px;
 .form-select-sm {
 width: auto;
 padding: 0.25rem 0.5rem;
-font-size: 0.875rem;
-}
-
-.btn {
-padding: 8px 16px;
-border-radius: 4px;
-border: none;
-cursor: pointer;
-display: flex;
-align-items: center;
-font-size: 14px;
-transition: all 0.2s;
-}
-
-.btn-primary {
-background-color: #3498db;
-color: white;
-}
-
-.btn-danger {
-background-color: #e74c3c;
-color: white;
-}
-
-.btn-sm {
-padding: 6px 12px;
 font-size: 0.875rem;
 }
 
@@ -1765,7 +1651,6 @@ background: white;
 .tabulator-table {
 background: white;
 border-radius: 8px;
-overflow: auto;
 box-shadow: 0 2px 8px rgba(0,0,0,0.1);
 }
 

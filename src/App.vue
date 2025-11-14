@@ -7,8 +7,8 @@
             <i class="material-icons">{{ sidebarCollapsed ? 'menu' : 'close'  }}</i>
           </button>
           <div class="logo">
-              <i class="material-icons logo-icon">pets</i>
-              <span class="app-title">动物房管理系统</span>
+              <img src="@/assets/logo.png" alt="鼠管家Logo" class="logo-icon">
+              <span class="app-title">MurisPro - 鼠管家</span>
           </div>
 
       </header>
@@ -264,7 +264,8 @@ watch(() => route.path, () => {
   }
   
   .sidebar-toggle {
-    display: block;
+    display: block !important;
+    color: gray !important;
   }
 }
 
@@ -281,10 +282,12 @@ watch(() => route.path, () => {
   
   .main-content {
     margin-left: 0 !important;
+    padding-left: 0% !important;
   }
   
   .sidebar-toggle {
-    display: block;
+    display: block !important;
+    color: gray !important;
   }
 }
 

@@ -595,7 +595,7 @@
                 </div>
             </div>
             
-            <div class="form-group">
+            <div class="btn-group">
             <button type="submit" class="btn btn-primary">
                 {{ editingExperimentType.id ? '更新' : '添加' }}
             </button>
@@ -801,7 +801,7 @@
 
                 <div class="form-group">
                     <label>分组类型</label>
-                    <select v-model="editingGroup.Gtype" @change="changeGroupType" class="group-type-selector">
+                    <select v-model="editingGroup.Gtype" @change="changeGroupType" class="group-type-selector" :disabled="editingGroup.experiment_id">
                         <option class="radio-label" value="" disabled selected>--请选择分组--</option>
                         <option value="rule" class="radio-label">
                             规则分组
@@ -830,7 +830,7 @@
                                         <div v-for="color in colors" 
                                             :key="color"
                                             class="color-option"
-                                            :style="{ backgroundColor: color }"
+                                            :style="{ selected: group.color === color }"
                                             @click="subgroup.color = color">
                                             <i v-if="subgroup.color === color" class="material-icons">check</i>
                                         </div>
@@ -1043,145 +1043,14 @@
                     </div>
                 </div>
                 <!-- ID分组 -->
-                <div v-if="showIDList || editingGroup.Gtype === 'id'" class="mouse-group-manager">
-                    <h2 class="section-title">ID分组管理</h2>
-                    
-                    <div class="id-grouping-container">
-                    <!-- 候选小鼠列表 -->
-                    <div class="candidate-mice">
-                        <h3>候选小鼠</h3>
-                        <div class="selection-controls">
-                            <div class="selection-info">
-                                已选择 {{ selectedMiceCount }} 只小鼠
-                            </div>
-                            <div class="selection-buttons">
-                                <button class="btn btn-outline" @click="selectAllMice">
-                                全选
-                                </button>
-                                <button class="btn btn-outline" @click="deselectAllMice">
-                                全不选
-                                </button>
-                            </div>
-                        </div>
-                        <div class="detail-item">
-                            <div class="checkbox-group">
-                                <input type="checkbox" v-model="isRepeated" id="edit-repeat-checkbox" :disabled="isRepeatedAble">
-                                <label for="edit-repeat-checkbox">是否可重复选择小鼠</label>
-                            </div>
-                        </div>
-                        <div class="search-container">
-                            <input 
-                                type="text" 
-                                class="search-input" 
-                                placeholder="搜索小鼠ID或基因型..."
-                                v-model="searchTerm"
-                            >
-                        </div>
-                        <div class="mice-list">
-                        <div 
-                            v-for="mouse in filteredMice" 
-                            :key="mouse.tid"
-                            class="mouse-item"
-                            :class="{ selected: isMouseSelected(mouse.tid) }"
-                            @click="toggleMouseSelection(mouse.tid)"
-                            draggable="true"
-                            @dragstart="onDragStart($event, mouse.tid)"
-                        >
-                            <input 
-                            type="checkbox" 
-                            class="mouse-checkbox"
-                            :checked="isMouseSelected(mouse.tid)"
-                            @click.stop
-                            >
-                            <div class="mouse-info">
-                            <div class="mouse-id">{{ mouse.id }}</div>
-                            <div class="mouse-details" v-html="mouse.genotype.symbol"></div>
-                            <div class="mouse-details">{{ mouse.sex }} · {{ mouse.strain }} · {{ mouse.birthDate }}</div>
-                            </div>
-                        </div>
-                        <div v-if="filteredMice.length === 0" style="color:gray;">
-                            暂无可选小鼠，请在小鼠页面为小鼠添加“完成实验”
-                        </div>
-                        </div>
-                    </div>
-                    
-                    <!-- 分组管理 -->
-                    <div class="grouping-section">
-                        <h3>分组管理</h3>
-                        <div class="groups-container">
-                        <div 
-                            v-for="(group, groupIndex) in editingGroup.rules" 
-                            :key="groupIndex"
-                            class="group-item"
-                            @dragover="onDragOver"
-                            @drop="onDrop($event, groupIndex)"
-                        >
-                            <div class="group-header">
-                            <div class="group-name">
-                                <input 
-                                type="text" 
-                                class="group-name-input" 
-                                v-model="group.name"
-                                placeholder="分组名称"
-                                >
-                                <div class="color-picker">
-                                <div 
-                                    v-for="color in colors" 
-                                    :key="color"
-                                    class="color-option"
-                                    :class="{ selected: group.color === color }"
-                                    :style="{ backgroundColor: color }"
-                                    @click="group.color = color"
-                                >
-                                    <i class="material-icons" v-if="group.color === color">check</i>
-                                </div>
-                                </div>
-                            </div>
-                            <div class="group-actions">
-                                <button 
-                                class="action-btn btn-danger"
-                                @click="removeGroup(groupIndex)"
-                                :disabled="editingGroup.rules.length <= 1"
-                                >
-                                <i class="material-icons">delete</i>
-                                </button>
-                            </div>
-                            </div>
-                            <div class="group-mice">
-                            <div 
-                                v-for="mouse in groupedMice[groupIndex]" 
-                                :key="mouse.tid"
-                                class="assigned-mouse"
-                            >
-                                <div class="mouse-id">{{ mouse.id }}</div>
-                                <div class="mouse-details" v-html="mouse.genotype.symbol"></div>
-                                <div class="mouse-details">{{ mouse.sex }} · {{ mouse.strain }} · {{ mouse.birthDate }}</div>
-                                <div class="mouse-actions">
-                                <button 
-                                    class="action-btn btn-outline"
-                                    @click="removeMouseFromGroup(mouse.tid, groupIndex)"
-                                >
-                                    <i class="material-icons">remove_circle</i>
-                                </button>
-                                </div>
-                            </div>
-                            <div v-if="group.mouseId.length === 0" class="empty-group">
-                                暂无小鼠，请从左侧拖拽或选择添加
-                            </div>
-                            </div>
-                        </div>
-                        </div>
-                        
-                        <div class="grouping-actions">
-                        <button v-if="!showIDList" class="btn btn-outline" @click="addGroup(editingGroup.Gtype)">
-                            <i class="material-icons">add</i> 添加新分组
-                        </button>
-                        <button class="btn btn-success" @click="saveGroup('id')">
-                            <i class="material-icons">save</i> 保存ID分组
-                        </button>
-                        </div>
-                    </div>
-                    </div>
+                <div v-if="showIDList || editingGroup.Gtype === 'id'">
+                        <IdGroupingManager
+                            :candidate-mice="candidateMice"
+                            :editing-group="editingGroup"
+                            :colors="colors"
+                            @update:editing-group="handleGroupUpdate"
+                            @save-group="saveGroup('id')"
+                        />
                 </div>
             </div>
         </div>
@@ -1643,6 +1512,7 @@ import { ref, reactive, onMounted, watch, computed, nextTick } from 'vue'
 import axios from 'axios'
 import { toast } from 'vue3-toastify'
 import 'vue3-toastify/dist/index.css'
+import IdGroupingManager from '@/components/IdGroupingManager.vue'
 
 import { useGeneStore, useCageStore, useExperimentStore } from '@/stores'
 import { storeToRefs } from 'pinia'
@@ -1772,15 +1642,9 @@ const genotypeAddable = ref(false)
 const candidateMice = ref([])//候选小鼠
 const showIDList = ref(false)
 
-const groupedMice = computed(() =>{
-    if(showIDList || editingGroup.Gtype === 'id') {
-        return editingGroup.rules.map(group => {
-            return group.mouseId.map(mId => mice.value.find(m => m.tid === mId))
-        })
-    } else {
-        return null
-    }
-})
+const handleGroupUpdate = (updatedGroup) => {
+    Object.assign(editingGroup, updatedGroup)
+}
 
 const toggleAlleles = (id) => {
     const index = expandedLoci.value.indexOf(id)
@@ -2623,22 +2487,20 @@ const addGroup = (type) => {
     }
 }
 
-const changeGroupExperiment = () => {
+const changeGroupExperiment = async () => {
     editingGroup.Gtype = ''
     editingGroup.rules = []
-    isRepeated.value = true
     showIDList.value = false
+    editingGroup.Gtype = 'id'
+    if (editingGroup.experiment_id) {
+        const miceExperiment = await axios.get(`/api/experiments/${editingGroup.experiment_id}/mice`)
+        candidateMice.value = miceExperiment.data
+    }
 }
 
 const changeGroupType = async () => {
     if (editingGroup.Gtype === 'id') {
-        showIDList.value = true
-        if (editingGroup.experiment_id) {
-            const miceExperiment = await axios.get(`/api/experiments/${editingGroup.experiment_id}/mice`)
-            candidateMice.value = miceExperiment.data
-        } else {
-            candidateMice.value = mice.value
-        }
+        candidateMice.value = mice.value
     } else if (editingGroup.Gtype === 'rule') {
         showIDList.value = false
         selectedGenes.value = []
@@ -2647,7 +2509,6 @@ const changeGroupType = async () => {
         addable.value = true
     }
     editingGroup.rules = []
-    isRepeated.value = true
     showIDList.value = false
 }
 
@@ -2688,9 +2549,6 @@ const saveGenes = (subgroupIndex, ruleIndex, index) => {
 
 const reviewRules = async () => {
     if (editingGroup.experiment_id) {
-        const miceExperiment = await axios.post(`/api/experiments/${editingGroup.experiment_id}/grouped_mice`)
-        candidateMice.value = miceExperiment.data
-    } else {
         candidateMice.value = mice.value
     }
     if (editingGroup.rules.length === 0) {
@@ -2703,7 +2561,6 @@ const reviewRules = async () => {
             Object.assign(editingGroup.rules[gIndex], { mouseId: g })
         }
     })
-    isRepeated.value = true
     showIDList.value = true
     editingGroup.rules.forEach(g => g.expanded = false)
 }
@@ -2763,7 +2620,6 @@ const cancelEditGroup = () => {
     editingGroup.Gtype = ''
     editingGroup.experiment_id = null
     editingGroup.rules = []
-    isRepeated.value = true
     showIDList.value = false
 }
 
@@ -2805,143 +2661,6 @@ const toggleGroupDetails = (groupId) => {
         expandedGroup.value.push(groupId)
     } else {
         expandedGroup.value.splice(index, 1)
-    }
-}
-
-// 选中的小鼠ID列表
-const selectedMouseIds = ref(new Set())
-// 搜索词
-const searchTerm = ref('')
-const isRepeated = ref(true)
-// 计算属性：过滤后的小鼠列表
-const filteredMice = computed(() => {
-    const term = searchTerm.value.trim().toLowerCase()
-    if (!term) {
-        return candidateMice.value.filter(mouse => 
-            !isMouseInAnyGroup(mouse.tid)
-        )
-    }
-    return candidateMice.value.filter(mouse => {
-        if (isMouseInAnyGroup(mouse.tid)) {
-            return false
-        }
-        const searchableFields = [
-            mouse.id || '',
-            mouse.strain || '',
-            mouse.sex || '',
-            mouse.genotype.symbol || ''
-        ]
-        return searchableFields.some(field => 
-            field.toLowerCase().includes(term)
-        )
-    })
-})
-
-// 计算属性：已选择的小鼠数量
-const selectedMiceCount = computed(() => selectedMouseIds.value.size)
-const isRepeatedAble = computed(() => {
-    return editingGroup.rules.some(group => group.mouseId?.length>0)
-})
-
-// 检查小鼠是否在任意分组中
-const isMouseInAnyGroup = (mouseId) => {
-    if (isRepeated.value) {
-        return false
-    } else {
-        return editingGroup.rules.some(group => group.mouseId.includes(mouseId))
-    }
-
-}
-
-// 检查小鼠是否被选中
-const isMouseSelected = (mouseId) => {
-    return selectedMouseIds.value.has(mouseId)
-}
-
-// 切换小鼠选择状态
-const toggleMouseSelection = (mouseId) => {
-    if (selectedMouseIds.value.has(mouseId)) {
-    selectedMouseIds.value.delete(mouseId)
-    } else {
-    selectedMouseIds.value.add(mouseId)
-    }
-}
-
-// 全选小鼠
-const selectAllMice = () => {
-    filteredMice.value.forEach(mouse => {
-    selectedMouseIds.value.add(mouse.tid)
-    })
-}
-
-// 全不选小鼠
-const deselectAllMice = () => {
-    selectedMouseIds.value.clear()
-}
-
-// 从分组中移除小鼠
-const removeMouseFromGroup = (mouseId, groupIndex) => {
-    const mouseIndex = editingGroup.rules[groupIndex].mouseId.indexOf(mouseId)
-    if (mouseIndex > -1) {
-    editingGroup.rules[groupIndex].mouseId.splice(mouseIndex, 1)
-    }
-}
-
-// 拖拽开始事件
-const onDragStart = (event, mId) => {
-    // 获取所有选中的小鼠ID
-    if (!selectedMouseIds.value.has(mId)) {
-        selectedMouseIds.value.add(mId);
-    }
-    const selectedMIs = Array.from(selectedMouseIds.value);
-    
-    // 将选中的小鼠ID数组存储到dataTransfer中
-    event.dataTransfer.setData('application/json', JSON.stringify(selectedMIs));
-    // 设置拖拽效果为移动
-    event.dataTransfer.effectAllowed = 'move';
-    // 可以添加视觉反馈，比如显示拖拽数量
-    event.dataTransfer.setData('text/plain', `移动 ${selectedMIs.length} 只小鼠`);
-}
-
-// 拖拽经过事件
-const onDragOver = (event) => {
-    event.preventDefault()
-    event.dataTransfer.dropEffect = 'move';
-    
-    // 添加视觉反馈，比如高亮分组区域
-    event.currentTarget.classList.add('drag-over');
-}
-
-// 放置事件
-const onDrop = (event, groupIndex) => {
-    event.preventDefault()
-    // 移除视觉反馈
-    event.currentTarget.classList.remove('drag-over');
-    try {
-        // 获取拖拽的小鼠ID数组
-        const mouseIdsData = event.dataTransfer.getData('application/json');
-        const mouseIds = JSON.parse(mouseIdsData);
-        
-        if (!Array.isArray(mouseIds) || mouseIds.length === 0) {
-            console.error('无效的拖拽数据');
-            return;
-        }
-        
-        // 批量处理选中的小鼠
-        mouseIds.forEach(mouseId => {
-            // 检查小鼠是否已经在其他分组中
-            if (!isMouseInAnyGroup(mouseId)) {
-                // 确保小鼠不在当前分组中（避免重复）
-                if (!editingGroup.rules[groupIndex].mouseId.includes(mouseId)) {
-                    editingGroup.rules[groupIndex].mouseId.push(mouseId);
-                }
-            }
-        });
-        
-        // 清空选择状态
-        selectedMouseIds.value.clear();
-    } catch (error) {
-        console.error('拖拽放置失败:', error);
     }
 }
 
@@ -3012,14 +2731,6 @@ border-radius: 8px;
 box-shadow: 0 2px 8px rgba(0,0,0,0.1);
 }
 
-.section-title {
-font-size: 1.3rem;
-font-weight: 600;
-margin-bottom: 15px;
-padding-bottom: 10px;
-border-bottom: 1px solid #eee;
-}
-
 .section-description {
 color: #666;
 margin-bottom: 20px;
@@ -3068,36 +2779,6 @@ font-size: 14px;
 border-color: var(--primary);
 outline: none;
 box-shadow: 0 0 0 2px rgba(25, 118, 210, 0.2);
-}
-
-.btn {
-padding: 8px 16px;
-border-radius: 4px;
-border: none;
-cursor: pointer;
-display: inline-flex;
-align-items: center;
-font-size: 14px;
-transition: background-color 0.2s;
-}
-
-.btn-primary {
-background-color: var(--primary);
-color: white;
-}
-
-.btn-primary:hover {
-background-color: #1a56b4;
-}
-
-.btn-outline {
-background-color: transparent;
-border: 1px solid var(--primary);
-color: var(--primary);
-}
-
-.btn-outline:hover {
-background-color: rgba(25, 118, 210, 0.1);
 }
 
 .table-container {
@@ -3396,15 +3077,6 @@ border: 1px solid #ddd;
 border-radius: 3px;
 }
 
-.btn-outline:disabled {
-opacity: 0.5;
-cursor: not-allowed;
-}
-
-.btn-outline:disabled:hover {
-background-color: transparent;
-}
-
 /* 详情展开区域样式 */
 .detail-row {
     background-color: #f9fafb;
@@ -3492,20 +3164,6 @@ background-color: transparent;
 
 .btn-info:hover {
     background-color: #138496;
-}
-
-.btn-danger {
-background-color: #e53935;
-color: white;
-}
-
-.btn-danger:hover:not(:disabled) {
-background-color: #c62828;
-}
-
-.btn-danger:disabled {
-  background-color: #f5b7b1;
-  cursor: not-allowed;
 }
 
 /* 可视化徽章样式 */
@@ -3647,11 +3305,6 @@ background-color: #c62828;
   color: #495057;
 }
 
-.btn-success {
-  background-color: #28a745;
-  color: white;
-}
-
 .database-list {
     display: grid;
     grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
@@ -3754,11 +3407,6 @@ background-color: #c62828;
     margin-top: 10px;
 }
 
-.detail-item {
-    display: flex;
-    flex-direction: column;
-}
-
 .detail-label {
     font-size: 12px;
     color: #666;
@@ -3784,19 +3432,6 @@ background-color: #c62828;
     margin-top: 10px;
 }
 
-.action-btn {
-    padding: 6px 12px;
-    border: none;
-    border-radius: 4px;
-    cursor: pointer;
-    font-size: 13px;
-    transition: background-color 0.2s;
-}
-
-.action-btn:hover {
-filter: brightness(0.9);
-}
-
 .action-btn.primary {
     background-color: #2196F3;
     color: white;
@@ -3819,73 +3454,6 @@ filter: brightness(0.9);
     border: 1px solid #ddd;
     border-radius: 4px;
     font-size: 14px;
-}
-
-.checkbox-group {
-    display: flex;
-    align-items: center;
-    gap: 12px;
-    margin-top: 5px;
-}
-
-.checkbox-group input[type="checkbox"] {
-    display: none;
-}
-
-.checkbox-group label {
-    position: relative;
-    cursor: pointer;
-    padding-left: 35px;
-    margin-bottom: 10px;
-    font-weight: normal;
-    color: #555;
-    user-select: none;
-}
-
-.checkbox-group label:before {
-    content: '';
-    position: absolute;
-    left: 0;
-    top: 0;
-    width: 22px;
-    height: 22px;
-    border: 2px solid #ddd;
-    border-radius: 4px;
-    background-color: #fff;
-    transition: all 0.2s ease;
-}
-
-.checkbox-group label:after {
-    content: '';
-    position: absolute;
-    left: 7px;
-    top: 3px;
-    width: 8px;
-    height: 13px;
-    border: solid #fff;
-    border-width: 0 2px 2px 0;
-    transform: rotate(45deg) scale(0);
-    transition: all 0.2s ease;
-    opacity: 0;
-}
-
-.checkbox-group label:hover:before {
-    border-color: #2c6fbb;
-}
-
-.checkbox-group input[type="checkbox"]:checked + label:before {
-    background-color: #2c6fbb;
-    border-color: #2c6fbb;
-}
-
-.checkbox-group input[type="checkbox"]:checked + label:after {
-    transform: rotate(45deg) scale(1);
-    opacity: 1;
-}
-
-.checkbox-group input[type="checkbox"]:focus + label:before {
-    box-shadow: 0 0 0 3px rgba(44, 111, 187, 0.2);
-    border-color: #2c6fbb;
 }
 
 .section-header {
@@ -4228,121 +3796,11 @@ filter: brightness(0.9);
     gap: 10px;
 }
 
-.color-picker {
-    display: flex;
-    align-items: center;
-    gap: 5px;
-}
-
-.color-option {
-    width: 20px;
-    height: 20px;
-    border-radius: 3px;
-    cursor: pointer;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    border: 1px solid #ddd;
-}
-
-.color-option i {
-    color: white;
-    font-size: 14px;
-    text-shadow: 0 0 2px rgba(0,0,0,0.5);
-}
-
 .color-input {
     width: 30px;
     height: 30px;
     border: none;
     cursor: pointer;
-}
-
-/* ID分组样式 */
-.id-group-container {
-    display: grid;
-    grid-template-columns: 1fr 1fr;
-    gap: 20px;
-    margin-top: 20px;
-}
-
-.candidate-mice, .id-groups-setup {
-    border: 1px solid #e0e0e0;
-    border-radius: 8px;
-    padding: 15px;
-    background: #fafafa;
-}
-
-.candidate-mice h5, .id-groups-setup h5 {
-    margin: 0 0 15px 0;
-    color: #2c3e50;
-}
-
-.search-input {
-    width: 100%;
-    padding: 8px;
-    border: 1px solid #ddd;
-    border-radius: 4px;
-}
-
-.mice-list {
-    max-height: 300px;
-    overflow-y: auto;
-}
-
-.mouse-item {
-    display: flex;
-    align-items: center;
-    gap: 10px;
-    padding: 8px;
-    border-bottom: 1px solid #eee;
-    cursor: pointer;
-}
-
-.mouse-item:hover {
-    background: #f0f0f0;
-}
-
-.mouse-checkbox {
-    margin: 0;
-}
-
-.id-group-item {
-    border: 1px solid #e0e0e0;
-    border-radius: 6px;
-    padding: 15px;
-    margin-bottom: 15px;
-    background: white;
-}
-
-.id-group-header {
-    display: flex;
-    align-items: center;
-    gap: 15px;
-    margin-bottom: 10px;
-}
-
-.group-name-input {
-    padding: 6px 10px;
-    border: 1px solid #ddd;
-    border-radius: 4px;
-    min-width: 120px;
-}
-
-.selected-mice {
-    display: flex;
-    flex-wrap: wrap;
-    gap: 5px;
-}
-
-.selected-mouse {
-    background: #e3f2fd;
-    padding: 4px 8px;
-    border-radius: 4px;
-    font-size: 12px;
-    display: flex;
-    align-items: center;
-    gap: 5px;
 }
 
 .btn-remove {
@@ -4393,301 +3851,11 @@ margin-bottom: 1rem;
     background: beige;
 }
 
-.mouse-group-manager {
-  max-width: 1200px;
-  margin: 0 auto;
-  background: white;
-  border-radius: 8px;
-  box-shadow: 0 2px 10px rgba(0,0,0,0.1);
-  padding: 20px;
-}
-
-.section-title {
-  font-size: 1.3rem;
-  font-weight: 600;
-  margin-bottom: 15px;
-  padding-bottom: 10px;
-  border-bottom: 1px solid #eee;
-  color: #2c3e50;
-}
-
-.id-grouping-container {
-  display: grid;
-  grid-template-columns: 1fr 1fr;
-  gap: 20px;
-  margin-top: 20px;
-}
-
-.candidate-mice, .grouping-section {
-  border: 1px solid #e0e0e0;
-  border-radius: 8px;
-  padding: 15px;
-  background: #fafafa;
-  height: 600px;
-  display: flex;
-  flex-direction: column;
-}
-
-.candidate-mice h3, .grouping-section h3 {
-  margin: 0 0 15px 0;
-  color: #2c3e50;
-  font-size: 1.1rem;
-}
-
-.selection-controls {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  margin-bottom: 15px;
-  padding: 10px;
-  background: white;
-  border-radius: 4px;
-  border: 1px solid #e0e0e0;
-}
-
-.selection-info {
-  font-size: 14px;
-  color: #2c3e50;
-  font-weight: 500;
-}
-
-.selection-buttons {
-  display: flex;
-  gap: 10px;
-}
-
-.search-container {
-  margin-bottom: 15px;
-}
-
-.search-input {
-  width: 100%;
-  padding: 8px 12px;
-  border: 1px solid #ddd;
-  border-radius: 4px;
-  font-size: 14px;
-}
-
-.mice-list {
-  flex: 1;
-  overflow-y: auto;
-  border: 1px solid #e0e0e0;
-  border-radius: 4px;
-  background: white;
-}
-
-.mouse-item {
-  display: flex;
-  align-items: center;
-  padding: 10px;
-  border-bottom: 1px solid #eee;
-  cursor: pointer;
-  transition: background-color 0.2s;
-}
-
-.mouse-item:hover {
-  background-color: #f0f7ff;
-}
-
-.mouse-item.selected {
-  background-color: #e3f2fd;
-}
-
-.mouse-checkbox {
-  margin-right: 10px;
-}
-
-.mouse-info {
-    font-size: 12px;
-    color: #666;
-    flex: 1;
-    display: flex;
-    gap: 10px;
-    align-items: center;
-}
-
-.mouse-id {
-  font-weight: 600;
-  color: #2c3e50;
-}
-
-.mouse-details {
-  font-size: 12px;
-  color: #666;
-  margin-top: 3px;
-}
-
-.groups-container {
-  flex: 1;
-  overflow-y: auto;
-  border: 1px solid #e0e0e0;
-  border-radius: 4px;
-  background: white;
-  padding: 10px;
-}
-
-.group-item {
-  border: 1px solid #e0e0e0;
-  border-radius: 6px;
-  margin-bottom: 15px;
-  background: white;
-  box-shadow: 0 1px 3px rgba(0,0,0,0.1);
-}
-
-.group-header {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  padding: 12px 15px;
-  background: #e8f4fd;
-  border-bottom: 1px solid #e0e0e0;
-  border-radius: 6px 6px 0 0;
-}
-
-.group-name {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-}
-
-.group-name-input {
-  padding: 5px 10px;
-  border: 1px solid #ddd;
-  border-radius: 4px;
-  font-size: 14px;
-  font-weight: 600;
-  min-width: 150px;
-}
-
-.color-picker {
-  display: flex;
-  align-items: center;
-  gap: 5px;
-}
-
-.color-option {
-  width: 20px;
-  height: 20px;
-  border-radius: 3px;
-  cursor: pointer;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  border: 1px solid #ddd;
-}
-
-.color-option.selected {
-  border: 2px solid #333;
-}
-
-.color-option i {
-  color: white;
-  font-size: 14px;
-  text-shadow: 0 0 2px rgba(0,0,0,0.5);
-}
-
-.group-actions {
-  display: flex;
-  gap: 5px;
-}
-
-.action-btn {
-  padding: 5px 10px;
-  border: none;
-  border-radius: 4px;
-  cursor: pointer;
-  font-size: 12px;
-  display: flex;
-  align-items: center;
-  gap: 5px;
-  transition: background-color 0.2s;
-}
-
-.btn-primary {
-  background-color: #2c6fbb;
-  color: white;
-}
-
-.btn-danger {
-  background-color: #f44336;
-  color: white;
-}
-
-.btn-danger:disabled {
-  background-color: #cccccc;
-  cursor: not-allowed;
-}
-
-.btn-outline {
-  background-color: transparent;
-  border: 1px solid #ddd;
-  color: #666;
-}
-
 .action-btn:hover:not(:disabled) {
   opacity: 0.9;
 }
 
-.group-mice {
-  padding: 10px;
-  min-height: 100px;
-  max-height: 200px;
-  overflow-y: auto;
-}
-
-.assigned-mouse {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  padding: 5px 10px;
-  margin-bottom: 5px;
-  background: #f9f9f9;
-  border-radius: 4px;
-  border-left: 3px solid #2c6fbb;
-}
-
-.mouse-actions {
-  display: flex;
-  gap: 5px;
-}
-
-.empty-group {
-  text-align: center;
-  padding: 20px;
-  color: #999;
-  font-style: italic;
-}
-
-.grouping-actions {
-  display: flex;
-  justify-content: space-between;
-  margin-top: 15px;
-  padding-top: 15px;
-  border-top: 1px solid #e0e0e0;
-}
-
-.btn {
-  padding: 8px 16px;
-  border-radius: 4px;
-  border: none;
-  cursor: pointer;
-  display: inline-flex;
-  align-items: center;
-  font-size: 14px;
-  transition: background-color 0.2s;
-}
-
-.btn-success {
-  background-color: #4CAF50;
-  color: white;
-}
-
 .btn i {
   margin-right: 5px;
-}
-
-.drag-over {
-  background-color: #f0f7ff;
-  border: 2px dashed #2c6fbb;
 }
 </style>
