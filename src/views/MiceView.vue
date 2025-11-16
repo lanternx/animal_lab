@@ -4,6 +4,7 @@
     <div class="section">
       <div class="header-with-button">
         <h2>小鼠管理</h2>
+        <h3>当前存活小鼠为{{ geneStore.miceLiveCount.total }}只，其中雄性小鼠{{ geneStore.miceLiveCount.male }}只、雌性小鼠{{ geneStore.miceLiveCount.female }}只</h3>
         <button @click="openModal('add')" class="add-button">
           <i class="material-icons">add</i>
           添加新小鼠

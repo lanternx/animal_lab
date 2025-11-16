@@ -15,10 +15,6 @@
             <option value="pred">使用预设分组</option>
             <option value="temp">使用临时分组</option>
         </select>
-        <button class="btn btn-primary" @click="openRecordModal">
-            <i class="material-icons btn-icon">add</i>
-            录入体重
-        </button>
         </div>
         <div v-if="showChartType === 'pred'" class="d-flex justify-content-between mb-4">
           <select v-model="selectedPredefinedGroupId" style="min-width:100px;">

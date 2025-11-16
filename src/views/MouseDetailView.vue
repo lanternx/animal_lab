@@ -284,7 +284,18 @@ setup(props, { emit }) {
         maintainAspectRatio: false,
         plugins: {
             legend: { display: false },
-            tooltip: { mode: 'index', intersect: false }
+            tooltip: { 
+              mode: 'index',
+              intersect: false,
+              callbacks: {
+                title: function(tooltipItems) {
+                    return `${tooltipItems[0].label}天时，`;
+                },
+                label: function(context) {
+                    return `体重${context.parsed.y}g`;
+                }
+              }
+            }
         },
         scales: {
             x: {

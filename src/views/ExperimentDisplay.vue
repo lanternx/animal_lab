@@ -111,8 +111,8 @@
             <div ref="recordTabulatorRef" class="tabulator-table" style="height: 300px;"></div>
             
             <div class="d-grid mt-3">
-                <button class="btn btn-primary" @click="saveExperimentRecord">
-                <i class="material-icons">save</i> 保存记录
+                <button class="btn btn-primary" @click="saveExperimentRecord" :disabled="isSubmitting">
+                <i class="material-icons">save</i> {{ isSubmitting? '保存中...' : '保存记录'}}
                 </button>
             </div>
         </div>
@@ -219,6 +219,7 @@ const researcher = ref('');
 const recordTabulatorRef = ref(null);
 const recordTabulatorInstance = ref(null);
 const recordRowData = ref([]);
+const isSubmitting = ref(false);
 
 const groupNames = computed(() => {
     return allGroups.value.rules.map(group => group.name)
@@ -232,35 +233,63 @@ var cellContextMenu = [
                 toast.error('未选中单元格');
                 return;
             }
+            const table = cell.getTable()
+            let editCompleted = false;
+            const editHandler = async function(editedCell){
+                if (editedCell === cell && !editCompleted) {
+                    editCompleted = true;
+                    const rowData = cell.getRow().getData();
+                    const field = cell.getField();
+                    const value = cell.getValue();
+                    
+                    // 确定更新的是基本字段还是实验值字段
+                    let updateData = {};
+                    
+                    if (['researcher', 'notes'].includes(field)) {
+                        // 更新基本字段
+                        updateData[field] = value;
+                    } else {
+                        updateData.value = {
+                            field_definition_id: parseInt(field.split('_')[1]),
+                            field_value: value
+                        };
+                    }
+                    try {
+                        await axios.patch(`/api/experiments/${rowData.__experimentId}`, updateData);
+                        toast.success('记录更新成功');
+                    } catch (error) {
+                        console.error('更新记录失败:', error);
+                        toast.error('更新失败: ' + (error.response?.data?.error || error.message));
+                        // 恢复原始值
+                        cell.restoreOldValue();
+                    } finally {
+                        table.off("cellEdited", editHandler);
+                    }
+                }
+            };
+            table.on("cellEdited", editHandler);
             cell.edit(true);
-            cell.getTable().on("cellEdited", async function(){
-                const rowData = cell.getRow().getData();
-                const field = cell.getField();
-                const value = cell.getValue();
-                
-                // 确定更新的是基本字段还是实验值字段
-                let updateData = {};
-                
-                if (['researcher', 'notes'].includes(field)) {
-                    // 更新基本字段
-                    updateData[field] = value;
-                } else {
-                    updateData.value = {
-                        field_definition_id: parseInt(field.split('_')[1]),
-                        field_value: value
-                    };
+            setTimeout(() => {
+                const editor = cell.getElement().querySelector('input, textarea');
+                if (editor) {
+                    // 阻止事件冒泡
+                    editor.addEventListener('mousedown', (e) => e.stopPropagation());
+                    editor.addEventListener('click', (e) => e.stopPropagation());
+                    // 添加键盘事件监听
+                    editor.addEventListener('keydown', (e) => {
+                        if (e.key === 'Enter') {
+                            e.preventDefault();
+                            saveData();
+                            if (editor.blur) editor.blur();
+                        } else if (e.key === 'Escape') {
+                            // ESC取消编辑
+                            e.preventDefault();
+                            cell.cancelEdit();
+                            table.off("cellEdited", editHandler);
+                        }
+                    });
                 }
-                try {
-                    await axios.patch(`/api/experiments/${rowData.__experimentId}`, updateData);
-                    toast.success('记录更新成功');
-                    await fetchData();
-                } catch (error) {
-                    console.error('更新记录失败:', error);
-                    toast.error('更新失败: ' + (error.response?.data?.error || error.message));
-                    // 恢复原始值
-                    cell.restoreOldValue();
-                }
-            });
+            })
         }
     },
     {
@@ -319,7 +348,7 @@ const columnDefs = computed(() => {
         },
         contextMenu: cellContextMenu,
         editor: field.data_type === 'BOOLEAN' ? 'select' : 'input',
-        editorParams: field.data_type === 'BOOLEAN' ? { values: ['是', '否'] } : {},
+        editorParams: field.data_type === 'BOOLEAN' ? { values: ['是', '否'] } : {selectContents: true}
     }));
 
     const additionalColumns = [
@@ -329,7 +358,8 @@ const columnDefs = computed(() => {
         width: 150,
         headerHozAlign: 'left',
         contextMenu: cellContextMenu,
-        editor: 'input'
+        editor: 'input',
+        editorParams: {selectContents: true}
         },
         {
         title: '备注',
@@ -337,7 +367,8 @@ const columnDefs = computed(() => {
         width: 200,
         headerHozAlign: 'left',
         contextMenu: cellContextMenu,
-        editor: 'input'
+        editor: 'input',
+        editorParams: {selectContents: true}
         }
     ];
 
@@ -405,10 +436,6 @@ const handleGroupUpdate = (updatedGroup) => {
 }
 
 const saveGroup = async () => {
-    if (allGroups.value.rules.some(group => !group.name)) {
-        toast.info('请填写分组名称')
-        return
-    }
     try {
         await axios.put(`/api/groups/predefined/${allGroups.value.id}`, allGroups.value)
         toast.success('预设ID分组保存成功')
@@ -1368,7 +1395,7 @@ try {
         toast.error('请填写记录日期');
         return;
     }
-
+    isSubmitting.value = true;
     let records = [];
     for (const row of allRows) {
         let values = {};
@@ -1419,6 +1446,8 @@ try {
 } catch (error) {
     console.error('保存实验记录失败:', error);
     toast.error('保存失败: ' + (error.response?.data?.error || error.message));
+} finally {
+    isSubmitting.value = false;
 }
 }
 </script>

@@ -66,7 +66,7 @@
                         <button class="action-btn" @click="editGeneLocus(locus)">编辑</button>
                         <button class="action-btn btn-danger" @click="deleteGeneLocus(locus.id)">删除</button>
                         <button v-if="locus.symbol !== 'WT'" class="action-btn btn-success" @click="toggleAlleles(locus.id)">
-                        {{ expandedLoci.includes(locus.id) ? '收起' : '展开' }}
+                        {{ expandedLoci.includes(locus.id) ? '收起' : '展开并为该位点添加等位基因' }}
                         </button>
                     </div>
                 </td>
@@ -91,8 +91,10 @@
                             <td>{{ allele.description }}</td>
                             <td>{{ allele.is_wildtype ? '是' : '否' }}</td>
                             <td class="action-cell">
-                            <button class="action-btn" @click="editAllele(allele)">编辑</button>
-                            <button class="action-btn btn-danger" @click="deleteAllele(allele.id)">删除</button>
+                                <div class="btn-group">
+                                    <button class="action-btn" @click="editAllele(allele)">编辑</button>
+                                    <button class="action-btn btn-danger" @click="deleteAllele(allele.id)">删除</button>
+                                </div>
                             </td>
                         </tr>
                         </tbody>
@@ -322,7 +324,7 @@
                             <td>字符串</td>
                             <td><span class="required">是</span></td>
                             <td>基因型描述，格式为：{位点1}[等位基因1]/[等位基因2]&{位点2}[等位基因3]/[等位基因4]</td>
-                            <td class="example-row">C57BL/6</td>
+                            <td class="example-row">{Trp53}[KO]/[+]或{WT}</td>
                         </tr>
                         <tr>
                             <td><span class="required">sex</span></td>
@@ -779,11 +781,11 @@
                         </select>
                     </div>
                 </div>
-                <div class="form-group">
-                    <button @click="saveGroup(editingGroup.Gtype)" class="btn btn-primary">
+                <div class="form-group" style="gap: 20px;display: flex;">
+                    <button @click="saveGroup" class="btn btn-primary">
                         {{ editingGroup.id ? '更新' : '添加' }}
                     </button>
-                    <button v-if="editingGroup.id" type="button" class="btn btn-outline" @click="cancelEditGroup">
+                    <button type="button" class="btn btn-outline" @click="cancelEditGroup">
                         取消
                     </button>
                 </div>
@@ -830,7 +832,7 @@
                                         <div v-for="color in colors" 
                                             :key="color"
                                             class="color-option"
-                                            :style="{ selected: group.color === color }"
+                                            :style="{ selected: subgroup.color === color }"
                                             @click="subgroup.color = color">
                                             <i v-if="subgroup.color === color" class="material-icons">check</i>
                                         </div>
@@ -1028,7 +1030,7 @@
                         </div>
                     </div>
                     <div class="form-group-row">
-                    <button :disabled="showIDList" @click="addGroup(editingGroup.Gtype)" class="btn btn-outline add-subgroup-btn">
+                    <button :disabled="showIDList" @click="addGroup" class="btn btn-outline add-subgroup-btn">
                         <i class="material-icons">add</i> 添加小组
                     </button>
                     <button v-if="!showIDList" @click="reviewRules" class="btn btn-primary add-subgroup-btn">
@@ -1037,7 +1039,7 @@
                     <button v-else @click="reviewRulesClose" class="btn btn-danger add-subgroup-btn">
                         <i class="material-icons">book</i> 取消预览
                     </button>
-                    <button @click="saveGroup('rule')" class="btn btn-success add-subgroup-btn">
+                    <button @click="saveGroup" class="btn btn-success add-subgroup-btn">
                         <i class="material-icons">save</i> 按规则存储
                     </button>
                     </div>
@@ -1049,7 +1051,7 @@
                             :editing-group="editingGroup"
                             :colors="colors"
                             @update:editing-group="handleGroupUpdate"
-                            @save-group="saveGroup('id')"
+                            @save-group="saveGroup"
                         />
                 </div>
             </div>
@@ -1525,7 +1527,7 @@ const { genotypes, selectedGenes, alleleSuggestions, addable, mice } = storeToRe
 const { loadGenotypes, colors, onFormLocusChange, onFormAlleleChange, deleteGene, addGene, deleteGenes } = geneStore
 
 const {locations} = storeToRefs(cageStore)
-const {loadInitialData, calculateCages} = cageStore
+const {calculateCages} = cageStore
 
 const {experiments, experimentPresets, predefinedGroups, trueCurrentDatabase, databaseNotChanged} = storeToRefs(experimentStore)
 const {fetchExperiments, fetchPredefinedGroups} = experimentStore
@@ -1911,8 +1913,10 @@ const importData = async () => {
         })
         Object.assign(importResult, response.data)
         importResultDialogVisible.value = true
-        await loadGenotypes()
-        await loadInitialData()
+        if (importType === 'mice') {
+            await geneStore.loadInitialData()
+            await cageStore.loadInitialData()
+        }
     } catch (error) {
         console.error('导入失败:', error)
         toast.error(`导入失败: ${error.response?.data?.error || '服务器错误'}`)
@@ -2474,17 +2478,13 @@ const removeGroup = (index) => {
 }
 
 // 分组设置相关方法
-const addGroup = (type) => {
+const addGroup = () => {
     // 找到一个未使用的颜色
     const usedColors = new Set(editingGroup.rules.map(g => g.color))
     const availableColor = colors.find(color => !usedColors.has(color)) || colors[0]
 
-    if (type === "rule") {
-        editingGroup.rules.push({name: `新分组${editingGroup.rules.length + 1}`, color: availableColor, rules:[], expanded: true})
-        genotypeAddable.value = true
-    } else {
-        editingGroup.rules.push({name: `新分组${editingGroup.rules.length + 1}`, color: availableColor, mouseId: []})
-    }
+    editingGroup.rules.push({name: `新分组${editingGroup.rules.length + 1}`, color: availableColor, rules:[], expanded: true})
+    genotypeAddable.value = true
 }
 
 const changeGroupExperiment = async () => {
@@ -2548,9 +2548,7 @@ const saveGenes = (subgroupIndex, ruleIndex, index) => {
 }
 
 const reviewRules = async () => {
-    if (editingGroup.experiment_id) {
-        candidateMice.value = mice.value
-    }
+    candidateMice.value = mice.value
     if (editingGroup.rules.length === 0) {
         toast.info("预览前请设定组别")
         return 
@@ -2570,12 +2568,7 @@ const reviewRulesClose = () => {
     editingGroup.rules.forEach(g => g.expanded = true)
 }
 
-const saveGroup = async (groupType) => {
-    if (!editingGroup.name) {
-        toast.info('请填写分组名称')
-        return
-    }
-
+const saveGroup = async () => {
     if (selectedGenes.value && selectedGenes.value.length !== 0) {
         toast.info('请完成基因选择')
         return
@@ -2588,12 +2581,10 @@ const saveGroup = async (groupType) => {
     const method = editingGroup.id ? 'put' : 'post'
 
     try {
-        if (groupType === 'id') {
-            editingGroup.Gtype = 'id'
+        if (editingGroup.Gtype === 'id') {
             await axios[method](url, editingGroup)
             toast.success('预设ID分组保存成功')
         } else {
-            editingGroup.Gtype = 'rule'
             await axios[method](url, editingGroup)
             toast.success('预设规则分组保存成功')
         }

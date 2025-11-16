@@ -113,7 +113,7 @@ LOADING_HTML = """
 <body>
     <div class="loading-container">
         <div class="spinner"></div>
-        <div class="loading-text">小鼠管理系统启动中...</div>
+        <div class="loading-text">鼠管家启动中...</div>
         <div class="progress-bar">
             <div class="progress"></div>
         </div>
@@ -282,7 +282,7 @@ if __name__ == '__main__':
     if sys.platform != "darwin":
         # 创建加载窗口
         loading_window = webview.create_window(
-            "小鼠管理系统 - 启动中", 
+            "鼠管家 - 启动中", 
             html=LOADING_HTML,
             width=loading_window_width, 
             height=loading_window_height,
@@ -294,7 +294,7 @@ if __name__ == '__main__':
         )
     else:
         loading_window = webview.create_window(
-            "小鼠管理系统 - 启动中", 
+            "鼠管家 - 启动中", 
             html=LOADING_HTML,
             resizable=False,
             frameless=True,
@@ -343,7 +343,7 @@ if __name__ == '__main__':
         
         # 创建主窗口
         main_window = webview.create_window(
-            "小鼠管理系统", 
+            "MurisPro - 鼠管家", 
             f"http://localhost:{port}",
             width=1200, 
             height=800,

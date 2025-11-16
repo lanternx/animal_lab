@@ -945,9 +945,9 @@ background-color: #1a56b4;
 }
 
 .btn-primary:disabled{
-    background-color: gray !important;
-    cursor: not-allowed;
-    opacity: 0.6;
+  background-color: gray !important;
+  cursor: not-allowed;
+  opacity: 0.6;
 }
 
 .btn-outline {

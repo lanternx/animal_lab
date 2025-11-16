@@ -155,7 +155,7 @@
           </div>
       </div>
       <div class="version-info">
-          版本号: 2.0 | 2025-10-1
+          版本号: 3.0 | 2025-11-20
       </div>
   </footer>
       </div>

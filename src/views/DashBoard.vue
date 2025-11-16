@@ -265,8 +265,9 @@
       </div>
       <div class="dialog-buttons">
         <button class="btn btn-outline" @click="closeCageModal">取消</button>
-        <button class="btn btn-primary" @click="isEditing ? updateCage() : addNewCage()">
-          {{ isEditing ? '更新' : '添加' }}
+        <button class="btn btn-primary" @click="isEditing ? updateCage() : addNewCage()" :disabled="isSaving">
+          <div v-if="isSaving">{{ isEditing ? '更新中' : '添加中' }}</div>
+          <div v-else>{{ isEditing ? '更新' : '添加' }}</div>
         </button>
       </div>
     </div>
@@ -370,6 +371,7 @@ const cageContextMenu = reactive({
   y: 0,
   cage: null
 })
+const isSaving = ref(false)
 
 // 搜索相关状态
 const searchTerm = ref('')
@@ -552,7 +554,7 @@ async function addNewCage() {
     toast.info('请填写笼位ID和区域')
     return
   }
-  
+  isSaving.value = true
   try {
     await axios.post('/api/cages', currentCage)
     await fetchCages() // 刷新笼位列表
@@ -560,6 +562,8 @@ async function addNewCage() {
   } catch (error) {
     console.error('添加笼位失败:', error)
     toast.error('添加笼位失败，请重试')
+  } finally {
+    isSaving.value = false
   }
 }
 
@@ -600,6 +604,7 @@ function closeContextMenu() {
 
 // 更新笼位信息
 async function updateCage() {
+  isSaving.value = true
   try {
     await axios.put(`/api/cages/${currentCage.id}`, {
       cage_id: currentCage.cage_id,
@@ -627,6 +632,8 @@ async function updateCage() {
   } catch (error) {
     console.error('修改笼位失败:', error)
     toast.error('修改笼位失败，请重试')
+  } finally {
+    isSaving.value = false
   }
 }
 
@@ -645,14 +652,16 @@ async function deleteCage(cage) {
   }
 }
 
+let timeoutId = null
+
 // 开始笼位互换
 async function exchangeCage(cage) {
   sourceCage.value = cage
   swapStatus.value = "select-source"
   closeContextMenu()
-  setTimeout(() => {
+  timeoutId = setTimeout(() => {
     cancelSwap()
-  }, 5000)
+}, 5000)
 }
 
 // 处理笼位点击
@@ -676,7 +685,7 @@ function confirmSwap() {
   updateCageOrder(sourceCage.value.id, targetCage.value.id)
   
   toast.success(`笼位 ${sourceCage.value.cage_id} 和 ${targetCage.value.cage_id} 位置已互换`)
-  
+  clearTimeout(timeoutId)
   // 重置状态
   resetSwapState()
 }

@@ -1209,7 +1209,10 @@ def export_data(export_type):
     
     # 根据导出类型准备数据
     if export_type == 'mice':
-        query = Mouse.query
+        query = Mouse.query.order_by(
+            Mouse.birth_date.is_(None),
+            Mouse.birth_date.asc()
+        )
         filename = 'mice_export'
     elif export_type == 'weights':
         query = WeightRecord.query
@@ -1983,7 +1986,7 @@ def update_experiment_type(id):
         for field_data in data.get('fields', []):
             if 'id' in field_data:
                 # 更新现有字段
-                field = FieldDefinition.query.get(field_data['id'])
+                field = FieldDefinition.query.get_or_404(field_data['id'])
                 if field:
                     field.field_name = field_data['field_name']
                     field.data_type = field_data['data_type']
@@ -2275,7 +2278,6 @@ def update_experiment(experiment_id):
                 field_definition_id=fdi
             ).first()
             if not experiment_value:
-                breakpoint()
                 experiment_value = ExperimentValue(
                     experiment_id=experiment_id,
                     field_definition_id=fdi
@@ -2314,7 +2316,6 @@ def update_experiment(experiment_id):
                     return jsonify({'error': f'字段 {field_def.field_name} 需要日期值 (YYYY-MM-DD)'}), 400
             else:
                 return jsonify({'error': f'未知的数据类型 {field_def.data_type}'}), 400
-        # 提交更改
         db.session.commit()
         return jsonify({
             'message': '记录更新成功',

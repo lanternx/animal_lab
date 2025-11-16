@@ -5,7 +5,7 @@ import subprocess
 import sys
 
 def build_app():
-    build_dist = "AM_V2.2" #路径不能有中文
+    build_dist = "MurisPro_V3" #路径不能有中文
     # 清理旧构建
     if os.path.exists(build_dist):
         shutil.rmtree(build_dist)

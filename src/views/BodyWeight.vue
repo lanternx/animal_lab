@@ -291,7 +291,7 @@
             </div>
             <div class="confirm-actions">
             <button class="btn btn-outline" @click="cancelConfirm">取消</button>
-            <button class="btn btn-primary" @click="confirmSave">确认保存</button>
+            <button class="btn btn-primary" @click="confirmSave" :disabled="isSaving">{{isSaving? "保存中...": "确认保存"}}</button>
             </div>
         </div>
         </div>
@@ -339,6 +339,7 @@ const weightRecords = ref([])
 const showConfirmModal = ref(false)
 const confirmDate = ref('')
 const confirmRecordCount = ref(0)
+const isSaving = ref(false)
 
 // 初始化方法
 const init = async () => {
@@ -406,6 +407,7 @@ const handleSaveWeight = () => {
 
 // 确认保存
 const confirmSave = async () => {
+    isSaving.value = true
     const records = []
 
     lived_mice.value.forEach((mouse) => {
@@ -436,6 +438,7 @@ const confirmSave = async () => {
         confirmRecordCount.value = 0
         confirmDate.value = null
         showConfirmModal.value = false
+        isSaving.value = false
     }
 }
 

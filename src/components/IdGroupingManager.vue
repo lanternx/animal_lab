@@ -132,8 +132,11 @@
           <button class="btn btn-outline" @click="addGroup">
             <i class="material-icons">add</i> 添加新分组
           </button>
-          <button class="btn btn-success" @click="$emit('save-group', 'id')">
-            <i class="material-icons">save</i> 保存ID分组
+          <button v-if="editingGroup.rules.length > 0" class="btn btn-outline" @click="resetGroup">
+            <i class="material-icons">refresh</i> 重置分组
+          </button>
+          <button class="btn btn-success" @click="saving" :disabled="isSaving">
+            <i class="material-icons">save</i> {{ isSaving? "保存中...": "保存ID分组" }}
           </button>
         </div>
       </div>
@@ -167,6 +170,7 @@ const emit = defineEmits(['update:editingGroup', 'save-group'])
 const searchTerm = ref('')
 const selectedMouseIds = ref(new Set())
 const isRepeated = ref(false)
+const isSaving = ref(false)
 
 // 计算属性
 const filteredMice = computed(() => {
@@ -294,6 +298,27 @@ const addGroup = () => {
 
 const removeGroup = (index) => {
   props.editingGroup.rules.splice(index, 1)
+  emit('update:editingGroup', { ...props.editingGroup })
+}
+
+const saving = () => {
+  if (!props.editingGroup.name) {
+    alert('请填写预设分组名称')
+    return
+  }
+  if (props.editingGroup.rules.some(group => !group.name)) {
+    alert('请填写分组名称')
+    return
+  }
+  isSaving.value = true
+  emit('save-group')
+}
+
+const resetGroup = () => {
+  isSaving.value = false
+  props.editingGroup.rules.forEach(group => {
+    group.mouseId = []
+  })
   emit('update:editingGroup', { ...props.editingGroup })
 }
 </script>

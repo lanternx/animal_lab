@@ -20,6 +20,17 @@ export const useGeneStore = defineStore('genotype', () => {
 
     const mice = ref([])
     const loading = ref(false)
+
+    //基础信息
+    const miceLiveCount = computed(()=>{
+        let liveMice = mice.value.filter(m => m.live_status === 1)
+        return {
+            total: liveMice.length,
+            male: liveMice.filter(m => m.sex === 'M').length,
+            female: liveMice.filter(m => m.sex === 'F').length
+        }
+    })
+
     const loadMice = async () => {
         loading.value = true
         try {
@@ -244,6 +255,7 @@ export const useGeneStore = defineStore('genotype', () => {
         locusSuggestions,
         alleleSuggestions,
         addable,
+        miceLiveCount,
         
         colors,
         groupLetters,
