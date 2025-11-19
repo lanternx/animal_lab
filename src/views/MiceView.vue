@@ -267,7 +267,7 @@
               <label>基因型:
                 <span class="selected-gene" v-html="geneStore.selectedGeneName"></span>
               </label>
-              <button class="primary-btn btn-add-top" @click="addGene" :disabled="!addable">
+              <button class="primary-btn btn-add-top" @click="addGene" :disabled="!geneStore.addable">
                 <i class="material-icons">add</i>
                 添加
               </button>
@@ -354,7 +354,6 @@
               <input
                 type="text"
                 v-model="fatherQuery"
-                @input="searchParents('father')"
                 placeholder="输入父本ID搜索..."
                 @focus="showFatherSuggestions = true"
                 @blur="onBlur"
@@ -385,7 +384,6 @@
               <input
                 type="text"
                 v-model="motherQuery"
-                @input="searchParents('mother')"
                 placeholder="输入母本ID搜索..."
                 @focus="showMotherSuggestions = true"
                 @blur="onBlur"
@@ -544,7 +542,7 @@
             </div>
             <div class="detail-item">
               <span class="detail-label">基因型</span>
-              <span class="detail-value">{{ templateMouse.genotype.symbol }}</span>
+              <span class="detail-value" v-html="templateMouse.genotype.symbol"></span>
             </div>
             <div class="detail-item">
               <span class="detail-label">品系</span>
@@ -552,7 +550,9 @@
             </div>
             <div class="detail-item">
               <span class="detail-label">性别</span>
-              <span class="detail-value">{{ templateMouse.sex }}</span>
+              <span class="mouse-sex" :class="templateMouse.sex === 'F' ? 'sex-female' : 'sex-male'">
+                {{ templateMouse.sex === 'F' ? '♀' : '♂' }}
+              </span>
             </div>
             <div class="detail-item">
               <span class="detail-label">出生日期</span>
@@ -560,7 +560,16 @@
             </div>
             <div class="detail-item">
               <span class="detail-label">存活状态</span>
-              <span class="detail-value">{{ templateMouse.live_status }}</span>
+              <span class="detail-value">
+                {{ 
+                  templateMouse.live_status === 0 ? '死亡' : 
+                  templateMouse.live_status === 1 ? '存活' : 
+                  templateMouse.live_status === 2 ? '解剖' : 
+                  templateMouse.live_status === 3 ? '意外消失' : 
+                  templateMouse.live_status === 4 ? '丢弃' : 
+                  '未知状态' 
+                }}
+              </span>
             </div>
             <div class="detail-item">
               <span class="detail-label">区域</span>
@@ -590,7 +599,7 @@
         </div>
 
         <div class="form-group">
-          <span>创建数量：{{ newMice.length }}</span>
+          <span style="margin-right: 20px;">创建数量：{{ newMice.length }}</span>
           <button @click="addInputField" >
             <i class="material-icons">add</i>
           </button>
@@ -631,7 +640,7 @@ import { useGeneStore, useCageStore, useExperimentStore } from '@/stores'
 import { storeToRefs } from 'pinia'
 
 const geneStore = useGeneStore()
-const { mice, loading, genotypes, selectedGenes, alleleSuggestions, addable } = storeToRefs(geneStore)
+const { mice, loading, genotypes, selectedGenes, alleleSuggestions } = storeToRefs(geneStore)
 const { loadMice, onFormLocusChange, onFormAlleleChange, deleteGene, addGene, deleteGenes } = geneStore
 
 const cageStore = useCageStore()
@@ -711,8 +720,6 @@ const fatherQuery = ref('')
 const motherQuery = ref('')
 const showFatherSuggestions = ref(false)
 const showMotherSuggestions = ref(false)
-const fatherSuggestions = ref([])
-const motherSuggestions = ref([])
 const selectedFathers = ref([])
 const selectedMothers = ref([])
 
@@ -742,7 +749,6 @@ const availableTestsDone = computed(() => {
   )
 })
 
-// 计算属性
 const modalTitle = computed(() => {
   switch (modalMode.value) {
     case 'add': return '添加新小鼠'
@@ -750,6 +756,100 @@ const modalTitle = computed(() => {
     case 'template': return '基于模板批量创建小鼠'
     default: return ''
   }
+})
+
+// 父亲建议列表
+const fatherSuggestions = computed(() => {
+  const query = fatherQuery.value
+  if (query.length < 1) return []
+  
+  const lowerQuery = query.toLowerCase()
+  let suggestions = mice.value.filter(mouse =>
+    mouse.sex === 'M' &&
+    mouse.id.toLowerCase().includes(lowerQuery)
+  )
+  
+  // 过滤已选中的父亲和子代
+  suggestions = suggestions.filter(mouse => 
+    !selectedFathers.value?.some(m => m.tid === mouse.tid)
+  )
+  
+  // 编辑模式下排除自己
+  if (modalMode.value === 'edit' && formData.tid) {
+    suggestions = suggestions.filter(mouse => mouse.tid !== formData.tid)
+  }
+  
+  // 排序逻辑
+  suggestions.sort((a, b) => {
+    const aStartsWith = a.id.toLowerCase().startsWith(lowerQuery)
+    const bStartsWith = b.id.toLowerCase().startsWith(lowerQuery)
+    const aIncludes = a.id.toLowerCase().includes(lowerQuery)
+    const bIncludes = b.id.toLowerCase().includes(lowerQuery)
+    
+    if (aStartsWith && !bStartsWith) return -1
+    if (!aStartsWith && bStartsWith) return 1
+    
+    if (aStartsWith && bStartsWith) {
+      return a.id.length - b.id.length
+    }
+    
+    if (aIncludes && bIncludes) {
+      const aIndex = a.id.toLowerCase().indexOf(lowerQuery)
+      const bIndex = b.id.toLowerCase().indexOf(lowerQuery)
+      return aIndex - bIndex
+    }
+    
+    return 0
+  })
+  
+  return suggestions.slice(0, 10)
+})
+
+// 母亲建议列表
+const motherSuggestions = computed(() => {
+  const query = motherQuery.value
+  if (query.length < 1) return []
+  
+  const lowerQuery = query.toLowerCase()
+  let suggestions = mice.value.filter(mouse =>
+    mouse.sex === 'F' &&
+    mouse.id.toLowerCase().includes(lowerQuery)
+  )
+  
+  // 过滤已选中的母亲
+  suggestions = suggestions.filter(mouse => 
+    !selectedMothers.value?.some(m => m.tid === mouse.tid)
+  )
+  
+  // 编辑模式下排除自己
+  if (modalMode.value === 'edit' && formData.tid) {
+    suggestions = suggestions.filter(mouse => mouse.tid !== formData.tid)
+  }
+  
+  // 排序逻辑
+  suggestions.sort((a, b) => {
+    const aStartsWith = a.id.toLowerCase().startsWith(lowerQuery)
+    const bStartsWith = b.id.toLowerCase().startsWith(lowerQuery)
+    const aIncludes = a.id.toLowerCase().includes(lowerQuery)
+    const bIncludes = b.id.toLowerCase().includes(lowerQuery)
+    
+    if (aStartsWith && !bStartsWith) return -1
+    if (!aStartsWith && bStartsWith) return 1
+    
+    if (aStartsWith && bStartsWith) {
+      return a.id.length - b.id.length
+    }
+    
+    if (aIncludes && bIncludes) {
+      const aIndex = a.id.toLowerCase().indexOf(lowerQuery)
+      const bIndex = b.id.toLowerCase().indexOf(lowerQuery)
+      return aIndex - bIndex
+    }
+    
+    return 0
+  })
+  
+  return suggestions.slice(0, 10)
 })
 
 // 方法
@@ -1224,64 +1324,6 @@ const showContextMenu = (event, mouse) => {
 
 const closeContextMenu = () => {
   contextMenu.visible = false
-}
-
-const searchParents = (type) => {
-  const query = type === 'father' ? fatherQuery.value : motherQuery.value
-  if (query.length < 1) {
-    if (type === 'father') fatherSuggestions.value = []
-    else motherSuggestions.value = []
-    return
-  }
-  
-  const lowerQuery = query.toLowerCase()
-  let suggestions = mice.value.filter(mouse =>
-    mouse.sex === (type === 'father' ? 'M' : 'F') &&
-    mouse.id.toLowerCase().includes(lowerQuery))
-  
-  suggestions.sort((a, b) => {
-      const aStartsWith = a.id.toLowerCase().startsWith(lowerQuery)
-      const bStartsWith = b.id.toLowerCase().startsWith(lowerQuery)
-      const aIncludes = a.id.toLowerCase().includes(lowerQuery)
-      const bIncludes = b.id.toLowerCase().includes(lowerQuery)
-      
-      // 完全匹配或开头匹配的优先
-      if (aStartsWith && !bStartsWith) return -1
-      if (!aStartsWith && bStartsWith) return 1
-      
-      // 开头匹配的按ID长度排序（较短的优先）
-      if (aStartsWith && bStartsWith) {
-        return a.id.length - b.id.length
-      }
-      
-      // 包含匹配的按匹配位置排序
-      if (aIncludes && bIncludes) {
-        const aIndex = a.id.toLowerCase().indexOf(lowerQuery)
-        const bIndex = b.id.toLowerCase().indexOf(lowerQuery)
-        return aIndex - bIndex
-      }
-      
-      return 0
-    })
-  
-  if (modalMode.value === 'edit'){
-    suggestions.filter(mouse => {
-        let flag = false;
-        if (formData.tid) {
-          if (mouse.tid !== formData.tid) flag=true;
-        }
-        if (type === 'father') {
-          if (mouse.father) return flag && !mouse.father.includes(formData.tid);
-          else return flag;
-        } else {
-          if (mouse.mother) return flag && !mouse.mother.includes(formData.tid);
-          else return flag;
-        }
-    })
-  }
-
-  if (type === 'father') fatherSuggestions.value = suggestions.slice(0, 10)
-  else motherSuggestions.value = suggestions.slice(0, 10)
 }
 
 const selectParent = (type, mouse) => {

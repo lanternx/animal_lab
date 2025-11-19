@@ -56,7 +56,7 @@
                 <div class="card">
                 <div class="card-header compact-header">
                     <span>分组 {{ index }}</span>
-                    <button @click="removeGroup(index)">
+                    <button @click="removeGroup(index)"  v-if="tempGroups.length > 1">
                         <i class="material-icons">close</i>
                     </button>
                 </div>
@@ -124,7 +124,7 @@
             </div>
             
             <div 
-                v-if="tempGroups.length < 5" 
+                v-if="tempGroups.length < 8" 
                 class="group-card add-card"
                 @click="addGroup"
             >

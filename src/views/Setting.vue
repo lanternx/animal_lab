@@ -630,7 +630,7 @@
                     <input type="text" v-model="field.field_name" placeholder="字段名称" required>
                     </td>
                     <td>
-                    <select v-model="field.data_type" required>
+                    <select v-model="field.data_type" required @change="chooseDataType(field)">
                         <option value="INTEGER">整数</option>
                         <option value="REAL">小数</option>
                         <option value="TEXT">文本</option>
@@ -647,9 +647,9 @@
                     <td>
                     <select v-model="field.visualize_type" required>
                         <option value="">不进行可视化</option>
-                        <option v-if="field.data_type === 'INTEGER' || 'REAL' || 'DATE'" value="x">作为横坐标</option>
-                        <option v-if="field.data_type === 'INTEGER' || 'REAL'" value="y">作为纵坐标</option>
-                        <option v-if="field.data_type === 'INTEGER' || 'REAL'" value="column">作为柱状图</option>
+                        <option v-if="field.data_type === 'INTEGER' || field.data_type === 'REAL' || field.data_type === 'DATE'" value="x">作为横坐标</option>
+                        <option v-if="field.data_type === 'INTEGER' || field.data_type === 'REAL'" value="y">作为纵坐标</option>
+                        <option v-if="field.data_type === 'INTEGER' || field.data_type === 'REAL'" value="column">作为柱状图</option>
                     </select>
                     </td>
                     <td class="action-cell">
@@ -890,7 +890,7 @@
                                                         <span class="selected-gene" v-if="!gene?.selectedGeneName" v-html="geneStore.selectedGeneName"></span>
                                                         <span class="selected-gene" v-else v-html="gene.selectedGeneName"></span>
                                                     </label>
-                                                    <button v-if="!gene?.selectedGeneName" class="" @click="addGene" :disabled="!addable">
+                                                    <button v-if="!gene?.selectedGeneName" class="" @click="addGene" :disabled="!geneStore.addable">
                                                         <i class="material-icons">add</i>
                                                     </button>
                                                     </div>
@@ -1523,11 +1523,11 @@ const geneStore = useGeneStore()
 const cageStore = useCageStore()
 const experimentStore = useExperimentStore()
 
-const { genotypes, selectedGenes, alleleSuggestions, addable, mice } = storeToRefs(geneStore)
+const { genotypes, selectedGenes, alleleSuggestions, mice } = storeToRefs(geneStore)
 const { loadGenotypes, colors, onFormLocusChange, onFormAlleleChange, deleteGene, addGene, deleteGenes } = geneStore
 
-const {locations} = storeToRefs(cageStore)
-const {calculateCages} = cageStore
+const {locations, section_key} = storeToRefs(cageStore)
+const {calculateCages, fetchCages} = cageStore
 
 const {experiments, experimentPresets, predefinedGroups, trueCurrentDatabase, databaseNotChanged} = storeToRefs(experimentStore)
 const {fetchExperiments, fetchPredefinedGroups} = experimentStore
@@ -1541,7 +1541,7 @@ const tabs = ref([
 { id: 'group', title: '预设分组' },
 { id: 'export', title: '导出设置' },
 { id: 'import', title: '导入数据' },
-{ id: 'database', title: '数据库管理' } 
+{ id: 'database', title: '数据库管理' }
 ])
 
 // 基因型相关状态
@@ -1783,7 +1783,10 @@ const index = locations.value.findIndex(l => l.id === editingLocation.id)
 if (index !== -1) {
     locations.value[index] = response.data
 }
+toast.success("区域编辑成功")
 editLocationDialogVisible.value = false
+section_key.value = false
+await fetchCages()
 } catch (error) {
 console.error('更新位置失败:', error)
 toast.error('更新位置失败，请重试')
@@ -2072,6 +2075,10 @@ const resetForm = () => {
         editingExperimentType.is_show = true
         selectedPreset.value = ''
     }
+}
+
+const chooseDataType = (field) => {
+    field.visualize_type = ''
 }
 
 const moveFieldUp = (index) => {
@@ -2506,7 +2513,6 @@ const changeGroupType = async () => {
         selectedGenes.value = []
         alleleSuggestions.value = []
         genotypeAddable.value = true
-        addable.value = true
     }
     editingGroup.rules = []
     showIDList.value = false
@@ -2544,7 +2550,6 @@ const saveGenes = (subgroupIndex, ruleIndex, index) => {
     selectedGenes.value = []
     alleleSuggestions.value = []
     genotypeAddable.value = true
-    addable.value = true
 }
 
 const reviewRules = async () => {

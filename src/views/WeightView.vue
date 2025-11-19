@@ -228,6 +228,10 @@ try {
     toast.error('请输入有效的体重值')
     return
     }
+    if (!newRecord.value.record_date) {
+    toast.error('请输入记录时间')
+    return
+    }
     
     if (editingRecord.value) {
         // 更新记录

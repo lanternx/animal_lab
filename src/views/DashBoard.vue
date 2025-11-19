@@ -55,9 +55,9 @@
           <i class="material-icons btn-icon">refresh</i>
           刷新数据
         </button>
-        <button class="btn btn-outline" v-if="!showTemporaryArea && temporaryMice.length === 0" @click="showTemporaryArea=true">
+        <button class="btn btn-outline" v-if="temporaryMice.length === 0" @click="showTemporaryArea=!showTemporaryArea">
           <i class="material-icons btn-icon">view_sidebar</i>
-          打开临时区
+          {{showTemporaryArea? "关闭临时区" : "打开临时区"}}
         </button>
         <button class="btn btn-outline" @click="exportToPDF">
           <i class="material-icons btn-icon">picture_as_pdf</i>
@@ -236,6 +236,14 @@
           </option>
         </select>
       </div>
+      <div class="dialog-buttons">
+        <button class="btn btn-outline" @click="closeCageModal">取消</button>
+        <button class="btn btn-primary" @click="isEditing ? updateCage() : addNewCage()" :disabled="isSaving">
+          <div v-if="isSaving">{{ isEditing ? '更新中' : '添加中' }}</div>
+          <div v-else>{{ isEditing ? '更新' : '添加' }}</div>
+        </button>
+      </div>
+      <div class="icon-hr">下面是用于标记的笼位信息</div>
       <div class="form-group">
         <label>笼位类型</label>
         <select v-model="currentCage.cage_type">
@@ -262,13 +270,6 @@
       <div class="form-group">
         <label>笼内小鼠基因型</label>
         <input type="text" v-model="currentCage.mice_genotype" placeholder="如: WT/KO/其他">
-      </div>
-      <div class="dialog-buttons">
-        <button class="btn btn-outline" @click="closeCageModal">取消</button>
-        <button class="btn btn-primary" @click="isEditing ? updateCage() : addNewCage()" :disabled="isSaving">
-          <div v-if="isSaving">{{ isEditing ? '更新中' : '添加中' }}</div>
-          <div v-else>{{ isEditing ? '更新' : '添加' }}</div>
-        </button>
       </div>
     </div>
   </div>
@@ -814,7 +815,11 @@ const renderPDFContent = (cages, sectionName) => {
       // 笼位ID和位置
       const cageId = document.createElement('div');
       cageId.className = 'pdf-cage-id';
-      cageId.textContent = cage.cage_id + " " + cage.location;
+      if (cage.location) {
+        cageId.textContent = cage.cage_id + " " + cage.location;
+      } else {
+        cageId.textContent = cage.cage_id;
+      }
       
       cageCard.appendChild(cageId);
       
@@ -1707,6 +1712,29 @@ function isCageHighlighted(cageId) {
   .action-buttons {
     justify-content: center;
   }
+}
+
+.icon-hr {
+  display: flex;
+  align-items: center;
+  text-align: center;
+  margin: 30px 0;
+  color: #7f8c8d;
+}
+
+.icon-hr::before,
+.icon-hr::after {
+  content: '';
+  flex: 1;
+  border-bottom: 1px solid #bdc3c7;
+}
+
+.icon-hr::before {
+  margin-right: 10px;
+}
+
+.icon-hr::after {
+  margin-left: 10px;
 }
 </style>
 

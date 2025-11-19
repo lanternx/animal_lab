@@ -52,7 +52,7 @@
             <div class="mouse-info">
               <div class="mouse-id">{{ mouse.id }}</div>
               <div class="mouse-details" v-html="mouse.genotype.symbol"></div>
-              <div class="mouse-details">{{ mouse.sex }} · {{ mouse.strain }} · {{ mouse.birthDate }}</div>
+              <div class="mouse-details">{{ mouse.sex }} · {{ mouse.strain }} · {{ mouse.birth_date }}</div>
             </div>
           </div>
           <div v-if="filteredMice.length === 0" style="color:gray;">
@@ -111,7 +111,7 @@
               >
                 <div class="mouse-id">{{ mouse.id }}</div>
                 <div class="mouse-details" v-html="mouse.genotype.symbol"></div>
-                <div class="mouse-details">{{ mouse.sex }} · {{ mouse.strain }} · {{ mouse.birthDate }}</div>
+                <div class="mouse-details">{{ mouse.sex }} · {{ mouse.strain }} · {{ mouse.birth_date }}</div>
                 <div class="mouse-actions">
                   <button 
                     class="action-btn btn-outline"

@@ -7,37 +7,44 @@ import { StoreUtils } from './stores'
 const app = createApp(App)
 const pinia = createPinia()
 
-function setFavicon() {
-  // 移除现有的图标
-    const existingIcon = document.querySelector('link[rel="icon"]')
-    if (existingIcon) {
-        existingIcon.remove()
-    }
-    
-    // 创建新的图标链接
-    const link = document.createElement('link')
-    link.rel = 'icon'
-    link.type = 'image/png'
-    link.href = '/src/assets/logo.png' // 使用你的logo.png
-    
-    // 添加到head
-    document.head.appendChild(link)
-    
-    // 设置页面标题
-    document.title = '鼠管家MurisPro - 专业的动物房管理系统'
-}
-
 app.use(pinia).use(router)
 
-// 在应用挂载前初始化 Store 数据
-StoreUtils.initializeStores()
-    .then(() => {
-        console.log('内容初始化完成')
-    })
-    .catch(error => {
-        console.error('内容初始化失败:', error)
-    })
-    .finally(()=>{
-        setFavicon()
-        app.mount('#app')
-    })
+// 在应用启动时检查是否在pywebview环境中
+const startApp = async () => {
+    try {
+        // 先初始化store
+        await StoreUtils.initializeStores();
+        console.log('内容初始化完成');
+        
+        // 挂载应用
+        app.mount('#app');
+    } catch (error) {
+        console.error('应用启动失败:', error);
+    } finally {
+        // 通知后端前端已准备好
+        new Promise((resolve) => {
+            let attempts = 0;
+            const maxAttempts = 50; // 最多尝试5秒（50 * 100ms）
+            
+            const tryNotify = () => {
+                attempts++;
+                
+                if (window.pywebview && window.pywebview.api) {
+                    console.log(`pywebview API就绪 (尝试次数: ${attempts})`);
+                    window.pywebview.api.notify_frontend_ready();
+                    resolve();
+                } else if (attempts < maxAttempts) {
+                    setTimeout(tryNotify, 100);
+                } else {
+                    console.error('❌ 无法连接到pywebview API');
+                    resolve(); // 仍然继续，不阻塞应用
+                }
+            };
+            
+            tryNotify();
+        });
+    }
+};
+
+// 立即开始启动流程
+startApp();

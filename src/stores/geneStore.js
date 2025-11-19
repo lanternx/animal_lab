@@ -96,8 +96,11 @@ export const useGeneStore = defineStore('genotype', () => {
             }
         });
     });
+    const addable = computed(() => {
+        return !selectedGenes.value?.some(g => g.locus === 'WT')
+    })
     const alleleSuggestions = ref([])
-    const addable = ref(true)
+    
 
     const loadAllGenotypes = async () => {
         const genotypeResponse = await api.get('/genotypes')
@@ -127,9 +130,6 @@ export const useGeneStore = defineStore('genotype', () => {
         }
         if (locus === "WT") {
             selectedGenes.value = [{'locus': 'WT', 'allele1': null, 'allele2': null}]
-            addable.value = false
-        } else {
-            addable.value = true
         }
     };
 
@@ -167,9 +167,6 @@ export const useGeneStore = defineStore('genotype', () => {
     }
 
     const deleteGene = (index) => {
-        if ( selectedGenes.value[index].locus === "WT") {
-            addable.value = true
-        }
         selectedGenes.value.splice(index, 1)
     }
 
@@ -180,7 +177,6 @@ export const useGeneStore = defineStore('genotype', () => {
 
     const deleteGenes = () => {
         selectedGenes.value = []
-        addable.value = true
     }
 
 
@@ -192,7 +188,6 @@ export const useGeneStore = defineStore('genotype', () => {
     // 添加分组
     const addGroup = () => {
         if (tempGroups.value.length >= 8) {
-            toast.info('最多只能添加8个分组')
             return
         }
         tempGroups.value.push({ sex: { M: true, F: true }, genotype: [] })

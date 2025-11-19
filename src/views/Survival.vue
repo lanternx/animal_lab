@@ -52,7 +52,7 @@
               <div class="card">
                 <div class="card-header compact-header d-flex justify-content-between align-items-center">
                   <span>分组 {{ index }}</span>
-                  <button @click="removeGroup(index)" v-if="groups.length > 1">
+                  <button @click="removeGroup(index)" v-if="tempGroups.length > 1">
                     <i class="material-icons">close</i>
                   </button>
                 </div>
@@ -120,7 +120,7 @@
             </div>
             
             <div 
-              v-if="groups.length < 5" 
+              v-if="tempGroups.length < 8" 
               class="group-card add-card"
               @click="addGroup"
             >

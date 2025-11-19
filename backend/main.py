@@ -102,7 +102,7 @@ LOADING_HTML = """
             width: 0%;
             background-color: #3498db;
             border-radius: 5px;
-            animation: progress-animation 3s ease-in-out;
+            animation: progress-animation 10s ease-in-out;
         }
         @keyframes progress-animation {
             0% { width: 0%; }
@@ -298,7 +298,9 @@ if __name__ == '__main__':
             html=LOADING_HTML,
             resizable=False,
             frameless=True,
-            easy_drag=False
+            easy_drag=False, 
+            transparent=True,
+            vibrancy=True
         )
     
     # 设置定时器，5秒后自动关闭加载窗口（无论初始化是否完成）
@@ -309,7 +311,7 @@ if __name__ == '__main__':
             pass
     
     # 启动定时器
-    close_timer = threading.Timer(5.0, close_loading_window)
+    close_timer = threading.Timer(10.0, close_loading_window)
     close_timer.start()
     
     # 在后台线程中执行初始化工作
@@ -341,6 +343,12 @@ if __name__ == '__main__':
             webview.schedule_update(show_error)
             return
         
+        mac_settings = {}
+        if sys.platform == "darwin":
+            mac_settings = {
+                'title_bar_color': '#FFFFFF',
+                'fullscreen': False,
+            }
         # 创建主窗口
         main_window = webview.create_window(
             "MurisPro - 鼠管家", 
@@ -350,18 +358,30 @@ if __name__ == '__main__':
             resizable=True,
             text_select=True,
             confirm_close=True,
-            frameless=False
+            frameless=False,
+            hidden=True,
+            **mac_settings
         )
         
         # 创建保存函数并暴露API
         save_file_dialog = create_save_file_dialog(main_window)
         main_window.expose(save_file_dialog)
+
+        # 创建前端初始化完成的通知函数
+        frontend_ready = threading.Event()
+        def notify_frontend_ready():
+            logger.info("前端初始化完成")
+            
+            # 取消定时器
+            close_timer.cancel()
+            
+            loading_window.destroy()
+            # 确保主窗口获得焦点
+            main_window.show()
+            if sys.platform == "darwin":
+                time.sleep(0.2)
         
-        # 取消定时器（如果初始化成功）
-        close_timer.cancel()
-        
-        # 关闭加载窗口
-        loading_window.destroy()
+        main_window.expose(notify_frontend_ready)
     
     # 在单独的线程中执行初始化
     init_thread = threading.Thread(target=initialize_app)

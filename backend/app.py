@@ -562,9 +562,7 @@ def add_cage():
 @app.route('/api/cage', methods=['PUT'])
 def move_mouse():
     data = request.json
-    mouse = Mouse.query.get(data['mouse_id'])
-    if not mouse:
-        return jsonify({'error': 'Mouse not found'}), 404
+    mouse = Mouse.query.get_or_404(data['mouse_id'])
     try:
         if data['cage_id'] == -1:
             mouse.cage_id = None
@@ -577,11 +575,9 @@ def move_mouse():
         return jsonify({'error': str(e)}), 500
 
 # 删除笼位API
-@app.route('/api/cages/<int:age_id>', methods=['DELETE'])
+@app.route('/api/cages/<int:cage_id>', methods=['DELETE'])
 def delete_cage(cage_id):
     cage = Cage.query.get_or_404(cage_id)
-    if not cage:
-        return jsonify({'error': 'Cage not found'}), 404
     try:
         # 将该笼位中的所有小鼠移动到临时区
         mice = Mouse.query.filter_by(cage_id=cage_id).all()
@@ -663,18 +659,15 @@ def get_mice_info(mouse_tid):
             c_cage = None
         else:
             c_cage = Cage.query.get_or_404(mouse.cage_id)
-        if mouse:
-            content['id'] = mouse.id
-            content['genotype'] = mouse.get_full_genotype()
-            content['sex'] = mouse.sex
-            content['live_status'] = mouse.live_status
-            if c_cage:
-                content['cage_id'] = c_cage.cage_id
-                content['cage_section'] = c_cage.section
-            if mouse.birth_date:
-                content['birth_date'] = mouse.birth_date.strftime('%Y-%m-%d')
-        else:
-            return jsonify({'error': 'Mouse not found'}), 404
+        content['id'] = mouse.id
+        content['genotype'] = mouse.get_full_genotype()
+        content['sex'] = mouse.sex
+        content['live_status'] = mouse.live_status
+        if c_cage:
+            content['cage_id'] = c_cage.cage_id
+            content['cage_section'] = c_cage.section
+        if mouse.birth_date:
+            content['birth_date'] = mouse.birth_date.strftime('%Y-%m-%d')
         if mouse.tests_done:
             tests = []
             for t in mouse.tests_done:
@@ -723,9 +716,9 @@ def get_mice_info(mouse_tid):
         return jsonify({'error': str(e)}), 500
 
 #删除小鼠状态记录
-@app.route('/api/status_records/<record_id>', methods=['DELETE'])
+@app.route('/api/status_records/<int:record_id>', methods=['DELETE'])
 def delete_status_record(record_id):
-    record = StatusRecord.query.get(record_id)
+    record = StatusRecord.query.get_or_404(record_id)
     if not record:
         return jsonify({'error': 'Status record not found'}), 404
     try:
@@ -743,7 +736,7 @@ def add_status_record():
     if not data or 'mouse_tid' not in data or 'status' not in data:
         return jsonify({'error': 'Invalid request format. Expected mouse_tid, status and birth_date.'}), 400
     try:
-        birth_date = Mouse.query.get(data['mouse_tid']).birth_date
+        birth_date = Mouse.query.get_or_404(data['mouse_tid']).birth_date
         record_date = datetime.strptime(data['record_date'], '%Y-%m-%d').date()
         record_livingdays = (record_date - birth_date).days if birth_date else 0
         record = StatusRecord(
@@ -1825,9 +1818,7 @@ def add_weight_record():
     data = request.json
     try:
         # 验证小鼠是否存在
-        mouse = Mouse.query.get(data['mouse_id'])
-        if not mouse:
-            return jsonify({'error': '小鼠不存在'}), 400
+        mouse = Mouse.query.get_or_404(data['mouse_id'])
             
         # 计算生存天数
         record_date = datetime.strptime(data['record_date'], '%Y-%m-%d')
@@ -1864,9 +1855,7 @@ def add_weight_record():
 def update_weight_record(id):
     data = request.json
     try:
-        record = WeightRecord.query.get(id)
-        if not record:
-            return jsonify({'error': '记录不存在'}), 404
+        record = WeightRecord.query.get_or_404(id)
             
         # 更新字段
         if 'weight' in data:
