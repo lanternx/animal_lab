@@ -82,7 +82,7 @@
                     </div>
                     <div class="mb-2">
                         <div class="form-group">
-                        <label class="form-label">基因型</label>
+                        <label class="form-label">基因型包含：（需要更加复杂的逻辑请使用预设分组）</label>
                         <div class="genotype-tree">
                             <div v-for="(combinations, locus) in allGenotypes" :key="locus" class="locus-item">
                             <div class="locus-header">
@@ -338,9 +338,7 @@ const renderChart = () => {
         label: group.name,
         data: group.survivalData.map(point => ({
           x: point.x,
-          y: point.y,
-          // 添加小鼠ID信息
-          mouseIds: point.mouseIds || [] 
+          y: point.y
         })),
         borderColor: group.color,
         backgroundColor: `${group.color}20`,
@@ -365,10 +363,10 @@ const renderChart = () => {
         label: `${group.name} - 死亡事件`,
         data: eventPoints,
         pointBackgroundColor: group.color,
-        pointBorderColor: '#fff',
+        pointBorderColor: `${group.color}20`,
         pointRadius: 5,
         pointHoverRadius: 7,
-        pointStyle: 'circle',
+        pointStyle: '',
         showLine: false,
         borderWidth: 0
       };
@@ -379,13 +377,13 @@ const renderChart = () => {
         data: group.censoredPoints.map(point => ({
           x: point.x,
           y: point.y,
-          mouseIds: point.mouseId
+          mouseIds: point.mouseIds
         })),
-        pointBackgroundColor: '#000',
-        pointBorderColor: '#000',
+        pointBackgroundColor: `${group.color}20`,
+        pointBorderColor: `${group.color}20`,
         pointRadius: 5,
         pointHoverRadius: 7,
-        pointStyle: 'crossRot',
+        pointStyle: 'rectRounded',
         showLine: false,
         borderWidth: 0
       };
@@ -456,15 +454,21 @@ const renderChart = () => {
           }
         },
         tooltip: {
+          filter: function(tooltipItem) {
+            // 只对死亡事件和删失事件显示工具提示
+            return tooltipItem.dataset.label.includes('死亡事件') || 
+                  tooltipItem.dataset.label.includes('删失事件');
+          },
           callbacks: {
             label: (context) => {
               const datasetLabel = context.dataset.label || '';
               const value = context.parsed.y;
+              const mouseIds = context.raw.mouseIds || [];
               
               if (datasetLabel.includes('死亡事件')) {
-                return `死亡事件: ${(value * 100).toFixed(1)}%`;
+                return `死亡事件: ${(value * 100).toFixed(1)}% (${mouseIds.length}只小鼠死亡)`;
               } else if (datasetLabel.includes('删失事件')) {
-                return '删失事件';
+                return `删失事件：${mouseIds.length}只小鼠尚存活`;
               }
               return `生存率: ${(value * 100).toFixed(1)}%`;
             },
@@ -475,7 +479,7 @@ const renderChart = () => {
               if (dataPoint.mouseIds && dataPoint.mouseIds.length > 0) {
                 return `小鼠编号: ${dataPoint.mouseIds.join(', ')}\n时间: ${item.parsed.x} 天`;
               }
-              return `时间: ${item.parsed.x} 天`;
+              return `存活时间: ${item.parsed.x} 天`;
             }
           }
         }

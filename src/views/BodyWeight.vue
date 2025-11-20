@@ -86,7 +86,7 @@
                     </div>
                     <div class="mb-2">
                         <div class="form-group">
-                        <label class="form-label">基因型</label>
+                        <label class="form-label">基因型包含：（需要更加复杂的逻辑请使用预设分组）</label>
                         <div class="genotype-tree">
                             <div v-for="(combinations, locus) in allGenotypes" :key="locus" class="locus-item">
                             <div class="locus-header">

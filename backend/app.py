@@ -199,6 +199,7 @@ def get_all_mice():
                 mother = None
             if m.birth_date:
                 birth_date = m.birth_date.strftime('%Y-%m-%d')
+                death_date = m.death_date.strftime('%Y-%m-%d') if m.death_date else None
                 if m.live_status != 1 and m.death_date:
                     days = (m.death_date - m.birth_date).days
                     weeks = days // 7
@@ -215,7 +216,7 @@ def get_all_mice():
                 'genotype': m.get_genotypes(),
                 'sex': m.sex,
                 'birth_date': birth_date,
-                'death_date': m.death_date.strftime('%Y-%m-%d') if m.death_date else None,
+                'death_date': death_date,
                 'cage_id': m.cage_id,
                 'live_status': m.live_status,
                 'father': father,
@@ -326,7 +327,10 @@ def update_mouse(mouse_tid):
         if data['birth_date']:
             mouse.birth_date = datetime.strptime(data['birth_date'], '%Y-%m-%d').date()
         if data['death_date']:
-            mouse.death_date = datetime.strptime(data['death_date'], '%Y-%m-%d').date()
+            if mouse.live_status == 1:
+                mouse.death_date = None
+            else:
+                mouse.death_date = datetime.strptime(data['death_date'], '%Y-%m-%d').date()
         if 'strain' in data:
             mouse.strain = data.get('strain')
         if 'tests_done' in data:
@@ -363,18 +367,7 @@ def update_mouse(mouse_tid):
                 )
                 db.session.add(parent)
         db.session.commit()
-        return jsonify({
-            'tid': mouse.tid,
-            'id': mouse.id,
-            'genotype': mouse.get_genotypes(),
-            'sex': mouse.sex,
-            'birth_date': mouse.birth_date.strftime('%Y-%m-%d') if mouse.birth_date else None,
-            'father': data.get('father'),
-            'mother': data.get('mother'),
-            'strain': mouse.strain,
-            'tests_done': [t.experiment_id for t in mouse.tests_done] if mouse.tests_done else [],
-            'tests_planned': mouse.tests_planned
-        })
+        return jsonify(), 201
     except Exception as e:
         db.session.rollback()
         logger.error(f"更新小鼠失败: {str(e)}")
@@ -929,12 +922,22 @@ def calculate_survival_analysis(mice_data):
                 
                 # 处理删失事件
                 if mouse['status'] == 0:
-                    group['censoredPoints'].append({
-                        'x': mouse['living_days'],
-                        'y': cumulative_survival,
-                        'mouseIds': [mouse['mouse_id']],
-                        'at_risk': at_risk
-                    })
+                    if len(group['censoredPoints']) == 0:
+                        group['censoredPoints'].append({
+                            'x': mouse['living_days'],
+                            'y': cumulative_survival,
+                            'mouseIds': [mouse['mouse_id']],
+                            'at_risk': at_risk
+                        })
+                    elif cumulative_survival == group['censoredPoints'][-1]['y'] and mouse['living_days'] == group['censoredPoints'][-1]['x']:
+                        group['censoredPoints'][-1]['mouseIds'].append(mouse['mouse_id'])
+                    else:
+                        group['censoredPoints'].append({
+                            'x': mouse['living_days'],
+                            'y': cumulative_survival,
+                            'mouseIds': [mouse['mouse_id']],
+                            'at_risk': at_risk
+                        })
                     at_risk -= 1
                     i += 1
                     continue
@@ -971,40 +974,25 @@ def calculate_survival_analysis(mice_data):
                     i += len(deaths_at_time)
                 else:
                     break
+
+        # 添加终点 - 确保曲线延伸到最长观察时间
+        if sorted_data:
+            max_time = max(mouse['living_days'] for mouse in sorted_data)
+            last_point = group['survivalData'][-1]
             
+            # 如果最后一个点的时间小于最大观察时间，添加终点
+            if last_point['x'] < max_time:
+                group['survivalData'].append({
+                    'x': max_time,
+                    'y': last_point['y'],  # 保持相同的生存率
+                    'mouseIds': [],
+                    'at_risk': at_risk
+                })    
             # 如果没有找到中位生存时间
             if not ls50_found:
                 group['ls50'] = ">{}".format(group['maxDays'])
         else:
             group['error'] = "所选组别无小鼠"
-    
-    # 处理全删失组
-    maximum_days = max([g['maxDays'] for g in group_results if g['allMice'] > 0], default=0)
-    for group in group_results:
-        if group.get('error'):
-            continue
-            
-        if group['deadMice'] == 0 and group['censoredMice'] > 0:
-            sorted_data = sorted(group['mice'], key=lambda x: x['living_days'])
-    
-            # 创建水平生存曲线
-            group['survivalData'] = [
-                {'x': 0, 'y': 1.0, 'mouseIds': [], 'at_risk': len(sorted_data)},
-                {'x': maximum_days, 'y': 1.0, 'mouseIds': [], 'at_risk': len(sorted_data)}
-            ]
-            
-            # 添加所有删失点
-            group['censoredPoints'] = [
-                {
-                    'x': mouse['living_days'],
-                    'y': 1.0,
-                    'mouseIds': [mouse['mouse_id']],
-                    'at_risk': len(sorted_data) - i  # 近似计算
-                }
-                for i, mouse in enumerate(sorted_data)
-            ]
-            
-            group['ls50'] = "未知"
     
     # 构建返回结果
     result = {

@@ -182,7 +182,6 @@ export const useGeneStore = defineStore('genotype', () => {
 
     // 分组数据
     const tempGroups = ref([{ sex: { M: true, F: true }, genotype: [] }])
-    const groupLetters = ['A', 'B', 'C', 'D', 'E', 'F', 'G', 'H', 'I', 'J']
     const colors = ['#F27970', '#BB9727', '#54B345', '#32B897', '#05B9E2', '#8983BF', '#C76DA2', "#743027"]
 
     // 添加分组
@@ -209,7 +208,7 @@ export const useGeneStore = defineStore('genotype', () => {
         // 筛选符合分组条件的小鼠
         const response = await api.get('/groups/temp', { params: { groups: JSON.stringify(tempGroups.value) } })
         return response.data.map((group, groupIndex) => ({ 
-            name: `分组 ${groupLetters[groupIndex]}`,
+            name: `分组 ${groupIndex}`,
             color: colors[groupIndex % colors.length],
             mice: group
         }))
@@ -253,8 +252,7 @@ export const useGeneStore = defineStore('genotype', () => {
         miceLiveCount,
         
         colors,
-        groupLetters,
-
+        
         loadMice,
         loadSurvival,
         loadGenotypes,
