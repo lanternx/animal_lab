@@ -153,39 +153,6 @@ class GeneLocus(db.Model):
     symbol = db.Column(db.String(50), unique=True, nullable=False)  # 基因符号
     description = db.Column(db.String(200))
     alleles = db.relationship('Allele', backref='locus', lazy=True)
-    
-    def get_combination(self):
-        inter_alleles = []
-        wild_type = []
-        result = []
-        key = False
-        for a in self.alleles:
-            if a.symbol != "+":
-                if a.is_wildtype:
-                    wild_type.append(a)
-                else:
-                    inter_alleles.append(a)
-            else:
-                key = True
-        if key:
-            for i in inter_alleles:
-                result.append(i.symbol+"/+")
-                result.append(i.symbol+"/"+i.symbol)
-            for w in wild_type:
-                for i in inter_alleles:
-                    result.append(i.symbol+"/"+w.symbol)
-        else:
-            for w in wild_type:
-                result.append(w.symbol+"/"+w.symbol)
-                for i in inter_alleles:
-                    result.append(i.symbol+"/"+w.symbol)
-                    result.append(i.symbol+"/"+i.symbol)
-        for index, i in enumerate(inter_alleles):
-            t_index = index+1
-            while t_index < len(inter_alleles):
-                result.append(i.symbol+"/"+inter_alleles[t_index].symbol)
-                t_index += 1
-        return result
 
     def to_dict(self):
         return {

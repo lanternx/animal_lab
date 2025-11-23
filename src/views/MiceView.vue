@@ -4,7 +4,7 @@
     <div class="section">
       <div class="header-with-button">
         <h2>小鼠管理</h2>
-        <h3>当前存活小鼠为{{ geneStore.miceLiveCount.total }}只，其中雄性小鼠{{ geneStore.miceLiveCount.male }}只、雌性小鼠{{ geneStore.miceLiveCount.female }}只</h3>
+        <h3>当前筛选小鼠为{{filteredMice.length}}只，其中雄性小鼠{{filteredMice.filter(m=>m.sex==='M').length}}只、雌性小鼠{{filteredMice.filter(m=>m.sex==='F').length}}只</h3>
         <button @click="openModal('add')" class="add-button">
           <i class="material-icons">add</i>
           添加新小鼠
@@ -63,6 +63,7 @@
             </div>
           <button @click="batchAddExperiment('计划实验')">批量计划实验</button>
           <button @click="batchAddExperiment('完成实验')">批量完成实验</button>
+          <button @click="batchDeleteMice" style="background-color: #FA8072;">批量删除小鼠</button>
           <button @click="clearSelection" style="background-color: #95a5a6;">取消选择</button>
       </div>
       
@@ -364,13 +365,13 @@
                   :key="mouse.tid"
                   @click="selectParent('father', mouse)"
                 >
-                  {{ mouse.id }} ({{ formatDate(mouse.birth_date) }}) - {{ mouse.genotype.symbol }}
+                  {{ mouse.id }} ({{ formatDate(mouse.birth_date) }}) - <span v-html="mouse.genotype.symbol"></span>
                 </li>
               </ul>
             </div>
             <div class="selected-parents" v-if="selectedFathers.length">
               <div class="selected-parent" v-for="(father, index) in selectedFathers" :key="father.tid">
-                <span>{{ father.id }} ({{ formatDate(father.birth_date) }}) - {{ father.genotype.symbol }}</span>
+                <span>{{ father.id }} ({{ formatDate(father.birth_date) }}) - <span v-html="father.genotype.symbol"></span></span>
                 <button type="button" class="remove-btn" @click="removeParent('father', index)">移除</button>
               </div>
             </div>
@@ -394,13 +395,13 @@
                   :key="mouse.tid"
                   @click="selectParent('mother', mouse)"
                 >
-                  {{ mouse.id }} ({{ formatDate(mouse.birth_date) }}) - {{ mouse.genotype.symbol }}
+                  {{ mouse.id }} ({{ formatDate(mouse.birth_date) }}) - <span v-html="mouse.genotype.symbol"></span>
                 </li>
               </ul>
             </div>
             <div class="selected-parents" v-if="selectedMothers.length">
               <div class="selected-parent" v-for="(mother, index) in selectedMothers" :key="mother.tid">
-                <span>{{ mother.id }} ({{ formatDate(mother.birth_date) }}) - {{ mother.genotype.symbol }}</span>
+                <span>{{ mother.id }} ({{ formatDate(mother.birth_date) }}) - <span v-html="mother.genotype.symbol"></span></span>
                 <button type="button" class="remove-btn" @click="removeParent('mother', index)">移除</button>
               </div>
             </div>
@@ -638,6 +639,7 @@ import 'vue3-toastify/dist/index.css'
 import MouseDetailModal from './MouseDetailView.vue'
 import { useGeneStore, useCageStore, useExperimentStore } from '@/stores'
 import { storeToRefs } from 'pinia'
+import { index } from 'd3'
 
 const geneStore = useGeneStore()
 const { mice, loading, genotypes, selectedGenes, alleleSuggestions } = storeToRefs(geneStore)
@@ -695,8 +697,8 @@ const formData = reactive({
 })
 
 // 筛选和排序
-const sortField = ref(null)
-const sortDirection = ref('asc')
+const sortField = ref('birth_date')
+const sortDirection = ref('desc')
 const filters = reactive({
   id: '',
   genotypeLocus: '',
@@ -1070,6 +1072,29 @@ const clearSelection = () => {
     applyFilters()
 }
 
+const batchDeleteMice = async () => {
+    try {
+    if (!confirm(`确认要删除选中的 ${selectedMice.value.length} 只小鼠吗？注意删除后，小鼠无法恢复！`)) {
+      return
+    }
+    const api = createAxiosInstance()
+    await api.delete('/mice', {params: { miceIds: selectedMice.value }})
+    selectedMice.value.forEach(mid => {
+      index = mice.value.findIndex(m => m.tid === mid)
+      if (index !== -1) {
+        mice.value = mice.value.splice(index, 1)
+      }
+    })
+    await fetchCages()
+    applyFilters()
+    toast.success("批量删除成功")
+  } catch (error) {
+    console.error('批量删除小鼠失败:', error)
+  } finally {
+    clearSelection()
+  }
+}
+
 const batchAddExperiment = async (batchTest) => {
   try {
     if (!confirm(`确认要为选中的 ${selectedMice.value.length} 只小鼠批量修改实验 ${batchTest} 吗？注意，未选择的实验会被清除！对应小鼠在其中的数据也会被清除！`)) {
@@ -1224,19 +1249,19 @@ const saveMouse = async () => {
     const api = createAxiosInstance()
     
     if (modalMode.value === 'add') {
-      await api.post('/mice', submitData)
+      const response = await api.post('/mice', submitData)
+      mice.value.push(response.data)
       toast.success(`小鼠 ${submitData.id} 添加成功！`)
     } else if (modalMode.value === 'edit') {
       await api.put(`/mice/${formData.tid}`, submitData)
+      await loadMice()
       toast.success(`小鼠 ${formData.id} 信息已更新！`)
     }
-    
-    await loadMice()
     applyFilters()
+    closeModal()
     if (formData.cage_id) {
       fetchCages()
     }
-    closeModal()
   } catch (error) {
     console.error('保存小鼠失败:', error)
     
@@ -1481,13 +1506,13 @@ const saveTemplateMice = async () => {
     const api = createAxiosInstance()
     await api.post(`/mice/${templateMouse.value.tid}`, newMice.value)
     
-    toast.success(`添加${newMice.value.length}只小鼠！`)
+    toast.success(`按模板添加${newMice.value.length}只小鼠！`)
     await loadMice()
     applyFilters()
+    closeModal()
     if (templateMouse.value.cage_id) {
       fetchCages()
     }
-    closeModal()
   } catch (error) {
     console.error('批量添加小鼠失败:', error)
     

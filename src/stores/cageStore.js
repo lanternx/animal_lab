@@ -41,6 +41,7 @@ export const useCageStore = defineStore('cage', () => {
         if (!activeSection.value) return cages.value
         return cages.value.filter(cage => cage.section === activeSection.value)
     })
+    
     // 获取所有笼位数据
     async function fetchCages() {
     try {

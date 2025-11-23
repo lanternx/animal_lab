@@ -33,7 +33,7 @@
           </div>
           <div class="info-row">
             <span class="info-label">性别:</span>
-            <span class="info-value">{{ mouseData.sex }}</span>
+            <span class="info-value">{{ mouseData.sex === 'M' ? '雄性' : '雌性' }}</span>
           </div>
         </div>
           <div class="info-row">

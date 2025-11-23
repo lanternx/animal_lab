@@ -180,8 +180,6 @@ def block_non_read_requests():
             }), 403
             
 
-
-
 ##列表视图
 @app.route('/api/mice', methods=['GET'])
 def get_all_mice():
@@ -228,8 +226,6 @@ def get_all_mice():
                 'weeks_old': weeks
             }
             mice_data.append(mouse_dict)
-
-        mice_data.sort(key=lambda x: x['tid'], reverse=True)
         return jsonify(mice_data)
     except Exception as e:
         logger.error(f"获取小鼠列表失败: {str(e)}")
@@ -249,6 +245,16 @@ def add_mouse():
             mouse.sex = data['sex']
         if data['birth_date']:
             mouse.birth_date = datetime.strptime(data['birth_date'], '%Y-%m-%d').date()
+        else:
+            mouse.birth_date = None
+        if mouse.birth_date:
+            birth_date = mouse.birth_date.strftime('%Y-%m-%d')
+            days = (datetime.now().date() - mouse.birth_date).days
+            weeks = days // 7
+        else:
+            birth_date = None
+            days = None
+            weeks = None
         mouse.live_status = 1  # 默认新添加的小鼠状态为'活'
         mouse.cage_id = data.get('cage_id', None)
         # 新增字段
@@ -290,15 +296,21 @@ def add_mouse():
                 db.session.add(exp)
         db.session.commit()
         return jsonify({
+            'tid': mouse.tid,
             'id': mouse.id,
             'genotype': mouse.get_genotypes(),
             'sex': mouse.sex,
-            'birth_date': mouse.birth_date.strftime('%Y-%m-%d') if mouse.birth_date else None,
+            'birth_date': birth_date,
+            'death_date': None,
             'live_status': mouse.live_status,
+            'father': data['father'] if data['father'] else [],
+            'mother': data['mother'] if data['mother'] else [],
             'cage_id': mouse.cage_id,
             'strain': mouse.strain,
             'tests_done': [t.experiment_id for t in mouse.tests_done] if mouse.tests_done else [],
-            'tests_planned': mouse.tests_planned
+            'tests_planned': mouse.tests_planned,
+            'days_old': days,
+            'weeks_old': weeks
         }), 201
     except Exception as e:
         logger.error(f"添加小鼠失败: {str(e)}")
@@ -385,6 +397,28 @@ def delete_mouse(mouse_tid):
         WeightRecord.query.filter_by(mouse_id=mouse_tid).delete()
         ExperimentClass.query.filter_by(mouse_id=mouse_tid).delete()
         db.session.delete(mouse)
+        db.session.commit()
+        return jsonify({'message': 'Mouse deleted successfully'})
+    except Exception as e:
+        db.session.rollback()
+        logger.error(f"删除小鼠失败: {str(e)}")
+        return jsonify({'error': str(e)}), 500
+
+@app.route('/api/mice', methods=['DELETE'])
+def delete_batch_mice():
+    """批量删除小鼠及其相关记录"""
+    mice_ids_param = request.args.getlist('miceIds[]')
+    mice_ids = [int(id.strip()) for id in mice_ids_param] if mice_ids_param else []
+    try:
+        for mouse_tid in mice_ids:
+            mouse = Mouse.query.get_or_404(mouse_tid)
+            Genotype.query.filter_by(mouse_id=mouse_tid).delete()
+            StatusRecord.query.filter_by(mouse_id=mouse_tid).delete()
+            Pedigree.query.filter_by(mouse_id=mouse_tid).delete()
+            Pedigree.query.filter_by(parent_id=mouse_tid).delete()
+            WeightRecord.query.filter_by(mouse_id=mouse_tid).delete()
+            ExperimentClass.query.filter_by(mouse_id=mouse_tid).delete()
+            db.session.delete(mouse)
         db.session.commit()
         return jsonify({'message': 'Mouse deleted successfully'})
     except Exception as e:
@@ -547,7 +581,7 @@ def add_cage():
         )
         db.session.add(cage)
         db.session.commit()
-        return jsonify({'message': 'Cage added successfully'}), 201
+        return jsonify({'id': cage.id}), 201
     except Exception as e:
         logger.error(f"添加笼位失败: {str(e)}")
         return jsonify({'error': str(e)}), 400
@@ -975,22 +1009,22 @@ def calculate_survival_analysis(mice_data):
                 else:
                     break
 
-        # 添加终点 - 确保曲线延伸到最长观察时间
-        if sorted_data:
-            max_time = max(mouse['living_days'] for mouse in sorted_data)
-            last_point = group['survivalData'][-1]
-            
-            # 如果最后一个点的时间小于最大观察时间，添加终点
-            if last_point['x'] < max_time:
-                group['survivalData'].append({
-                    'x': max_time,
-                    'y': last_point['y'],  # 保持相同的生存率
-                    'mouseIds': [],
-                    'at_risk': at_risk
-                })    
-            # 如果没有找到中位生存时间
-            if not ls50_found:
-                group['ls50'] = ">{}".format(group['maxDays'])
+            # 添加终点 - 确保曲线延伸到最长观察时间
+            if sorted_data:
+                max_time = max(mouse['living_days'] for mouse in sorted_data)
+                last_point = group['survivalData'][-1]
+                
+                # 如果最后一个点的时间小于最大观察时间，添加终点
+                if last_point['x'] < max_time:
+                    group['survivalData'].append({
+                        'x': max_time,
+                        'y': last_point['y'],  # 保持相同的生存率
+                        'mouseIds': [],
+                        'at_risk': at_risk
+                    })    
+                # 如果没有找到中位生存时间
+                if not ls50_found:
+                    group['ls50'] = ">{}".format(group['maxDays'])
         else:
             group['error'] = "所选组别无小鼠"
     
@@ -1275,9 +1309,10 @@ def export_data(export_type):
             data[index]['genotype_description'] = data[index]['genotype']
             data[index]['genotype'] = genotype_str
         df = pd.DataFrame(data)
-        base_columns = ['id', 'sex', 'genotype_description', 'live_status', 'birth_date', 'death_date', 'location', 'cage_id', 'strain']
-        info_columns = ["tid", "genotype", "tests_done", "tests_planned"]
-        df = df[base_columns + info_columns]
+        if data:
+            base_columns = ['id', 'sex', 'genotype_description', 'live_status', 'birth_date', 'death_date', 'location', 'cage_id', 'strain']
+            info_columns = ["tid", "genotype", "tests_done", "tests_planned"]
+            df = df[base_columns + info_columns]
     else:
         df = pd.DataFrame(data)
     

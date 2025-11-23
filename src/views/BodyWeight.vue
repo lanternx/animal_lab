@@ -22,6 +22,7 @@
         </div>
         <div v-if="showChartType === 'pred'" class="d-flex justify-content-between mb-4">
             <select v-model="selectedPredefinedGroupId" style="min-width:100px;">
+                <option v-if="predefinedGroups.length === 0" :value='null' :disabled="true">---请在设置中确定预设分组---</option>
                 <option v-for="group in predefinedGroups" :value="group.id" :key="group.id">
                     {{ group.name }}
                 </option>
@@ -88,7 +89,7 @@
                         <div class="form-group">
                         <label class="form-label">基因型包含：（需要更加复杂的逻辑请使用预设分组）</label>
                         <div class="genotype-tree">
-                            <div v-for="(combinations, locus) in allGenotypes" :key="locus" class="locus-item">
+                            <div v-for="(combinations, locus) in geneStore.allGenotypes" :key="locus" class="locus-item">
                             <div class="locus-header">
                                 <label class="locus-label">
                                 <input 
@@ -310,7 +311,7 @@ import { useGeneStore, useExperimentStore } from '@/stores'
 import { storeToRefs } from 'pinia'
 
 const geneStore = useGeneStore()
-const { allGenotypes, tempGroups, mice } = storeToRefs(geneStore)
+const { tempGroups, mice } = storeToRefs(geneStore)
 const { addGroup, removeGroup, clearGroups, getTempGroups, onLocusSelect, onCombinationSelect } = geneStore
 const experimentStore = useExperimentStore()
 const { predefinedGroups, selectedPredefinedGroupId, showChartType } = storeToRefs(experimentStore)

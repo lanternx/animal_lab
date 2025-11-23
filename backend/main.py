@@ -182,12 +182,18 @@ def create_save_file_dialog(window):
                 default_dir = os.getcwd()
             
             try:
+                if filename.endswith('.xlsx'):
+                    file_types = ("Excel files (*.xlsx)", "All files (*.*)")
+                elif filename.endswith('.xlsx'):
+                    file_types = ("CSV files (*.csv)", "All files (*.*)")
+                else:
+                    file_types = ("All files (*.*)",)
                 # 使用窗口实例创建文件对话框
                 save_paths = window.create_file_dialog(
                     webview.FileDialog.SAVE,
                     directory=default_dir,
                     save_filename=filename,
-                    file_types=("All files (*.*)",)
+                    file_types=file_types
                 )
                 
                 if save_paths and len(save_paths) > 0:

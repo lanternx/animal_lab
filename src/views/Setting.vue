@@ -1729,16 +1729,16 @@ toast.error('更新等位基因失败，请重试')
 }
 
 const deleteGeneLocus = async (id) => {
-if (!confirm('确定要删除这个基因位点吗？')) return
+    if (!confirm('确定要删除这个基因位点吗？')) return
 
-try {
-await axios.delete(`/api/gene/${id}`)
-genotypes.value = genotypes.value.filter(g => g.id !== id)
-toast.success('删除基因位点成功')
-} catch (error) {
-console.error('删除基因型失败:', error)
-toast.error('删除基因型失败，请重试')
-}
+    try {
+    await axios.delete(`/api/gene/${id}`)
+    genotypes.value = genotypes.value.filter(g => g.id !== id)
+    toast.success('删除基因位点成功')
+    } catch (error) {
+    console.error('删除基因型失败:', error)
+    toast.error('删除基因型失败，请重试')
+    }
 }
 
 const deleteAllele = async (id) => {

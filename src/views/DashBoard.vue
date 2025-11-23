@@ -409,17 +409,7 @@ const sortedSections = computed({
 
 // 生命周期钩子
 onMounted(async () => {
-  console.log('DashBoard组件已挂载，开始初始化...')
-  console.log('当前URL:', window.location.href)
-  console.log('User Agent:', navigator.userAgent)
-
-  // 延迟0.1秒再开始加载，确保所有依赖都准备好
-  setTimeout(async () => {
-    console.log('开始延迟加载数据...')
-    await fetchTemporaryMice()
-  }, 100)
-  
-  console.log('DashBoard组件初始化完成')
+  await fetchTemporaryMice()
 })
 
 // 获取临时区小鼠数据
@@ -557,9 +547,14 @@ async function addNewCage() {
   }
   isSaving.value = true
   try {
-    await axios.post('/api/cages', currentCage)
-    await fetchCages() // 刷新笼位列表
+    const responseId = await axios.post('/api/cages', currentCage)
+    cages.value.push({
+      ...currentCage,
+      'mice': [],
+      'id': responseId.data.id
+    })
     closeCageModal()
+    toast.success('添加笼位成功')
   } catch (error) {
     console.error('添加笼位失败:', error)
     toast.error('添加笼位失败，请重试')
@@ -645,8 +640,15 @@ async function deleteCage(cage) {
   try {
     await axios.delete(`/api/cages/${cage.id}`)
     // 更新本地数据
-    cages.value = cages.value.filter(c => c.id !== cage.id)
+    const index = cages.value.findIndex(c => c.id === cage.id)
+    if (index !== -1) {
+      cage.mice.forEach(m=> {
+        temporaryMice.value.push(m)
+      })
+      cages.value.splice(index, 1)
+    }
     closeContextMenu()
+    toast.success('成功删除笼位')
   } catch (error) {
     console.error('删除笼位失败:', error)
     toast.error('删除笼位失败，请重试')
@@ -662,7 +664,7 @@ async function exchangeCage(cage) {
   closeContextMenu()
   timeoutId = setTimeout(() => {
     cancelSwap()
-}, 5000)
+  }, 5000)
 }
 
 // 处理笼位点击
@@ -707,7 +709,13 @@ function resetSwapState() {
 // API更新笼位排序
 async function updateCageOrder(cage_from_id, cage_to_id) {
   await axios.put('/api/cages/order', {id_from: cage_from_id, id_to: cage_to_id})
-  await fetchCages() // 刷新笼位列表
+  const indexI = cages.value.findIndex(c => c.id === cage_from_id)
+  const indexJ = cages.value.findIndex(c => c.id === cage_to_id)
+  if (indexI !== -1 && indexJ !== -1) {
+    const temp = cages.value[indexI];
+    cages.value[indexI] = cages.value[indexJ];
+    cages.value[indexJ] = temp;
+  }
 }
 
 // 拖动结束事件

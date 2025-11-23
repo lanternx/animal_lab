@@ -15,21 +15,10 @@ export const useGeneStore = defineStore('genotype', () => {
     const loadInitialData = async () => {
         await loadMice()
         await loadGenotypes()
-        await loadAllGenotypes()
     }
 
     const mice = ref([])
     const loading = ref(false)
-
-    //基础信息
-    const miceLiveCount = computed(()=>{
-        let liveMice = mice.value.filter(m => m.live_status === 1)
-        return {
-            total: liveMice.length,
-            male: liveMice.filter(m => m.sex === 'M').length,
-            female: liveMice.filter(m => m.sex === 'F').length
-        }
-    })
 
     const loadMice = async () => {
         loading.value = true
@@ -53,8 +42,17 @@ export const useGeneStore = defineStore('genotype', () => {
     };
     
     const genotypes = ref([])
-    const allGenotypes = ref([])
-
+    const allGenotypes = computed(() => {
+        const result = {};
+        
+        // 遍历所有基因型
+        genotypes.value.forEach(genotype => {
+            // 为每个基因型计算组合
+            result[genotype.symbol] = calculateCombinations(genotype.alleles);
+        });
+        
+        return result;
+    });
     // 基因型选择
     const selectedGenes = ref([])
     const selectedGeneName = computed(() => {
@@ -101,11 +99,61 @@ export const useGeneStore = defineStore('genotype', () => {
     })
     const alleleSuggestions = ref([])
     
-
-    const loadAllGenotypes = async () => {
-        const genotypeResponse = await api.get('/genotypes')
-        allGenotypes.value = genotypeResponse.data
-    }
+    // 计算单个基因型的组合
+    const calculateCombinations = (alleles) => {
+        const interAlleles = [];
+        const wildType = [];
+        const result = [];
+        let hasWildTypeSymbol = false;
+        
+        // 分类等位基因
+        alleles.forEach(allele => {
+            if (allele.symbol !== "+") {
+                if (allele.is_wildtype) {
+                    wildType.push(allele);
+                } else {
+                    interAlleles.push(allele);
+                }
+            } else {
+                hasWildTypeSymbol = true;
+            }
+        });
+        
+        // 生成组合
+        if (hasWildTypeSymbol) {
+            // 存在"+"符号的情况
+            interAlleles.forEach(i => {
+                result.push(`${i.symbol}/+`);
+                result.push(`${i.symbol}/${i.symbol}`);
+            });
+            
+            wildType.forEach(w => {
+                interAlleles.forEach(i => {
+                    result.push(`${i.symbol}/${w.symbol}`);
+                });
+            });
+        } else {
+            // 不存在"+"符号的情况
+            wildType.forEach(w => {
+                result.push(`${w.symbol}/${w.symbol}`);
+                interAlleles.forEach(i => {
+                    result.push(`${i.symbol}/${w.symbol}`);
+                    result.push(`${i.symbol}/${i.symbol}`);
+                });
+            });
+        }
+        
+        // 添加不同突变等位基因之间的组合
+        interAlleles.forEach((i, index) => {
+            let tIndex = index + 1;
+            while (tIndex < interAlleles.length) {
+                result.push(`${i.symbol}/${interAlleles[tIndex].symbol}`);
+                tIndex++;
+            }
+        });
+        
+        return result;
+    };
 
     const loadGenotypes = async () => {
         try {
@@ -249,7 +297,6 @@ export const useGeneStore = defineStore('genotype', () => {
         locusSuggestions,
         alleleSuggestions,
         addable,
-        miceLiveCount,
         
         colors,
         
