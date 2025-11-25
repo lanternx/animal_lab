@@ -750,6 +750,10 @@ const exportToPDF = async () => {
       cage => cage.section === activeSection.value
     );
     
+    if (sectionCages.length === 0) {
+      toast.info("本区域无笼位，无法导出pdf")
+      return
+    }
     // 渲染PDF内容
     renderPDFContent(sectionCages, activeSection.value);
     

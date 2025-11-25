@@ -64,7 +64,7 @@
                 <td class="action-cell">
                     <div class="btn-group">
                         <button class="action-btn" @click="editGeneLocus(locus)">编辑</button>
-                        <button class="action-btn btn-danger" @click="deleteGeneLocus(locus.id)">删除</button>
+                        <button v-if="locus.symbol !== 'WT'" class="action-btn btn-danger" @click="deleteGeneLocus(locus.id)">删除</button>
                         <button v-if="locus.symbol !== 'WT'" class="action-btn btn-success" @click="toggleAlleles(locus.id)">
                         {{ expandedLoci.includes(locus.id) ? '收起' : '展开并为该位点添加等位基因' }}
                         </button>

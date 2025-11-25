@@ -1080,14 +1080,14 @@ const batchDeleteMice = async () => {
     const api = createAxiosInstance()
     await api.delete('/mice', {params: { miceIds: selectedMice.value }})
     selectedMice.value.forEach(mid => {
-      index = mice.value.findIndex(m => m.tid === mid)
+      const index = mice.value.findIndex(m => m.tid === mid)
       if (index !== -1) {
-        mice.value = mice.value.splice(index, 1)
+        mice.value.splice(index, 1)
       }
     })
     await fetchCages()
     applyFilters()
-    toast.success("批量删除成功")
+    toast.success(`批量删除${selectedMice.value.length}只小鼠`)
   } catch (error) {
     console.error('批量删除小鼠失败:', error)
   } finally {
@@ -1258,9 +1258,11 @@ const saveMouse = async () => {
       toast.success(`小鼠 ${formData.id} 信息已更新！`)
     }
     applyFilters()
-    closeModal()
     if (formData.cage_id) {
+      closeModal()
       fetchCages()
+    } else {
+      closeModal()
     }
   } catch (error) {
     console.error('保存小鼠失败:', error)
@@ -1509,9 +1511,11 @@ const saveTemplateMice = async () => {
     toast.success(`按模板添加${newMice.value.length}只小鼠！`)
     await loadMice()
     applyFilters()
-    closeModal()
     if (templateMouse.value.cage_id) {
+      closeModal()
       fetchCages()
+    } else {
+      closeModal()
     }
   } catch (error) {
     console.error('批量添加小鼠失败:', error)

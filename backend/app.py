@@ -71,9 +71,11 @@ def get_base_dir():
         # 开发环境
         return Path(__file__).parent
 
+script_dir = os.path.dirname(os.path.abspath(__file__))
+config_path = os.path.join(script_dir, "config.json")
 import json
 # 读取配置
-if not os.path.exists('config.json'):
+if not os.path.exists(config_path):
     # 创建默认配置文件
     default_config = {
         "db": {
@@ -81,10 +83,10 @@ if not os.path.exists('config.json'):
             "db_list": {'mice.db': {'projectName': '默认数据库', 'startAt':None, 'endAt':None, 'readOnly': False} }
         }
     }
-    with open('config.json', 'w', encoding='utf-8') as f:
+    with open(config_path, 'w', encoding='utf-8') as f:
         json.dump(default_config, f, indent=4)
 
-with open('config.json', 'r', encoding='utf-8') as f:
+with open(config_path, 'r', encoding='utf-8') as f:
     config = json.load(f)
 
 def get_db_file():
@@ -94,7 +96,7 @@ def get_db_file():
         return current_db
     else:
         config['db']['default_db'] = 'mice.db'
-        with open('config.json', 'w', encoding='utf-8') as f:
+        with open(config_path, 'w', encoding='utf-8') as f:
             json.dump(config, f, indent=4)
         return 'mice.db'
 
@@ -197,7 +199,6 @@ def get_all_mice():
                 mother = None
             if m.birth_date:
                 birth_date = m.birth_date.strftime('%Y-%m-%d')
-                death_date = m.death_date.strftime('%Y-%m-%d') if m.death_date else None
                 if m.live_status != 1 and m.death_date:
                     days = (m.death_date - m.birth_date).days
                     weeks = days // 7
@@ -214,7 +215,7 @@ def get_all_mice():
                 'genotype': m.get_genotypes(),
                 'sex': m.sex,
                 'birth_date': birth_date,
-                'death_date': death_date,
+                'death_date': m.death_date.strftime('%Y-%m-%d') if m.death_date else None,
                 'cage_id': m.cage_id,
                 'live_status': m.live_status,
                 'father': father,
@@ -2700,7 +2701,7 @@ def create_database():
     timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
     db_list[timestamp+'.db'] = database
     config['db']['db_list'] = db_list
-    with open('config.json', 'w', encoding='utf-8') as f:
+    with open(config_path, 'w', encoding='utf-8') as f:
         json.dump(config, f, indent=4)
     return jsonify({'message': '数据库创建成功', 'database': database, 'key': timestamp+'.db'}), 201
 
@@ -2722,7 +2723,7 @@ def select_database(db_key):
         'totalRecords': total_records
     })
 
-    with open('config.json', 'w', encoding='utf-8') as f:
+    with open(config_path, 'w', encoding='utf-8') as f:
         json.dump(config, f, indent=4)
 
     return jsonify({'message': f'已切换到新数据库，重启后生效'}), 200
@@ -2736,7 +2737,7 @@ def delete_database(db_key):
         return jsonify({'error': '无法删除当前使用的数据库'}), 400
     del db_list[db_key]
     config['db']['db_list'] = db_list
-    with open('config.json', 'w', encoding='utf-8') as f:
+    with open(config_path, 'w', encoding='utf-8') as f:
         json.dump(config, f, indent=4)
     if os.path.exists(os.path.join(base_dir, db_key)):
         os.remove(os.path.join(base_dir, db_key))
@@ -2757,7 +2758,7 @@ def modify_database(db_key):
     }
     db_list[db_key].update(database)
     config['db']['db_list'] = db_list
-    with open('config.json', 'w', encoding='utf-8') as f:
+    with open(config_path, 'w', encoding='utf-8') as f:
         json.dump(config, f, indent=4)
     return jsonify({'message': '数据库信息修改成功', 'database': database}), 200
 
@@ -2870,7 +2871,7 @@ def import_database():
         config['db']['db_list'] = db_list
         config['db']['default_db'] = timestamp_name
         
-        with open('config.json', 'w', encoding='utf-8') as f:
+        with open(config_path, 'w', encoding='utf-8') as f:
             json.dump(config, f, indent=4)
         
         if version_change:

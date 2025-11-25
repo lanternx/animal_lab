@@ -348,13 +348,7 @@ if __name__ == '__main__':
                 loading_window.destroy()
             webview.schedule_update(show_error)
             return
-        
-        mac_settings = {}
-        if sys.platform == "darwin":
-            mac_settings = {
-                'title_bar_color': '#FFFFFF',
-                'fullscreen': False,
-            }
+
         # 创建主窗口
         main_window = webview.create_window(
             "MurisPro - 鼠管家", 
@@ -365,28 +359,23 @@ if __name__ == '__main__':
             text_select=True,
             confirm_close=True,
             frameless=False,
-            hidden=True,
-            **mac_settings
+            hidden=True
         )
         
         # 创建保存函数并暴露API
         save_file_dialog = create_save_file_dialog(main_window)
         main_window.expose(save_file_dialog)
 
-        # 创建前端初始化完成的通知函数
-        frontend_ready = threading.Event()
         def notify_frontend_ready():
             logger.info("前端初始化完成")
             
             # 取消定时器
             close_timer.cancel()
-            
             loading_window.destroy()
             # 确保主窗口获得焦点
-            main_window.show()
             if sys.platform == "darwin":
                 time.sleep(0.2)
-        
+            main_window.show()
         main_window.expose(notify_frontend_ready)
     
     # 在单独的线程中执行初始化
