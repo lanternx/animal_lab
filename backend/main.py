@@ -174,7 +174,7 @@ def create_save_file_dialog(window):
                 byte_data = data
             
             if sys.platform == "darwin":
-                return mac_save_file(data, filename)
+                return mac_save_file(byte_data, filename)
             
             # 创建默认保存路径
             default_dir = os.path.join(os.path.expanduser("~"), "Documents")

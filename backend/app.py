@@ -1503,6 +1503,16 @@ def import_mice_data(df, result, conflict_resolution):
             # 可选字段
             if 'death_date' in df.columns and pd.notna(row['death_date']) and mouse.live_status != 1:
                 mouse.death_date = pd.to_datetime(row['death_date']).date()
+            if 'record' in df.columns and pd.notna(row['record']):
+                #临时
+                record = StatusRecord(
+                    mouse_id=mouse.tid,
+                    record_date=datetime.now().date(),
+                    record_livingdays=0,
+                    status=str(row['record'])
+                )
+                db.session.add(record)
+                db.session.commit()  
             if 'cage_id' in df.columns and pd.notna(row['cage_id']):
                 if 'location' in df.columns and pd.notna(row['location']):
                     location = str(row['location'].strip())

@@ -832,7 +832,8 @@
                                         <div v-for="color in colors" 
                                             :key="color"
                                             class="color-option"
-                                            :style="{ selected: subgroup.color === color }"
+                                            :class="{ selected: group.color === color }"
+                                            :style="{ backgroundColor: color }"
                                             @click="subgroup.color = color">
                                             <i v-if="subgroup.color === color" class="material-icons">check</i>
                                         </div>

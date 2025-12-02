@@ -51,7 +51,7 @@
             >
             <div class="mouse-info">
               <div class="mouse-id">{{ mouse.id }}</div>
-              <div class="mouse-details" v-html="mouse.genotype.symbol"></div>
+              <div class="mouse-details" v-html="mouse.genotype.symbol? mouse.genotype.symbol : mouse.genotype"></div>
               <div class="mouse-details">{{ mouse.sex }} · {{ mouse.strain }} · {{ mouse.birth_date }}</div>
             </div>
           </div>
@@ -110,7 +110,7 @@
                 class="assigned-mouse"
               >
                 <div class="mouse-id">{{ mouse.id }}</div>
-                <div class="mouse-details" v-html="mouse.genotype.symbol"></div>
+                <div class="mouse-details" v-html="mouse.genotype.symbol? mouse.genotype.symbol : mouse.genotype"></div>
                 <div class="mouse-details">{{ mouse.sex }} · {{ mouse.strain }} · {{ mouse.birth_date }}</div>
                 <div class="mouse-actions">
                   <button 

@@ -147,7 +147,7 @@
       <div class="status-indicators">
           <div class="status-item">
               <i class="material-icons status-icon online">cloud_done</i>
-              <span>数据库位置：mice.db</span>
+              <span>当前数据库正常</span>
           </div>
           <div class="status-item">
               <i class="material-icons status-icon">save</i>
