@@ -368,6 +368,13 @@
                             <td>区域名称</td>
                             <td class="example-row">本部动物房</td>
                         </tr>
+                        <tr>
+                            <td><span class="optional">strain</span></td>
+                            <td>字符串</td>
+                            <td><span class="optional">否</span></td>
+                            <td>小鼠品系</td>
+                            <td class="example-row">C57BL/6J</td>
+                        </tr>
                     </tbody>
                 </table>
                 
@@ -1238,21 +1245,21 @@
                     <button
                         class="action-btn primary" 
                         @click="selectDatabase(key)"
-                        :disabled="currentDatabase === key"
+                        :disabled="currentDatabase === key || databaseNotChanged === false"
                     >
                         设为当前
                     </button>
                     <button
                         class="action-btn secondary" 
                         @click="exportDatabase(key)"
-                        :disabled="!db.totalRecords && db.totalRecords !== 0"
+                        :disabled="(!db.totalRecords && db.totalRecords !== 0) || databaseNotChanged === false"
                     >
                         导出
                     </button>
                     <button
                         class="action-btn btn-danger" 
                         @click="deleteDatabase(key)"
-                        :disabled="currentDatabase === key"
+                        :disabled="currentDatabase === key || databaseNotChanged === false"
                     >
                         删除
                     </button>
@@ -1917,7 +1924,7 @@ const importData = async () => {
         })
         Object.assign(importResult, response.data)
         importResultDialogVisible.value = true
-        if (importType === 'mice') {
+        if (importType.value === 'mice') {
             await geneStore.loadInitialData()
             await cageStore.loadInitialData()
         }
@@ -1930,18 +1937,18 @@ const importData = async () => {
 }
 
 const addField = () => {
-editingExperimentType.fields.push({
-field_name: '',
-data_type: 'TEXT',
-unit: '',
-is_required: false,
-visualize_type: "",
-display_order: editingExperimentType.fields.length
-})
+    editingExperimentType.fields.push({
+    field_name: '',
+    data_type: 'TEXT',
+    unit: '',
+    is_required: false,
+    visualize_type: "",
+    display_order: editingExperimentType.fields.length
+    })
 }
 
 const removeField = (index) => {
-editingExperimentType.fields.splice(index, 1)
+    editingExperimentType.fields.splice(index, 1)
 }
 
 const saveExperimentType = async () => {

@@ -688,7 +688,7 @@ def get_mice_info(mouse_tid):
         else:
             c_cage = Cage.query.get_or_404(mouse.cage_id)
         content['id'] = mouse.id
-        content['genotype'] = mouse.get_full_genotype()
+        content['genotype'] = mouse.get_genotypes()
         content['sex'] = mouse.sex
         content['live_status'] = mouse.live_status
         if c_cage:
@@ -776,7 +776,7 @@ def add_status_record():
         db.session.add(record)
         db.session.commit()
         return jsonify({
-            'mouse_tid': record.mouse_id,
+            'id': record.id,
             'record_livingdays': record.record_livingdays,
             'status': record.status
         }), 201
@@ -1503,12 +1503,15 @@ def import_mice_data(df, result, conflict_resolution):
             # 可选字段
             if 'death_date' in df.columns and pd.notna(row['death_date']) and mouse.live_status != 1:
                 mouse.death_date = pd.to_datetime(row['death_date']).date()
+            if 'strain' in df.columns and pd.notna(row['strain']):
+                mouse.strain = str(row['strain']).strip()
             if 'record' in df.columns and pd.notna(row['record']):
-                #临时
+                if conflict_resolution == 'overwrite':
+                    StatusRecord.query.filter(StatusRecord.mouse_id == mouse.tid & StatusRecord.record_livingdays == -1).delete()
                 record = StatusRecord(
                     mouse_id=mouse.tid,
                     record_date=datetime.now().date(),
-                    record_livingdays=0,
+                    record_livingdays=-1,
                     status=str(row['record'])
                 )
                 db.session.add(record)
@@ -1747,20 +1750,6 @@ def import_pedigree_data(df, result, conflict_resolution):
                 'row': index + 2,
                 'message': f'导入失败: {str(e)}'
             })
-
-# 添加获取小鼠简要信息的API
-@app.route('/api/mice/<int:mouse_tid>/brief', methods=['GET'])
-def get_mouse_brief(mouse_tid):
-    mouse = Mouse.query.get_or_404(mouse_tid)
-    if not mouse:
-        return jsonify({'error': 'Mouse not found'}), 404
-    
-    return jsonify({
-        'id': mouse.id,
-        'birth_date': mouse.birth_date,
-        'genotype': mouse.get_full_genotype(),
-        'sex': mouse.sex
-    })
 
 # 更新部分顺序
 @app.route('/api/locations/order', methods=['PUT'])

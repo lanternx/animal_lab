@@ -5,26 +5,26 @@
 
 <!-- 主内容区 -->
 <div class="mouse-detail-modal">
-    <div class="page-header">
+  <div class="page-header">
     <button class="back-button" @click="closeMainModal">
-        <i class="material-icons">arrow_back</i>
-        返回
+      <i class="material-icons">arrow_back</i>
+      返回
     </button>
     <!-- 添加返回上一只按钮 -->
     <button 
-        v-if="prevMouseId"
-        class="back-button" 
-        @click="navigateToMouse(prevMouseId)"
+      v-if="prevMouseId"
+      class="back-button" 
+      @click="navigateToMouse(prevMouseId)"
     >
-        <i class="material-icons">replay</i>
-        返回上一只
+      <i class="material-icons">replay</i>
+      返回上一只
     </button>
     <h2>小鼠详情 #{{ mouseData.id }}</h2>
-    </div>
+  </div>
 
-    <div class="detail-grid">
+  <div class="detail-grid">
     <div class="grid-item basic-info">
-        <div class="card">
+      <div class="card">
         <h3 class="card-title">小鼠基本信息</h3>
         <div class="info-grid">
           <div class="info-row">
@@ -38,7 +38,7 @@
         </div>
           <div class="info-row">
             <span class="info-label">基因型:</span>
-            <span class="info-value" v-html="mouseData.genotype"></span>
+            <span class="info-value" v-html="mouseData.genotype?.symbol"></span>
           </div>
           <div class="info-row">
             <span class="info-label">笼位位置:</span>
@@ -48,280 +48,286 @@
             <span class="info-label">完成实验:</span>
             <span class="info-value">{{ mouseData.tests_done && mouseData.tests_done.length ? mouseData.tests_done.join(', ') : '无' }}</span>
         </div>
-        </div>
+      </div>
     </div>
 
     <div class="grid-item status-records">
-        <div class="card">
+      <div class="card">
         <h3 class="card-title">状态记录</h3>
-        <button 
+          <button 
             v-if="!showAddRecordForm" 
             class="add-record-button" 
             @click.stop="openAddRecordForm">
             <i class="material-icons">add</i>
             添加记录
-        </button>
+          </button>
 
-        <!-- 添加记录表单（内联显示） -->
-        <div v-else class="add-record-form">
+          <!-- 添加记录表单（内联显示） -->
+          <div v-else class="add-record-form">
             <div class="form-group">
-                <label>记录日期</label>
-                <input type="date" v-model="newRecord.record_date">
+              <label>记录日期</label>
+              <input type="date" v-model="newRecord.record_date">
             </div>
             <div class="form-group">
-                <label>详细描述</label>
-                <textarea 
-                    v-model="newRecord.status" 
-                    placeholder="输入详细描述..."
-                    rows="2"
-                ></textarea>
+              <label>详细描述</label>
+              <textarea 
+                v-model="newRecord.status" 
+                placeholder="输入详细描述..."
+                rows="2"
+              ></textarea>
             </div>
             <div class="form-buttons">
-            <button class="btn btn-outline" @click="cancelAddRecord">取消</button>
-            <button class="btn btn-primary" @click="saveNewRecord">保存</button>
+              <button class="btn btn-outline" @click="cancelAddRecord">取消</button>
+              <button class="btn btn-primary" @click="saveNewRecord">保存</button>
             </div>
-        </div>
+          </div>
 
         <div class="status-content">
-            <div v-if="mouseData.status_records && mouseData.status_records.length" class="status-list">
+          <div v-if="mouseData.status_records && mouseData.status_records.length" class="status-list">
             <div v-for="record in mouseData.status_records" :key="record.id" class="status-item" :class="{ 'deleting': deletingRecordId === record.id }" @click="setDeletingRecord(record)">
-                <div class="status-date">{{ record.record_livingdays }}天时</div>
-                <div class="status-description">{{ record.status }}</div>
+              <div class="status-date" v-if="record.record_livingdays === -1">导入默认</div>
+              <div class="status-date" v-else>{{ record.record_livingdays }}天时</div>
+              <div class="status-description">{{ record.status }}</div>
             </div>
-            </div>
-            <div v-else-if="!showAddRecordForm" class="no-data">
-                <i class="material-icons">info</i>
-                <p>暂无状态记录</p>
-            </div>
+          </div>
+          <div v-else-if="!showAddRecordForm" class="no-data">
+            <i class="material-icons">info</i>
+            <p>暂无状态记录</p>
+          </div>
         </div>
-        </div>
+      </div>
     </div>
 
     <div class="grid-item pedigree">
-        <div class="card">
-        <h3 class="card-title">谱系图</h3>
+      <div class="card">
+        <div class="pedigree-header card-title">
+          <h3>谱系图</h3>
+          <div class="checkbox-group">
+            <input type="checkbox" v-model="liveOnly" id="live_only-checkbox">
+            <label for="live_only-checkbox">仅显示存活小鼠的关系</label>
+          </div>
+        </div>
         <!-- SVG 容器（D3 绘图） -->
         <div ref="pedigreeChart" class="chart-container svg-container"></div>
-        </div>
+      </div>
     </div>
 
     <div class="grid-item weight-chart">
-        <div class="card">
+      <div class="card">
         <h3 class="card-title">体重变化图</h3>
         <!-- 为 Chart.js 提供固定高度的父容器，canvas 放在内部 -->
         <div class="chart-container canvas-wrapper">
-            <canvas ref="weightChart"></canvas>
+          <canvas ref="weightChart"></canvas>
         </div>
-        </div>
+      </div>
     </div>
-    </div>
+  </div>
 </div>
 </div>
 </template>
 
-<script>
+<script setup>
 import { ref, onMounted, onUnmounted, nextTick, watch } from 'vue'
 import * as d3 from 'd3'
 import { Chart, registerables } from 'chart.js'
 import { toast } from 'vue3-toastify';
+import { useGeneStore } from '@/stores'
+import { storeToRefs } from 'pinia'
+
+const geneStore = useGeneStore()
+const { mice } = storeToRefs(geneStore)
 
 Chart.register(...registerables)
 
-export default {
-name: 'MouseDetailModal',
-props: {
-    mouseId: { type: Number, required: true }
-},
-setup(props, { emit }) {
-    const prevMouseId = ref(null);
+// 定义 props
+const props = defineProps({
+  mouseId: { type: Number, required: true }
+})
+// 定义 emits
+const emit = defineEmits(['close'])
 
-    const closeMainModal = () => { emit('close') }
+const closeMainModal = () => { emit('close') }
 
-    // state refs
-    const mouseData = ref({})
-    const weightChart = ref(null)
-    const pedigreeChart = ref(null)
+const prevMouseId = ref(null);
+const currentMouseID = ref(props.mouseId)
+const mouseData = ref({})
+const weightChart = ref(null)
+const pedigreeChart = ref(null)
+const liveOnly = ref(false)
 
-    // chart / d3 refs
-    let chartInstance = null
-    const simulationRef = ref(null)
-    let resizeObserver = null
-    let resizeTimer = null
+// chart / d3 refs
+let chartInstance = null
+const simulationRef = ref(null)
+let resizeObserver = null
+let resizeTimer = null
 
-    const currentMouseID = ref(props.mouseId)
+// 监听props.mouseId变化
+watch(currentMouseID, (newId) => {
+  if (newId) {
+    fetchMouseData();
+  }
+});
 
-    // 监听props.mouseId变化
-    watch(currentMouseID, (newId) => {
-        if (newId) {
-            fetchMouseData();
-        }
-    });
+watch(liveOnly, async () => {
+  // 重新渲染谱系图
+  await nextTick()
+  renderPedigreeChart()
+})
 
-    // fetch data
-    const fetchMouseData = async () => {
-    try {
-        const response = await fetch(`/api/mice/${currentMouseID.value}`)
-        if (!response.ok) throw new Error('获取数据失败')
-        mouseData.value = await response.json()
-        // 渲染图表在 DOM 更新后进行
-        await nextTick()
-        renderWeightChart()
-        renderPedigreeChart()
-    } catch (error) {
-        console.error('获取小鼠数据失败:', error)
+const fetchMouseData = async () => {
+  try {
+    const response = await fetch(`/api/mice/${currentMouseID.value}`)
+    if (!response.ok) throw new Error('获取数据失败')
+    mouseData.value = await response.json()
+    // 渲染图表在 DOM 更新后进行
+    await nextTick()
+    renderWeightChart()
+    renderPedigreeChart()
+  } catch (error) {
+    console.error('获取小鼠数据失败:', error)
+  }
+}
+
+// ========== 状态记录相关 ==========
+const deletingRecordId = ref(null)
+  let clickTimer = null
+  const setDeletingRecord = (record) => {
+  if (deletingRecordId.value === record.id) {
+    deleteRecord(record)
+    return
+  }
+  if (clickTimer) { clearTimeout(clickTimer); clickTimer = null }
+  deletingRecordId.value = record.id
+  clickTimer = setTimeout(() => { deletingRecordId.value = null }, 1000)
+}
+
+const deleteRecord = async (record) => {
+  try {
+    const response = await fetch(`/api/status_records/${record.id}`, { method: 'DELETE' })
+    if (response.ok) {
+      const index = mouseData.value.status_records.findIndex(r => r.id === record.id)
+    if (index !== -1) mouseData.value.status_records.splice(index, 1)
+    console.log('记录删除成功')
+    } else {
+      console.error('删除记录失败')
     }
-    }
+  } catch (error) {
+    console.error('删除记录时出错:', error)
+  } finally {
+    deletingRecordId.value = null
+  }
+}
 
-    // ========== 状态记录相关 ==========
-    const deletingRecordId = ref(null)
-    let clickTimer = null
-    const setDeletingRecord = (record) => {
-    if (deletingRecordId.value === record.id) {
-        deleteRecord(record)
-        return
-    }
-    if (clickTimer) { clearTimeout(clickTimer); clickTimer = null }
-    deletingRecordId.value = record.id
-    clickTimer = setTimeout(() => { deletingRecordId.value = null }, 1000)
-    }
+// 添加记录表单状态
+const showAddRecordForm = ref(false)
+const newRecord = ref({ record_date: null, status: '' }) 
 
-    const deleteRecord = async (record) => {
-    try {
-        const response = await fetch(`/api/status_records/${record.id}`, { method: 'DELETE' })
-        if (response.ok) {
-        const index = mouseData.value.status_records.findIndex(r => r.id === record.id)
-        if (index !== -1) mouseData.value.status_records.splice(index, 1)
-        console.log('记录删除成功')
-        } else {
-        console.error('删除记录失败')
-        }
-    } catch (error) {
-        console.error('删除记录时出错:', error)
-    } finally {
-        deletingRecordId.value = null
-    }
-    }
+const openAddRecordForm = () => {
+  // 设置默认日期为今天
+  const today = new Date()
+  const formattedDate = today.toISOString().split('T')[0]
+  newRecord.value = { record_date: formattedDate, status: '' }
+  showAddRecordForm.value = true
+}
 
-    // 添加记录表单状态
-    const showAddRecordForm = ref(false)
-    const newRecord = ref({ record_date: null, status: '' }) 
-    
-    const openAddRecordForm = () => {
-        // 设置默认日期为今天
-        const today = new Date()
-        const formattedDate = today.toISOString().split('T')[0]
-        newRecord.value = { record_date: formattedDate, status: '' }
-        showAddRecordForm.value = true
-    }
-    
-    const cancelAddRecord = () => {
-        showAddRecordForm.value = false
-    }
+const cancelAddRecord = () => {
+  showAddRecordForm.value = false
+}
 
-    const saveNewRecord = async () => {
-    try {
-        const recordToSave = { ...newRecord.value, mouse_tid: currentMouseID.value, birth_date: mouseData.value.birth_date }
-        await fetch(`/api/status_records`, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify(recordToSave)
-        })
-        showAddRecordForm.value = false
-        toast.success('状态记录已添加')
-        // 刷新数据
-        await fetchMouseData()
-    } catch (error) {
-        console.error('添加记录失败:', error)
-        toast.error('添加记录失败，请重试')
-    }
-    }
-    
-    const formatDate = (dateString) => {
-    if (!dateString) return ''
-    const date = new Date(dateString)
-    return date.toLocaleDateString('zh-CN')
-    }
-
-    // ========== Chart.js 渲染（体重图） ==========
-    const renderWeightChart = () => {
-    if (!weightChart.value || !mouseData.value.weight_records) return
-    const weightRecords = Array.isArray(mouseData.value.weight_records) ? mouseData.value.weight_records : []
-    if (weightRecords.length === 0) {
-        // 若无数据，销毁实例并返回（保持 canvas 空白）
-        if (chartInstance) { chartInstance.destroy(); chartInstance = null }
-        return
-    }
-
-    const dataPoints = weightRecords.map(record => ({ x: record.record_livingdays, y: record.weight }))
-
-    // 如果已经有实例，更新数据即可，避免 destroy -> create 循环
-    if (chartInstance) {
-        chartInstance.data.datasets[0].data = dataPoints
-        chartInstance.update()
-        return
-    }
-
-    // 首次创建 Chart 实例（使用 canvas context）
-    const ctx = weightChart.value.getContext('2d')
-    chartInstance = new Chart(ctx, {
-        type: 'line',
-        data: {
-        datasets: [{
-            label: '体重 (g)',
-            data: dataPoints,
-            borderColor: '#4285f4',
-            backgroundColor: 'rgba(66, 133, 244, 0.1)',
-            tension: 0.3,
-            fill: true,
-            pointBackgroundColor: '#4285f4',
-            pointBorderColor: '#fff',
-            pointRadius: 4,
-            pointHoverRadius: 6
-        }]
-        },
-        options: {
-        responsive: true,
-        maintainAspectRatio: false,
-        plugins: {
-            legend: { display: false },
-            tooltip: { 
-              mode: 'index',
-              intersect: false,
-              callbacks: {
-                title: function(tooltipItems) {
-                    return `${tooltipItems[0].label}天时，`;
-                },
-                label: function(context) {
-                    return `体重${context.parsed.y}g`;
-                }
-              }
-            }
-        },
-        scales: {
-            x: {
-            type: 'linear', // 关键：x 轴为线性数值轴（天数）
-            title: { display: true, text: '天数' },
-            grid: { color: 'rgba(0,0,0,0.05)' }
-            },
-            y: {
-            beginAtZero: false,
-            title: { display: true, text: '体重 (g)' },
-            grid: { color: 'rgba(0,0,0,0.05)' }
-            }
-        }
-        }
+const saveNewRecord = async () => {
+  try {
+    const recordToSave = { ...newRecord.value, mouse_tid: currentMouseID.value, birth_date: mouseData.value.birth_date }
+    const response = await fetch(`/api/status_records`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(recordToSave)
     })
-    }
+    showAddRecordForm.value = false
+    toast.success('状态记录已添加')
+    // 刷新数据
+    await fetchMouseData()
+  } catch (error) {
+    console.error('添加记录失败:', error)
+    toast.error('添加记录失败，请重试')
+  }
+}
+    
+const formatDate = (dateString) => {
+  if (!dateString) return ''
+  const date = new Date(dateString)
+  return date.toLocaleDateString('zh-CN')
+}
 
-    const fetchMouseInfo = async (mouseId) => {
-    try {
-        const response = await fetch(`/api/mice/${mouseId}/brief`);
-        return await response.json();
-    } catch (error) {
-        console.error('获取小鼠信息失败:', error);
-        return { id: mouseId, genotype: '未知', sex: '未知' };
+// ========== Chart.js 渲染（体重图） ==========
+const renderWeightChart = () => {
+  if (!weightChart.value || !mouseData.value.weight_records) return
+  const weightRecords = Array.isArray(mouseData.value.weight_records) ? mouseData.value.weight_records : []
+  if (weightRecords.length === 0) {
+    // 若无数据，销毁实例并返回（保持 canvas 空白）
+    if (chartInstance) { chartInstance.destroy(); chartInstance = null }
+    return
+  }
+
+  const dataPoints = weightRecords.map(record => ({ x: record.record_livingdays, y: record.weight }))
+
+  // 如果已经有实例，更新数据即可，避免 destroy -> create 循环
+  if (chartInstance) {
+    chartInstance.data.datasets[0].data = dataPoints
+    chartInstance.update()
+    return
+  }
+
+  // 首次创建 Chart 实例（使用 canvas context）
+  const ctx = weightChart.value.getContext('2d')
+    chartInstance = new Chart(ctx, {
+      type: 'line',
+      data: {
+      datasets: [{
+        label: '体重 (g)',
+        data: dataPoints,
+        borderColor: '#4285f4',
+        backgroundColor: 'rgba(66, 133, 244, 0.1)',
+        tension: 0.3,
+        fill: true,
+        pointBackgroundColor: '#4285f4',
+        pointBorderColor: '#fff',
+        pointRadius: 4,
+        pointHoverRadius: 6
+      }]
+      },
+      options: {
+      responsive: true,
+      maintainAspectRatio: false,
+      plugins: {
+        legend: { display: false },
+        tooltip: { 
+          mode: 'index',
+          intersect: false,
+          callbacks: {
+            title: function(tooltipItems) {
+                return `${tooltipItems[0].label}天时，`;
+            },
+            label: function(context) {
+                return `体重${context.parsed.y}g`;
+            }
+          }
+        }
+      },
+      scales: {
+        x: {
+        type: 'linear', // 关键：x 轴为线性数值轴（天数）
+        title: { display: true, text: '天数' },
+        grid: { color: 'rgba(0,0,0,0.05)' }
+        },
+        y: {
+        beginAtZero: false,
+        title: { display: true, text: '体重 (g)' },
+        grid: { color: 'rgba(0,0,0,0.05)' }
+        }
+      }
     }
-    };
+  })
+  }
 
 const renderPedigreeChart = async () => {
   if (!pedigreeChart.value || !mouseData.value.pedigree) return
@@ -382,11 +388,12 @@ const renderPedigreeChart = async () => {
   // 创建当前小鼠节点
   const currentNode = {
     id: currentMouseID.value,
-    name: `#${mouseData.value.id}`,
+    name: `${mouseData.value.id}`,
     type: 'current',
     birth_date: mouseData.value.birth_date,
     genotype: mouseData.value.genotype,
     sex: mouseData.value.sex,
+    live: mouseData.value.live_status,
     // 设置初始位置为中心
     x: width / 2,
     y: height / 2,
@@ -394,21 +401,25 @@ const renderPedigreeChart = async () => {
   }
   nodes.push(currentNode)
 
-  // 创建异步任务数组
-  const nodePromises = []
-
-  // 处理父代
-  if (pedigree.father_id && pedigree.father_id.length) {
-    for (const id of pedigree.father_id) {
-      nodePromises.push(
-        fetchMouseInfo(id).then(father => {
+  // 等待所有节点加载完成
+  try {
+    // 处理父代
+    if (pedigree.father_id && pedigree.father_id.length) {
+      for (const id of pedigree.father_id) {
+        const father = mice.value.find(m => m.tid === id)
+        if (father) {
+          if (father.live_status !== 1 && liveOnly.value) {
+            // 若选择仅显示存活小鼠，且父代已死亡，则跳过该节点
+            continue;
+          }
           const fatherNode = {
             id,
-            name: `#${father.id}`,
+            name: `${father.id}`,
             birth_date: father.birth_date,
             type: 'father',
             genotype: father.genotype,
             sex: father.sex,
+            live: father.live_status,
             // 设置父代初始位置在左侧
             x: width / 4,
             y: height / 2 - (pedigree.father_id.length > 1 ? 30 : 0)
@@ -419,16 +430,16 @@ const renderPedigreeChart = async () => {
             target: currentNode,
             type: 'father'
           })
-          return fatherNode
-        }).catch(error => {
+        } else {
           console.error(`获取父代小鼠 ${id} 失败:`, error)
           const fallbackNode = {
             id,
-            name: `#${id}`,
+            name: '未知',
             birth_date: '未知',
             type: 'father',
             genotype: '未知',
             sex: '未知',
+            live: -1,
             x: width / 4,
             y: height / 2 - (pedigree.father_id.length > 1 ? 30 : 0)
           }
@@ -438,24 +449,27 @@ const renderPedigreeChart = async () => {
             target: currentNode,
             type: 'father'
           })
-          return fallbackNode
-        })
-      )
+        }
+      }
     }
-  }
   
-  // 处理母代
-  if (pedigree.mother_id && pedigree.mother_id.length) {
-    for (const id of pedigree.mother_id) {
-      nodePromises.push(
-        fetchMouseInfo(id).then(mother => {
+    // 处理母代
+    if (pedigree.mother_id && pedigree.mother_id.length) {
+      for (const id of pedigree.mother_id) {
+        const mother = mice.value.find(m => m.tid === id)
+        if (mother) {
+          if (mother.live_status !== 1 && liveOnly.value) {
+            // 若选择仅显示存活小鼠，且母代已死亡，则跳过该节点
+            continue;
+          }
           const motherNode = {
             id,
-            name: `#${mother.id}`,
+            name: `${mother.id}`,
             birth_date: mother.birth_date,
             type: 'mother',
             genotype: mother.genotype,
             sex: mother.sex,
+            live: mother.live_status,
             // 设置母代初始位置在左侧
             x: width / 4,
             y: height / 2 + (pedigree.mother_id.length > 1 ? 30 : 0)
@@ -466,16 +480,16 @@ const renderPedigreeChart = async () => {
             target: currentNode,
             type: 'mother'
           })
-          return motherNode
-        }).catch(error => {
+        }else {
           console.error(`获取母代小鼠 ${id} 失败:`, error)
           const fallbackNode = {
             id,
-            name: `#${id}`,
+            name: '未知',
             birth_date: '未知',
             type: 'mother',
             genotype: '未知',
             sex: '未知',
+            live: -1,
             x: width / 4,
             y: height / 2 + (pedigree.mother_id.length > 1 ? 30 : 0)
           }
@@ -485,24 +499,27 @@ const renderPedigreeChart = async () => {
             target: currentNode,
             type: 'mother'
           })
-          return fallbackNode
-        })
-      )
+        }
+      }
     }
-  }
-  
-  // 处理后代
-  if (pedigree.offspring && pedigree.offspring.length) {
-    for (const [index, id] of pedigree.offspring.entries()) {
-      nodePromises.push(
-        fetchMouseInfo(id).then(offspring => {
+
+    // 处理后代
+    if (pedigree.offspring && pedigree.offspring.length) {
+      for (const [index, id] of pedigree.offspring.entries()) {
+        const offspring = mice.value.find(m => m.tid === id)
+        if (offspring) {
+          if (offspring.live_status !== 1 && liveOnly.value) {
+            // 若选择仅显示存活小鼠，且后代已死亡，则跳过该节点
+            continue;
+          }
           const offspringNode = {
             id,
-            name: `#${offspring.id}`,
+            name: `${offspring.id}`,
             birth_date: offspring.birth_date,
             type: 'offspring',
             genotype: offspring.genotype,
             sex: offspring.sex,
+            live: offspring.live_status,
             // 设置后代初始位置在右侧，根据数量垂直分布
             x: width * 0.75,
             y: height / (pedigree.offspring.length + 1) * (index + 1)
@@ -513,16 +530,16 @@ const renderPedigreeChart = async () => {
             target: offspringNode,
             type: 'offspring'
           })
-          return offspringNode
-        }).catch(error => {
+        } else {
           console.error(`获取后代小鼠 ${id} 失败:`, error)
           const fallbackNode = {
             id,
-            name: `#${id}`,
+            name: '未知',
             birth_date: '未知',
             type: 'offspring',
             genotype: '未知',
             sex: '未知',
+            live: -1,
             x: width * 0.75,
             y: height / (pedigree.offspring.length + 1) * (index + 1)
           }
@@ -533,14 +550,9 @@ const renderPedigreeChart = async () => {
             type: 'offspring'
           })
           return fallbackNode
-        })
-      )
+        }
+      }
     }
-  }
-
-  // 等待所有节点加载完成
-  try {
-    await Promise.all(nodePromises)
   } catch (error) {
     console.error('谱系图节点加载错误:', error)
   }
@@ -602,11 +614,25 @@ const renderPedigreeChart = async () => {
   nodeGroups.append('circle')
     .attr('r', 20)
     .attr('fill', d => {
+      // 如果 live 为 -1，直接返回灰色
+      if (d.live === -1) {
+        return '#cccccc'; // 未知状态用浅灰色
+      }
+      // 根据节点类型设置基础颜色
+      let baseColor = '#999'; // 默认灰色
       switch (d.type) {
-        case 'current': return '#4285f4'; // 当前小鼠蓝色
-        case 'father': return '#34a853'; // 父代绿色
-        case 'mother': return '#ea4335'; // 母代红色
-        default: return '#999'; // 后代灰色
+        case 'current': baseColor = '#4285f4'; break; // 当前小鼠用蓝色
+        case 'father': baseColor = '#34a853'; break;  // 父代用绿色
+        case 'mother': baseColor = '#ea4335'; break;  // 母代用红色
+        case 'offspring': baseColor = '#9c27b0'; break; // 后代用紫色
+      }
+      // 根据 live 值调整亮度
+      if (d.live === 1) {
+        // live=1: 明亮
+        return baseColor;
+      } else {
+        // live=0或其他: 变暗
+        return d3.color(baseColor).darker(1.5);
       }
     });
 
@@ -671,9 +697,9 @@ const renderPedigreeChart = async () => {
       if (tooltip) {
         tooltip
           .html(`
-          <div>ID: #${d.name}</div>
-          <div>生日: #${formatDate(d.birth_date)}</div>
-          <div>基因型: ${d.genotype || '未知'}</div>
+          <div>ID: ${d.name}</div>
+          <div>生日: ${formatDate(d.birth_date)}</div>
+          <div>基因型: ${d.genotype.symbol || '未知'}</div>
           <div>性别: ${d.sex === 'M' ? '雄性' : d.sex === 'F' ? '雌性' : '未知'}</div>
           `)
           .style('visibility', 'visible')
@@ -717,62 +743,42 @@ const renderPedigreeChart = async () => {
   simulationRef.value = simulation
 }
 
-    // ========== ResizeObserver（只观察谱系图容器，带防抖） ==========
-    const setupResizeObserver = () => {
-    resizeObserver = new ResizeObserver((entries) => {
-        if (resizeTimer) clearTimeout(resizeTimer)
-        resizeTimer = setTimeout(() => {
-        // 只对 d3 svg 重新布局/重绘
-        renderPedigreeChart()
-        // Chart.js 会自己监听容器变化，若需要强制 resize：
-        if (chartInstance) {
-            try { chartInstance.resize() } catch (e) { /* ignore */ }
-        }
-        }, 120)
-    })
+// ========== ResizeObserver（只观察谱系图容器，带防抖） ==========
+const setupResizeObserver = () => {
+  resizeObserver = new ResizeObserver((entries) => {
+    if (resizeTimer) clearTimeout(resizeTimer)
+    resizeTimer = setTimeout(() => {
+      // 只对 d3 svg 重新布局/重绘
+      renderPedigreeChart()
+      // Chart.js 会自己监听容器变化，若需要强制 resize：
+      if (chartInstance) {
+        try { chartInstance.resize() } catch (e) { /* ignore */ }
+      }
+    }, 120)
+  })
 
-    if (pedigreeChart.value) resizeObserver.observe(pedigreeChart.value)
-    // **注意**：不要 observe weightChart（canvas）本身 — 会造成 destroy/create 循环
-    }
-
-    const navigateToMouse = (mouseId) => {
-        prevMouseId.value = currentMouseID.value
-        currentMouseID.value = mouseId
-    };
-
-    onMounted(() => {
-      fetchMouseData()
-      setupResizeObserver()
-    })
-
-    onUnmounted(() => {
-    if (chartInstance) chartInstance.destroy()
-    if (resizeObserver) resizeObserver.disconnect()
-    if (simulationRef.value) {
-        try { simulationRef.value.stop() } catch (e) {}
-        simulationRef.value = null
-    }
-    })
-
-    return {
-    closeMainModal,
-    mouseData,
-    weightChart,
-    pedigreeChart,
-    formatDate,
-    setDeletingRecord,
-    deletingRecordId,
-    saveNewRecord,
-    newRecord,
-    cancelAddRecord,
-    openAddRecordForm,
-    showAddRecordForm,
-    prevMouseId,
-    navigateToMouse,
-    currentMouseID
-    }
+  if (pedigreeChart.value) resizeObserver.observe(pedigreeChart.value)
+  // **注意**：不要 observe weightChart（canvas）本身 — 会造成 destroy/create 循环
 }
-}
+
+const navigateToMouse = (mouseId) => {
+  prevMouseId.value = currentMouseID.value
+  currentMouseID.value = mouseId
+};
+
+onMounted(() => {
+  fetchMouseData()
+  setupResizeObserver()
+})
+
+onUnmounted(() => {
+  if (chartInstance) chartInstance.destroy()
+  if (resizeObserver) resizeObserver.disconnect()
+  if (simulationRef.value) {
+    try { simulationRef.value.stop() } catch (e) {}
+    simulationRef.value = null
+  }
+})
 </script>
 
 <style scoped>
@@ -997,6 +1003,14 @@ font-style: italic;
 /* Chart / SVG 容器：为 canvas 提供固定高度，避免 flex:1 导致尺寸被父 flex 反复拉伸 */
 .chart-container {
 width: 100%;
+}
+
+.pedigree-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 1rem;
+  padding: 0 0.5rem;
 }
 
 /* pedigree SVG 的容器 */
