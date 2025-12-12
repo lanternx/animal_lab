@@ -129,6 +129,21 @@
               <div class="tooltip" v-if="sidebarCollapsed">设置</div>
             </div>
         </router-link>
+        <router-link 
+            :to="{ name: 'InfoPage' }" 
+            custom
+            v-slot="{ navigate, isActive }"
+          >
+            <div 
+              class="nav-item" 
+              :class="{ 'active': isActive }"
+              @click="navigate"
+            >
+              <i class="material-icons">info</i>
+              <span v-if="!sidebarCollapsed">宣传页</span>
+              <div class="tooltip" v-if="sidebarCollapsed">宣传页</div>
+            </div>
+        </router-link>
         </div>
         
         <!-- 折叠按钮（在侧边栏底部） -->
@@ -155,7 +170,7 @@
           </div>
       </div>
       <div class="version-info">
-          版本号: 3.0 | 2025-11-20
+          版本号: 3.1 | 2025-12-13
       </div>
   </footer>
       </div>

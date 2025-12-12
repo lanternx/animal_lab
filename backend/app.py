@@ -882,6 +882,8 @@ def get_survival_data():
     try:
         mice = Mouse.query.filter((Mouse.live_status == 0) | (Mouse.live_status == 1)).all()
         survival_data = [[] for _ in data['groups']]
+        if len(survival_data) == 0:
+            return jsonify({'error': '无分组'}), 500
         for mouse in mice:
             if mouse.live_status == 0:
                 if mouse.birth_date and mouse.death_date:
@@ -3002,10 +3004,16 @@ def get_predefined_mice(groups_id):
     """获取预设分组的信息和小鼠编号"""
     try:
         predefined_group = PredefinedGroup.query.get_or_404(groups_id)
+        group_result = []
         if predefined_group.Gtype == 'id':
-            return jsonify(predefined_group.to_dict()), 200
+            for group in predefined_group.rules:
+                group_info = {
+                    'name':group.get('name', ''),
+                    'color':group.get('color', ''),
+                }
+                group_info['mice'] = group.get('mouseId', [])
+                group_result.append(group_info)
         elif predefined_group.Gtype == 'rule':
-            group_result = []
             all_mice = Mouse.query.all()
             all_mice_tid = [m.tid for m in all_mice]
             for group in predefined_group.rules:
@@ -3023,9 +3031,9 @@ def get_predefined_mice(groups_id):
                     group_mice_ids = group_mice_ids.intersection(rule_mice_ids)
                 group_info['mice'] = list(group_mice_ids)
                 group_result.append(group_info)
-            return jsonify(group_result), 200
         else:
             return jsonify(), 403
+        return jsonify(group_result), 200
     except Exception as e:
         logger.error(f"获取预设分组数据失败: {str(e)}")
         return jsonify({'error': str(e)}), 500
@@ -3035,44 +3043,28 @@ def analyse_rule(rule):
         gene_set = rule.get('genes', [])
         result = []
         for genes in gene_set:
-            query = []
-            for gene in genes['gene']:
+            if len(genes['gene']) == 1:
+                gene = genes['gene'][0]
                 if gene["locus"]:
-                    locus = GeneLocus.query.filter_by(symbol=gene["locus"]).first()
-                else:
-                    continue
-                a1 = gene['allele1']
-                a2 = gene['allele2']
-                if a1 and a2:
-                    query.append(Genotype.query.filter(
-                        Genotype.locus_id == locus.id,
-                        or_(
-                            and_(Genotype.allele1_id == a1, Genotype.allele2_id == a2),
-                            and_(Genotype.allele1_id == a2, Genotype.allele2_id == a1)
-                        )
-                    ))
-                elif a1 and not a2:
-                    query.append(Genotype.query.filter(
-                        Genotype.locus_id == locus.id,
-                        or_(Genotype.allele1_id == a1, Genotype.allele2_id == a1)
-                    ))
-                elif not a1 and a2:
-                    query.append(Genotype.query.filter(
-                        Genotype.locus_id == locus.id,
-                        or_(Genotype.allele1_id == a2, Genotype.allele2_id == a2)
-                    ))
-                else:
-                    query.append(Genotype.query.filter(
-                        Genotype.locus_id == locus.id
-                    ))
-            common_locus = query[0]
-            for subq in query[1:]:
-                common_locus = common_locus.intersect(subq)
-            result.append(common_locus)
-        common_mice = result[0]
-        for subq in result[1:]:
-            common_mice = common_mice.union(subq)
-        return [r.mouse_id for r in common_mice.all()]
+                    if gene["locus"] == 'WT':
+                        locus = GeneLocus.query.filter_by(symbol=gene["locus"]).first()
+                        gs = Genotype.query.filter(
+                            Genotype.locus_id == locus.id
+                        ).all()
+                        common_locus = set([g.mouse_id for g in gs])
+                    else:
+                        common_locus = find_mice_with_exact_locus(genes['gene'])
+                result.append(common_locus)
+            elif len(genes['gene']) > 1:
+                common_locus = find_mice_with_exact_locus(genes['gene'])
+                result.append(common_locus)
+        if result:
+            common_mice = result[0]
+            for subq in result[1:]:
+                common_mice = common_mice.union(subq)
+            return list(common_mice)
+        else:
+            return []
     elif rule['Rtype'] == 'sex':
         value = rule.get('value')
         if value in ['M', 'F']:
@@ -3103,6 +3095,50 @@ def analyse_rule(rule):
     else:
         return False
     return False
+
+def find_mice_with_exact_locus(genes):
+    locus_names = [gene['locus'] for gene in genes]
+    loci = GeneLocus.query.filter(GeneLocus.symbol.in_(locus_names)).all()
+    locus_ids = [l.id for l in loci]
+    locus_dict = {l.symbol: l.id for l in loci}
+    mouse_query = db.session.query(
+        Genotype.mouse_id
+    ).filter(
+        Genotype.locus_id.in_(locus_ids)
+    ).distinct().all()
+    candidate_mouse_ids = []
+    for m in mouse_query:
+        mouse_gene = Genotype.query.filter(Genotype.mouse_id == m[0]).all()
+        if len(mouse_gene) == len(locus_ids):
+            candidate_mouse_ids.append(m[0])
+    query = [set(candidate_mouse_ids)]
+    for gene in genes:
+        a1 = gene['allele1']
+        a2 = gene['allele2']
+        if a1 and a2:
+            gs = Genotype.query.filter(
+                or_(
+                    and_(Genotype.allele1_id == a1, Genotype.allele2_id == a2),
+                    and_(Genotype.allele1_id == a2, Genotype.allele2_id == a1)
+                )
+            ).all()
+        elif a1 and not a2:
+            gs = Genotype.query.filter(
+                or_(Genotype.allele1_id == a1, Genotype.allele2_id == a1)
+            ).all()
+        elif not a1 and a2:
+            gs = Genotype.query.filter(
+                or_(Genotype.allele1_id == a2, Genotype.allele2_id == a2)
+            ).all()
+        else:
+            gs = Genotype.query.filter(
+                Genotype.locus_id == locus_dict[gene['locus']]
+            ).all()
+        query.append(set([g.mouse_id for g in gs]))
+    result_query = query[0]
+    for q in query[1:]:
+        result_query = result_query.intersection(q)
+    return result_query
 
 @app.route('/api/groups/predefined/<int:gIndex>', methods=['PUT'])
 def modify_predefined_groups(gIndex):

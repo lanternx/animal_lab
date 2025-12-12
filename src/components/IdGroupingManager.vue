@@ -160,17 +160,20 @@ const props = defineProps({
   colors: {
     type: Array,
     default: () => []
+  },
+  isSaving: {
+    type: Boolean,
+    default: () => false
   }
 })
 
 // 定义emits
-const emit = defineEmits(['update:editingGroup', 'save-group'])
+const emit = defineEmits(['update:editingGroup', 'update:isSaving', 'save-group'])
 
 // 使用ref创建本地数据
 const searchTerm = ref('')
 const selectedMouseIds = ref(new Set())
 const isRepeated = ref(false)
-const isSaving = ref(false)
 
 // 计算属性
 const filteredMice = computed(() => {
@@ -302,20 +305,15 @@ const removeGroup = (index) => {
 }
 
 const saving = () => {
-  if (!props.editingGroup.name) {
-    alert('请填写预设分组名称')
-    return
-  }
   if (props.editingGroup.rules.some(group => !group.name)) {
     alert('请填写分组名称')
     return
   }
-  isSaving.value = true
   emit('save-group')
 }
 
 const resetGroup = () => {
-  isSaving.value = false
+  emit('update:isSaving', false)
   props.editingGroup.rules.forEach(group => {
     group.mouseId = []
   })

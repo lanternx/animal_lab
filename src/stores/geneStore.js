@@ -63,8 +63,8 @@ export const useGeneStore = defineStore('genotype', () => {
             }
             if (g.locus) {
             const alleles = genotypes.value.find(gt => gt.symbol === g.locus).alleles
-            const allele1 = g.allele1 ? alleles.find(a => a.id === g.allele1)?.symbol : ""
-            const allele2 = g.allele2 ? alleles.find(a => a.id === g.allele2)?.symbol : ""
+            const allele1 = g.allele1 ? alleles.find(a => a.id === g.allele1)?.symbol : "□"
+            const allele2 = g.allele2 ? alleles.find(a => a.id === g.allele2)?.symbol : "□"
             return `${g.locus}<sup>${allele1}/${allele2}</sup>`
             } else {
             return ''

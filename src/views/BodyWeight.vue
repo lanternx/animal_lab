@@ -453,25 +453,28 @@ const cancelConfirm = () => {
 const showChart = async (groupType) => {
     try {
         if (weightRecords.value.length === 0) {
-        toast.error('没有可用的体重记录数据')
+        toast.info('没有可用的体重记录数据')
         return
         }
-        
-        hasData.value = true
         let groups = []
         if (groupType === 'temp') {
             if (tempGroups.value.length === 0) {
-                toast.error('请至少添加一个分组');
+                toast.info('请至少添加一个分组');
                 return;
             }  
             groups = await getTempGroups()
         } else if (groupType === 'pred') {
             if (!selectedPredefinedGroupId.value) {
-                toast.error('请选择预设分组');
+                toast.info('请选择预设分组');
                 return;
             }
             groups = await getPredefinedGroups()
         }
+        if (groups.length === 0) {
+            toast.info('预设分组暂无信息');
+            return;
+        }
+        hasData.value = true
         await nextTick();
         generateChart(weightRecords.value, groups)
     } catch (error) {
@@ -497,12 +500,12 @@ try {
     
     // 处理数据
     groups.forEach(group => {
-    const groupName = group.name || '暂无名称'
-    const color = group.color || 'black'
-    const groupMice = group.mice || []
+        const groupName = group.name || '暂无名称'
+        const color = group.color || 'black'
+        const groupMice = group.mice || []
 
     if (groupMice.length === 0){
-        toast.error("所选组别无小鼠！")
+        toast.info("所选组别无小鼠！")
     }
     
     // 获取这些小鼠的体重记录
@@ -511,7 +514,7 @@ try {
     )
     
     if (groupRecords.length === 0){
-        toast.error("所选组别无数据！")
+        toast.info("所选组别无数据！")
     }
     // 1. 散点图数据集（显示所有数据点）
     const scatterData = []

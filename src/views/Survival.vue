@@ -277,16 +277,20 @@ const fetchData = async (groupType) => {
     let groupData = []
     if (groupType === 'temp') {
       if (tempGroups.value.length === 0) {
-        toast.error('请至少添加一个分组');
+        toast.info('请至少添加一个分组');
         return;
       }
       groupData = await getTempGroups()
     } else if (groupType === 'pred') {
       if (!selectedPredefinedGroupId.value) {
-        toast.error('请选择预设分组');
+        toast.info('请选择预设分组');
         return;
       }
       groupData = await getPredefinedGroups()
+    }
+    if (groupData.length === 0) {
+      toast.info('预设分组暂无信息');
+      return;
     }
     const response = await axios.post('/api/survival-analysis', {
       groups: groupData.map(g => g.mice)
@@ -313,7 +317,7 @@ const fetchData = async (groupType) => {
     }
   } catch (error) {
     console.error('获取生存数据失败:', error);
-    toast.error('获取数据失败，请检查网络连接或后端服务');
+    toast.error(`获取数据失败：${error}`);
   }
 };
 

@@ -375,6 +375,13 @@
                             <td>小鼠品系</td>
                             <td class="example-row">C57BL/6J</td>
                         </tr>
+                        <tr>
+                            <td><span class="optional">record</span></td>
+                            <td>字符串</td>
+                            <td><span class="optional">否</span></td>
+                            <td>导入时备注信息</td>
+                            <td class="example-row">2025.1.1 被咬</td>
+                        </tr>
                     </tbody>
                 </table>
                 
@@ -780,7 +787,7 @@
                 <div class="form-group">
                     <label>是否为实验预设分组？</label>
                     <div class="group-type-selector">
-                        <select v-model="editingGroup.experiment_id" @change="changeGroupExperiment" :disabled="editingGroup.id">
+                        <select v-model="editingGroup.experiment_id" @change="changeGroupExperiment(editingGroup.experiment_id)" :disabled="editingGroup.id">
                             <option :value=null>不为实验预设分组</option>
                             <option v-for="experiment in experiments" :value="experiment.id" :key="experiment.id" >
                             {{ experiment.name }}
@@ -789,7 +796,7 @@
                     </div>
                 </div>
                 <div class="form-group" style="gap: 20px;display: flex;">
-                    <button @click="saveGroup" class="btn btn-primary">
+                    <button @click="saveGroup" class="btn btn-primary" :disabled="isSaving">
                         {{ editingGroup.id ? '更新' : '添加' }}
                     </button>
                     <button type="button" class="btn btn-outline" @click="cancelEditGroup">
@@ -835,17 +842,16 @@
                                 <input type="text" v-model="subgroup.name" placeholder="小组名称" class="subgroup-name-input">
                                 <div class="color-picker-container">
                                     <label>主题色:</label>
-                                    <div class="color-picker">
-                                        <div v-for="color in colors" 
-                                            :key="color"
-                                            class="color-option"
-                                            :class="{ selected: group.color === color }"
-                                            :style="{ backgroundColor: color }"
-                                            @click="subgroup.color = color">
-                                            <i v-if="subgroup.color === color" class="material-icons">check</i>
-                                        </div>
-                                        <input type="color" v-model="subgroup.color" class="color-input">
+                                    <div v-for="color in colors" 
+                                        :key="color"
+                                        class="color-option"
+                                        :class="{ selected: subgroup.color === color }"
+                                        :style="{ backgroundColor: color }"
+                                        @click="subgroup.color = color"
+                                    >
+                                        <i v-if="subgroup.color === color" class="material-icons">check</i>
                                     </div>
+                                    <input type="color" v-model="subgroup.color" class="color-input">
                                 </div>
                             </div>
                             <div class="subgroup-actions">
@@ -900,6 +906,9 @@
                                                     </label>
                                                     <button v-if="!gene?.selectedGeneName" class="" @click="addGene" :disabled="!geneStore.addable">
                                                         <i class="material-icons">add</i>
+                                                    </button>
+                                                    <button v-else class="btn-remove" @click="removeGeneSelection(subgroupIndex, ruleIndex, geneIndex)">
+                                                        <i class="material-icons">close</i>
                                                     </button>
                                                     </div>
 
@@ -1058,6 +1067,7 @@
                             :candidate-mice="candidateMice"
                             :editing-group="editingGroup"
                             :colors="colors"
+                            v-model:is-saving="isSaving"
                             @update:editing-group="handleGroupUpdate"
                             @save-group="saveGroup"
                         />
@@ -1631,11 +1641,11 @@ const isDeleteConfirmed = computed(() => {
 
 // 监听确认输入框的变化
 watch(deleteConfirmation, (newValue) => {
-  if (newValue && newValue !== 'DELETE ALL DATA') {
+    if (newValue && newValue !== 'DELETE ALL DATA') {
     deleteConfirmationError.value = '确认文字不匹配'
-  } else {
+    } else {
     deleteConfirmationError.value = ''
-  }
+    }
 })
 
 // 分组设置相关状态
@@ -1651,6 +1661,7 @@ const expandedGroup = ref([])
 const genotypeAddable = ref(false)
 const candidateMice = ref([])//候选小鼠
 const showIDList = ref(false)
+const isSaving = ref(false)
 
 const handleGroupUpdate = (updatedGroup) => {
     Object.assign(editingGroup, updatedGroup)
@@ -2502,11 +2513,12 @@ const addGroup = () => {
     genotypeAddable.value = true
 }
 
-const changeGroupExperiment = async () => {
+const changeGroupExperiment = async (experimentID) => {
     editingGroup.Gtype = ''
     editingGroup.rules = []
     showIDList.value = false
     editingGroup.Gtype = 'id'
+    editingGroup.name = (experiments.value.find(et => et.id === experimentID)?.name || "未知实验") + "-分组"
     if (editingGroup.experiment_id) {
         const miceExperiment = await axios.get(`/api/experiments/${editingGroup.experiment_id}/mice`)
         candidateMice.value = miceExperiment.data
@@ -2539,6 +2551,10 @@ const addRule = (subgroupIndex) => {
 
 const removeRule = (subgroupIndex, index) => {
     editingGroup.rules[subgroupIndex].rules.splice(index, 1)
+}
+
+const removeGeneSelection = (subgroupIndex, ruleIndex, geneIndex) => {
+    editingGroup.rules[subgroupIndex].rules[ruleIndex].genes.splice(geneIndex, 1)
 }
 
 const addGenotype = (subgroupIndex, ruleIndex) => {
@@ -2587,6 +2603,25 @@ const saveGroup = async () => {
         return
     }
 
+    if (!editingGroup.name) {
+        toast.info('请填写预设分组名称')
+        return
+    }
+
+    if(!editingGroup.id && predefinedGroups.value.some(g => g.name == editingGroup.name)) {
+        toast.info('预设分组不能重名')
+        return
+    }
+
+    if(predefinedGroups.value?.some(g => {
+        if (g?.experiment_id) {
+            g?.experiment_id == editingGroup?.experiment_id
+        }}) ?? false) {
+        toast.info('同一实验只能有一个预设分组')
+        return
+    }
+
+    isSaving.value = true
     const url = editingGroup.id 
         ? `/api/groups/predefined/${editingGroup.id}`
         : '/api/groups/predefined'
@@ -2606,6 +2641,8 @@ const saveGroup = async () => {
     } catch (error) {
         console.error('保存分组失败:', error)
         toast.error(error.response?.data?.error || '保存分组失败')
+    } finally {
+        isSaving.value = false
     }
 }
 
