@@ -62,10 +62,10 @@
                 <td>{{ locus.description }}</td>
                 <td>{{ locus.alleles.length }}</td>
                 <td class="action-cell">
-                    <div class="btn-group">
+                    <div class="btn-group" v-if="locus.symbol !== 'WT'">
                         <button class="action-btn" @click="editGeneLocus(locus)">编辑</button>
-                        <button v-if="locus.symbol !== 'WT'" class="action-btn btn-danger" @click="deleteGeneLocus(locus.id)">删除</button>
-                        <button v-if="locus.symbol !== 'WT'" class="action-btn btn-success" @click="toggleAlleles(locus.id)">
+                        <button class="action-btn btn-danger" @click="deleteGeneLocus(locus.id)">删除</button>
+                        <button class="action-btn btn-success" @click="toggleAlleles(locus.id)">
                         {{ expandedLoci.includes(locus.id) ? '收起' : '展开并为该位点添加等位基因' }}
                         </button>
                     </div>
@@ -93,7 +93,7 @@
                             <td class="action-cell">
                                 <div class="btn-group">
                                     <button class="action-btn" @click="editAllele(allele)">编辑</button>
-                                    <button class="action-btn btn-danger" @click="deleteAllele(allele.id)">删除</button>
+                                    <button v-if="locus.alleles.length > 1" class="action-btn btn-danger" @click="deleteAllele(allele.id)">删除</button>
                                 </div>
                             </td>
                         </tr>
@@ -1714,49 +1714,49 @@ const addAllele = async (locus_id) => {
 }
 
 const editGeneLocus = (genotype) => {
-Object.assign(editingLocus, { ...genotype })
-editLocusDialogVisible.value = true
+    Object.assign(editingLocus, { ...genotype })
+    editLocusDialogVisible.value = true
 }
 
 const editAllele = (genotype) => {
-Object.assign(editingAllele, { ...genotype })
-editAlleleDialogVisible.value = true
+    Object.assign(editingAllele, { ...genotype })
+    editAlleleDialogVisible.value = true
 }
 
 const saveGeneLocus = async () => {
-try {
-await axios.put(`/api/gene/${editingLocus.id}`, editingLocus)
-await loadGenotypes()
-editLocusDialogVisible.value = false
-toast.success('修改基因位点成功')
-} catch (error) {
-console.error('更新基因位点失败:', error)
-toast.error('更新基因位点失败，请重试')
-}
+    try {
+        await axios.put(`/api/gene/${editingLocus.id}`, editingLocus)
+        await loadGenotypes()
+        editLocusDialogVisible.value = false
+        toast.success('修改基因位点成功')
+    } catch (error) {
+        console.error('更新基因位点失败:', error)
+        toast.error('更新基因位点失败，请重试')
+    }
 }
 
 const saveAllele = async () => {
-try {
-await axios.put(`/api/gene_allele/${editingAllele.id}`, editingAllele)
-await loadGenotypes()
-editAlleleDialogVisible.value = false
-toast.success('修改基因位点编辑方式成功')
-} catch (error) {
-console.error('更新等位基因失败:', error)
-toast.error('更新等位基因失败，请重试')
-}
+    try {
+        await axios.put(`/api/gene_allele/${editingAllele.id}`, editingAllele)
+        await loadGenotypes()
+        editAlleleDialogVisible.value = false
+        toast.success('修改基因位点编辑方式成功')
+    } catch (error) {
+        console.error('更新等位基因失败:', error)
+        toast.error('更新等位基因失败，请重试')
+    }
 }
 
 const deleteGeneLocus = async (id) => {
-    if (!confirm('确定要删除这个基因位点吗？')) return
+    if (!confirm('确定要删除这个基因位点吗？所有已经设定的该基因位点会消失')) return
 
     try {
-    await axios.delete(`/api/gene/${id}`)
-    genotypes.value = genotypes.value.filter(g => g.id !== id)
-    toast.success('删除基因位点成功')
+        await axios.delete(`/api/gene/${id}`)
+        genotypes.value = genotypes.value.filter(g => g.id !== id)
+        toast.success('删除基因位点成功')
     } catch (error) {
-    console.error('删除基因型失败:', error)
-    toast.error('删除基因型失败，请重试')
+        console.error('删除基因型失败:', error)
+        toast.error('删除基因型失败，请重试')
     }
 }
 
@@ -1774,144 +1774,148 @@ const deleteAllele = async (id) => {
 }
 
 const addLocation = async () => {
-if (!newLocation.identifier) {
-toast.info('请填写位置标识')
-return
-}
+    if (!newLocation.identifier) {
+        toast.info('请填写位置标识')
+        return
+    }
 
-try {
-const response = await axios.post('/api/locations', newLocation)
-locations.value.push(response.data)
-newLocation.identifier = ''
-newLocation.description = ''
-} catch (error) {
-console.error('添加位置失败:', error)
-toast.error('添加位置失败，请重试')
-}
+    try {
+        const response = await axios.post('/api/locations', newLocation)
+        locations.value.push(response.data)
+        newLocation.identifier = ''
+        newLocation.description = ''
+        section_key.value = true
+        await fetchCages()
+    } catch (error) {
+        console.error('添加位置失败:', error)
+        toast.error('添加位置失败，请重试')
+    }
 }
 
 const editLocation = (location) => {
-Object.assign(editingLocation, { ...location })
-editLocationDialogVisible.value = true
+    Object.assign(editingLocation, { ...location })
+    editLocationDialogVisible.value = true
 }
 
 const saveLocation = async () => {
-try {
-const response = await axios.put(`/api/locations/${editingLocation.id}`, editingLocation)
-const index = locations.value.findIndex(l => l.id === editingLocation.id)
-if (index !== -1) {
-    locations.value[index] = response.data
-}
-toast.success("区域编辑成功")
-editLocationDialogVisible.value = false
-section_key.value = false
-await fetchCages()
-} catch (error) {
-console.error('更新位置失败:', error)
-toast.error('更新位置失败，请重试')
-}
+    try {
+        const response = await axios.put(`/api/locations/${editingLocation.id}`, editingLocation)
+        const index = locations.value.findIndex(l => l.id === editingLocation.id)
+    if (index !== -1) {
+        locations.value[index] = response.data
+    }
+    toast.success("区域编辑成功")
+    editLocationDialogVisible.value = false
+    section_key.value = true
+    await fetchCages()
+    } catch (error) {
+        console.error('更新位置失败:', error)
+        toast.error('更新位置失败，请重试')
+    }
 }
 
 const deleteLocation = async (id) => {
-if (!confirm('确定要删除这个位置吗？')) return
+    if (!confirm('确定要删除这个位置吗？')) return
 
-try {
-await axios.delete(`/api/locations/${id}`)
-locations.value = locations.value.filter(l => l.id !== id)
-} catch (error) {
-console.error('删除位置失败:', error)
-toast.error('删除位置失败，请重试')
-}
+    try {
+        await axios.delete(`/api/locations/${id}`)
+        locations.value = locations.value.filter(l => l.id !== id)
+        section_key.value = true
+        await fetchCages()
+    } catch (error) {
+        console.error('删除位置失败:', error)
+        toast.error('删除位置失败，请重试')
+    }
 }
 
 // 导出相关方法
 const exportData = (type) => {
-currentExportType.value = type
-selectedExperiments.value = []
-exportOptionsVisible.value = true
+    currentExportType.value = type
+    selectedExperiments.value = []
+    exportOptionsVisible.value = true
 }
 
 const toggleSelect = (id) => {
-const index = selectedExperiments.value.indexOf(id)
-if (index === -1) {
-selectedExperiments.value.push(id)
-} else {
-selectedExperiments.value.splice(index, 1)
-}
+    const index = selectedExperiments.value.indexOf(id)
+    if (index === -1) {
+        selectedExperiments.value.push(id)
+    } else {
+        selectedExperiments.value.splice(index, 1)
+    }
 }
 
 const confirmExport = async () => {
-const params = {
-start_date: exportStartDate.value,
-end_date: exportEndDate.value,
-experiment_ids: selectedExperiments.value,
-format: exportFormat.value
-}
-
-try {
-const response = await axios.get(`/api/export/${currentExportType.value}`, { 
-    params,
-    responseType: 'blob'
-})
-
-// 使用 PyWebview 的保存文件对话框
-if (window.pywebview && window.pywebview.api) {
-    const filename = `${currentExportType.value}_export.${exportFormat.value}`
-    const arrayBuffer = await response.data.arrayBuffer()
-    const uint8array = new Uint8Array(arrayBuffer)
-    const dataArray = Array.from(uint8array)
-    const state = await window.pywebview.api.save_file_dialog(dataArray, filename)
-    if(state.success){
-        toast.success(`导出成功，文件路径：${state.path}`)
-    } else {
-        toast.info(state.message || "导出失败")
+    const params = {
+        start_date: exportStartDate.value,
+        end_date: exportEndDate.value,
+        experiment_ids: selectedExperiments.value,
+        format: exportFormat.value
     }
-} else {
-    const url = window.URL.createObjectURL(new Blob([response.data]))
-    const link = document.createElement('a')
-    link.href = url
-    link.setAttribute('download', `${currentExportType.value}_export.${exportFormat.value}`)
-    document.body.appendChild(link)
-    link.click()
-    document.body.removeChild(link)
-    toast.success("导出成功")
-}
-} catch (error) {
-console.error('导出数据失败:', error)
-toast.error('导出数据失败，请重试')
-} finally {
-    exportOptionsVisible.value = false
-    currentExportType.value = ""
-    exportStartDate.value = ""
-    exportEndDate.value = ""
-}
+
+    try {
+        const response = await axios.get(`/api/export/${currentExportType.value}`, { 
+            params,
+            responseType: 'blob'
+        })
+
+        // 使用 PyWebview 的保存文件对话框
+        if (window.pywebview && window.pywebview.api) {
+            const filename = `${currentExportType.value}_export.${exportFormat.value}`
+            const arrayBuffer = await response.data.arrayBuffer()
+            const uint8array = new Uint8Array(arrayBuffer)
+            const dataArray = Array.from(uint8array)
+            const state = await window.pywebview.api.save_file_dialog(dataArray, filename)
+            if(state.success){
+                toast.success(`导出成功，文件路径：${state.path}`)
+            } else {
+                toast.info(state.message || "导出失败")
+            }
+        } else {
+            const url = window.URL.createObjectURL(new Blob([response.data]))
+            const link = document.createElement('a')
+            link.href = url
+            link.setAttribute('download', `${currentExportType.value}_export.${exportFormat.value}`)
+            document.body.appendChild(link)
+            link.click()
+            document.body.removeChild(link)
+            toast.success("导出成功")
+        }
+    } catch (error) {
+        console.error('导出数据失败:', error)
+        toast.error('导出数据失败，请重试')
+    } finally {
+        exportOptionsVisible.value = false
+        currentExportType.value = ""
+        exportStartDate.value = ""
+        exportEndDate.value = ""
+    }
 }
 
 // 导入相关方法
 const handleFileUpload = (event) => {
-selectedFile.value = event.target.files[0]
-event.target.value = null
+    selectedFile.value = event.target.files[0]
+    event.target.value = null
 }
 
 const handleDrop = (event) => {
-event.preventDefault()
-isDragging.value = false
+    event.preventDefault()
+    isDragging.value = false
 
-if (event.dataTransfer.files && event.dataTransfer.files.length > 0) {
-selectedFile.value = event.dataTransfer.files[0]
-}
+    if (event.dataTransfer.files && event.dataTransfer.files.length > 0) {
+        selectedFile.value = event.dataTransfer.files[0]
+    }
 }
 
 const clearFile = () => {
-selectedFile.value = null
+    selectedFile.value = null
 }
 
 const formatFileSize = (bytes) => {
-if (bytes === 0) return '0 Bytes'
-const k = 1024
-const sizes = ['Bytes', 'KB', 'MB', 'GB']
-const i = Math.floor(Math.log(bytes) / Math.log(k))
-return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i]
+    if (bytes === 0) return '0 Bytes'
+    const k = 1024
+    const sizes = ['Bytes', 'KB', 'MB', 'GB']
+    const i = Math.floor(Math.log(bytes) / Math.log(k))
+    return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i]
 }
 
 const importData = async () => {
@@ -2259,41 +2263,41 @@ const exportDatabase = async (key) => {
 }
 
 const exportLogFile = async () => {
-  isExportingLog.value = true
+    isExportingLog.value = true
 
-  try {
-    const response = await axios.get('/api/database/export-log', {
-      responseType: 'blob'
-    })
+    try {
+        const response = await axios.get('/api/database/export-log', {
+            responseType: 'blob'
+        })
 
-    // 使用 PyWebview 的保存文件对话框
-    if (window.pywebview && window.pywebview.api) {
-      const filename = `app_log_${new Date().toISOString().split('T')[0]}.log`
-      const arrayBuffer = await response.data.arrayBuffer()
-      const uint8array = new Uint8Array(arrayBuffer)
-      const dataArray = Array.from(uint8array)
-      const state = await window.pywebview.api.save_file_dialog(dataArray, filename)
-      if(state.success){
-        toast.success(`日志文件导出成功，文件路径：${state.path}`)
-      } else {
-        toast.info(state.message || "导出失败")
-      }
-    } else {
-      const url = window.URL.createObjectURL(new Blob([response.data]))
-      const link = document.createElement('a')
-      link.href = url
-      link.setAttribute('download', `app_log_${new Date().toISOString().split('T')[0]}.log`)
-      document.body.appendChild(link)
-      link.click()
-      document.body.removeChild(link)
-      toast.success("日志文件导出成功")
+        // 使用 PyWebview 的保存文件对话框
+        if (window.pywebview && window.pywebview.api) {
+            const filename = `app_log_${new Date().toISOString().split('T')[0]}.log`
+            const arrayBuffer = await response.data.arrayBuffer()
+            const uint8array = new Uint8Array(arrayBuffer)
+            const dataArray = Array.from(uint8array)
+            const state = await window.pywebview.api.save_file_dialog(dataArray, filename)
+            if(state.success){
+                toast.success(`日志文件导出成功，文件路径：${state.path}`)
+            } else {
+                toast.info(state.message || "导出失败")
+            }
+        } else {
+            const url = window.URL.createObjectURL(new Blob([response.data]))
+            const link = document.createElement('a')
+            link.href = url
+            link.setAttribute('download', `app_log_${new Date().toISOString().split('T')[0]}.log`)
+            document.body.appendChild(link)
+            link.click()
+            document.body.removeChild(link)
+            toast.success("日志文件导出成功")
+        }
+    } catch (error) {
+        console.error('导出日志文件失败:', error)
+        toast.error('导出日志文件失败，请重试')
+    } finally {
+        isExportingLog.value = false
     }
-  } catch (error) {
-    console.error('导出日志文件失败:', error)
-    toast.error('导出日志文件失败，请重试')
-  } finally {
-    isExportingLog.value = false
-  }
 }
 
 const refreshDbInfo = async () => {
@@ -2314,33 +2318,33 @@ const refreshDbInfo = async () => {
 
 // 清空数据库方法
 const clearDatabase = async () => {
-  if (!isDeleteConfirmed.value) {
-    deleteConfirmationError.value = '请正确输入确认文字'
-    return
-  }
-  
-  if (!confirm('最后确认：这将永久删除所有数据，此操作不可逆！确定要继续吗？')) {
-    return
-  }
-  
-  isClearingDb.value = true
-  deleteConfirmationError.value = ''
-  
-  try {
-    const response = await axios.post('/api/database/clear')
-    toast.success('数据库清空成功')
-    deleteConfirmation.value = ''
+    if (!isDeleteConfirmed.value) {
+        deleteConfirmationError.value = '请正确输入确认文字'
+        return
+    }
     
-    // 刷新数据库信息
-    await refreshDbInfo()
+    if (!confirm('最后确认：这将永久删除所有数据，此操作不可逆！确定要继续吗？')) {
+        return
+    }
     
-  } catch (error) {
-    console.error('清空数据库失败:', error)
-    const errorMsg = error.response?.data?.error || '清空数据库失败'
-    toast.error(errorMsg)
-  } finally {
-    isClearingDb.value = false
-  }
+    isClearingDb.value = true
+    deleteConfirmationError.value = ''
+    
+    try {
+        const response = await axios.post('/api/database/clear')
+        toast.success('数据库清空成功')
+        deleteConfirmation.value = ''
+        
+        // 刷新数据库信息
+        await refreshDbInfo()
+        
+    } catch (error) {
+        console.error('清空数据库失败:', error)
+        const errorMsg = error.response?.data?.error || '清空数据库失败'
+        toast.error(errorMsg)
+    } finally {
+        isClearingDb.value = false
+    }
 }
 
 // 编辑状态

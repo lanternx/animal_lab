@@ -145,7 +145,7 @@ with app.app_context():
         if not db.session.query(GeneLocus).first():
             new_gene_locus = GeneLocus(
                 symbol = "WT",
-                description = "")
+                description = "野生型（wild type）")
             db.session.add(new_gene_locus)
             db.session.commit()
             print("已自动创建默认基因型")
@@ -699,9 +699,8 @@ def get_mice_info(mouse_tid):
         if mouse.tests_done:
             tests = []
             for t in mouse.tests_done:
-                et = ExperimentType.query.get(t.experiment_id)
-                if et:
-                    tests.append(et.name)
+                et = ExperimentType.query.get_or_404(t.experiment_id)
+                tests.append(et.name)
             content['tests_done'] = tests
         else:
             content['tests_done'] = []
@@ -1765,9 +1764,8 @@ def update_sections_order():
     try:
         # 批量更新顺序
         for item in order_data:
-            section = Location.query.get(item['id'])
-            if section:
-                section.order = item['order']
+            section = Location.query.get_or_404(item['id'])
+            section.order = item['order']
         
         db.session.commit()
         return jsonify({'message': '部分顺序已更新'})
@@ -2124,7 +2122,11 @@ def get_experiment_data(experiment_id):
     """获取实验数据，并在后端完全处理"""
     try:
         candidate_mice = [ex.mouse_id for ex in ExperimentClass.query.filter_by(experiment_id=experiment_id).all()]
-        groups = PredefinedGroup.query.filter_by(experiment_id=experiment_id).first().rules
+        groups = PredefinedGroup.query.filter_by(experiment_id=experiment_id).first()
+        if groups:
+            groups = groups.rules
+        else:
+            return jsonify({'error': '暂无分组'}), 403
         mouse_to_group = {}
         for g in groups:
             for m in g['mouseId']:

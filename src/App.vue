@@ -99,7 +99,7 @@
               <div class="tooltip" v-if="sidebarCollapsed">体重曲线</div>
             </div>
           </router-link>
-        <router-link 
+          <router-link 
             :to="{ name: 'Survivalplot' }" 
             custom
             v-slot="{ navigate, isActive }"
@@ -113,8 +113,11 @@
               <span v-if="!sidebarCollapsed">生存曲线</span>
               <div class="tooltip" v-if="sidebarCollapsed">生存曲线</div>
             </div>
-        </router-link>
-        <router-link 
+          </router-link>
+        </div>
+        <div class="nav-section">
+          <div class="nav-title" v-if="!sidebarCollapsed">系统设置</div>
+          <router-link 
             :to="{ name: 'SystemSettings' }" 
             custom
             v-slot="{ navigate, isActive }"
@@ -128,8 +131,8 @@
               <span v-if="!sidebarCollapsed">设置</span>
               <div class="tooltip" v-if="sidebarCollapsed">设置</div>
             </div>
-        </router-link>
-        <router-link 
+          </router-link>
+          <router-link 
             :to="{ name: 'InfoPage' }" 
             custom
             v-slot="{ navigate, isActive }"
@@ -143,7 +146,7 @@
               <span v-if="!sidebarCollapsed">宣传页</span>
               <div class="tooltip" v-if="sidebarCollapsed">宣传页</div>
             </div>
-        </router-link>
+          </router-link>
         </div>
         
         <!-- 折叠按钮（在侧边栏底部） -->

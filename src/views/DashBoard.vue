@@ -94,7 +94,7 @@
     
     <div class="cage-view-container">
       <!-- 笼位网格区域 -->
-      <div class="cage-grid" id="cageGrid">
+      <div v-if="locations.length > 0" class="cage-grid" id="cageGrid">
         <div 
           v-for="cage in cageStore.filteredCages" 
           :key="cage.id" 
@@ -151,6 +151,13 @@
             </template>
             <div v-else class="empty-cage">空笼位</div>
         </div>
+        </div>
+      </div>
+      <div v-else style="flex: 1;padding: 80px;background-color: white;">
+        <div class="container">
+          <i class="material-icons" style="font-size: 120px; color: #cbd5e1;">error_outline</i>
+          <h1>未设定区域</h1>
+          <p>请前往设置页面设定区域。</p>
         </div>
       </div>
       
@@ -600,6 +607,10 @@ function closeContextMenu() {
 
 // 更新笼位信息
 async function updateCage() {
+  if (!currentCage.section) {
+    toast.info("未填写区域")
+    return
+  }
   isSaving.value = true
   try {
     await axios.put(`/api/cages/${currentCage.id}`, {
@@ -624,6 +635,7 @@ async function updateCage() {
       cages.value[index].mice_sex = currentCage.mice_sex
       cages.value[index].mice_genotype = currentCage.mice_genotype
     }
+    toast.success("笼位更新成功")
     closeCageModal()
   } catch (error) {
     console.error('修改笼位失败:', error)
@@ -773,7 +785,9 @@ const exportToPDF = async () => {
         toast.info(state.message || "导出失败")
       }
     } else {
-      const url = window.URL.createObjectURL(new Blob([pdfData], { type: 'application/pdf' }))
+      const arrayBuffer = await generatePDFAsArrayBuffer();
+      const blob = new Blob([arrayBuffer], { type: 'application/pdf' });
+      const url = window.URL.createObjectURL(blob);
       const link = document.createElement('a')
       link.href = url
       link.setAttribute('download', `${today_formatted} ${activeSection.value}.pdf`)
@@ -1747,6 +1761,30 @@ function isCageHighlighted(cageId) {
 
 .icon-hr::after {
   margin-left: 10px;
+}
+
+.icon {
+  width: 120px;
+  height: 120px;
+  margin: 0 auto 30px;
+  color: #cbd5e1;
+}
+h1 {
+  font-size: 1.8rem;
+  color: #334155;
+  margin-bottom: 12px;
+  font-weight: 600;
+}
+
+p {
+  color: #64748b;
+  font-size: 1.1rem;
+  line-height: 1.5;
+}
+.container {
+  text-align: center;
+  padding: 40px 20px;
+  max-width: 400px;
 }
 </style>
 

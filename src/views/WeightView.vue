@@ -99,7 +99,7 @@
     </div>
     
     <!-- 添加/编辑体重记录模态框 -->
-    <div v-if="showAddModal || editingRecord" class="modal">
+    <div v-if="showAddModal || editingRecord" class="modal" @click.self="closeModal">
     <div class="modal-content">
         <div class="modal-header">
         <h3>{{ editingRecord ? '编辑体重记录' : '添加体重记录' }}</h3>

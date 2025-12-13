@@ -230,7 +230,7 @@ var cellContextMenu = [
         label: "编辑记录",
         action: (e, cell) => {
             if (!cell) {
-                toast.error('未选中单元格');
+                toast.info('未选中单元格');
                 return;
             }
             const table = cell.getTable()
@@ -296,7 +296,7 @@ var cellContextMenu = [
         label: "删除记录",
         action: (e, cell) => {
             if (!cell) {
-                toast.error('未选中单元格');
+                toast.info('未选中单元格');
                 return;
             }
             const rowData = cell.getRow().getData();
@@ -421,10 +421,14 @@ const fetchGroups = async () => {
 try {
     const response = await axios.get(`/api/experiments/${experimentId.value}/grouped_mice`, {cancelToken: currentRequestToken.token});
     if (response.data.error) {
-        toast.error("请在设置页面为本实验设置预设分组")
+        toast.info("请在设置页面为本实验设置预设分组")
         return
     }
     allGroups.value = response.data;
+    await fetchData()
+    // 初始化 Tabulator
+    initTabulator();
+    await generateChart()
 } catch (error) {
     console.error('获取小鼠错误:', error);
     toast.error('获取小鼠错误: ' + error.message);
@@ -469,12 +473,6 @@ try {
 
     await fetchCandidate();
     await fetchGroups();
-    await fetchData();
-    
-    // 初始化 Tabulator
-    initTabulator();
-
-    generateChart()
 } catch (error) {
     if (!axios.isCancel(error)) {
         console.error('初始化失败:', error);
@@ -511,7 +509,7 @@ tabulatorInstance.value = new Tabulator(tabulatorRef.value, {
 function initRecordTabulator() {
 if (!recordTabulatorRef.value) return;
 if (recordTabulatorInstance.value) {
-recordTabulatorInstance.value.destroy();
+    recordTabulatorInstance.value.destroy();
 }
 recordTabulatorInstance.value = new Tabulator(recordTabulatorRef.value, {
     data: recordRowData.value,
@@ -626,7 +624,7 @@ try{
 
 async function generateChart() {
     if (!hasData.value) {
-        toast.error('暂无实验数据，无法生成图表');
+        toast.info('暂无实验数据，无法生成图表');
         return;
     }
     // 清空图表容器
@@ -952,249 +950,248 @@ function createXYChart(canvas, xField, yField, groupedData) {
 
 // 创建箱线图+散点图函数
 function createBoxPlotWithPoints(canvas, columnField, groupedData) {
-  const ctx = canvas.getContext('2d');
-  
-  // 准备数据
-  const groupNames = Object.keys(groupedData);
-  const groupColors = {};
-  groupNames.forEach(gname => {
-    groupColors[gname] = groupedData[gname][0]?.color;
-  });
-  
-  const scatterDatasets = [];  // 改为存储多个散点图数据集
-  const boxPlotStats = [];
-  let globalMin = Infinity;
-  let globalMax = -Infinity;
-
-  // 为每个分组计算统计数据并创建散点图数据集
-  groupNames.forEach((groupName, groupIndex) => {
-    const groupItems = groupedData[groupName];
-    const groupColor = groupColors[groupName];
-
-    // 获取该分组所有小鼠在该字段上的值
-    const values = groupItems
-      .map(item => {
-        const value = parseFloat(item[`field_${columnField.id}`]);
-        return isNaN(value) ? null : value;
-      })
-      .filter(val => val !== null);
+    const ctx = canvas.getContext('2d');
     
-    if (values.length > 0) {
-      // 排序以便计算分位数
-      values.sort((a, b) => a - b);
-      
-      // 计算五数概括
-      const min = values[0];
-      const q1 = calculateQuartile(values, 0.25);
-      const median = calculateMedian(values);
-      const q3 = calculateQuartile(values, 0.75);
-      const max = values[values.length - 1];
-      
-      boxPlotStats.push({ min, q1, median, q3, max });
-      
-      // 为每个分组创建单独的散点图数据集
-      const scatterData = values.map((value, index) => {
-        // 为散点添加一些随机偏移，避免重叠
-        const xOffset = (Math.random() - 0.5) * 0.2;
-        return {
-          x: groupIndex + xOffset,
-          y: value
-        };
-      });
-      
-      scatterDatasets.push({
-        type: 'scatter',
-        label: groupName,  // 使用分组名称作为标签
-        data: scatterData,
-        backgroundColor: groupColor + 'AA',  // 使用分组颜色
-        borderColor: '#FFFFFF',
-        borderWidth: 1,
-        pointRadius: 4,
-        pointHoverRadius: 6
-      });
-      
-    } else {
-      boxPlotStats.push({ min: 0, q1: 0, median: 0, q3: 0, max: 0 });
-      // 即使没有数据也添加一个空的数据集以保持图例一致
-      scatterDatasets.push({
-        type: 'scatter',
-        label: groupName,
-        data: [],
-        backgroundColor: groupColor + 'AA',
-        borderColor: '#FFFFFF',
-        borderWidth: 1,
-        pointRadius: 4,
-        pointHoverRadius: 6
-      });
-    }
+    // 准备数据
+    const groupNames = Object.keys(groupedData);
+    const groupColors = {};
+    groupNames.forEach(gname => {
+        groupColors[gname] = groupedData[gname][0]?.color;
+    });
+    
+    const scatterDatasets = [];  // 改为存储多个散点图数据集
+    const boxPlotStats = [];
+    let globalMin = Infinity;
+    let globalMax = -Infinity;
 
-    if (values.length > 0) {
-      globalMin = Math.min(globalMin, ...values);
-      globalMax = Math.max(globalMax, ...values);
-    }
-  });
+    // 为每个分组计算统计数据并创建散点图数据集
+    groupNames.forEach((groupName, groupIndex) => {
+        const groupItems = groupedData[groupName];
+        const groupColor = groupColors[groupName];
 
-  // 如果全局最小值和最大值仍然是Infinity，则设置为0
-  if (globalMin === Infinity) globalMin = 0;
-  if (globalMax === -Infinity) globalMax = 1;
-  
-  // 计算y轴的范围，留出一些边距
-  const padding = (globalMax - globalMin) * 0.1;
-  const yMin = globalMin - padding;
-  const yMax = globalMax + padding;
-  
-  // 创建组合图表
-  new Chart(ctx, {
-    data: {
-      labels: groupNames,
-      datasets: scatterDatasets  // 使用多个散点图数据集
-    },
-    // ... 其余配置保持不变
-    options: {
-      responsive: true,
-      maintainAspectRatio: false,
-      scales: {
-        y: {
-          beginAtZero: false,
-          min: yMin,
-          max: yMax,
-          title: {
-            display: true,
-            text: `${columnField.field_name}${columnField.unit ? ` (${columnField.unit})` : ''}`
-          }
-        },
-        x: {
-          title: {
-            display: true,
-            text: '分组'
-          },
-          min: -0.5,
-          max: groupNames.length - 0.5,
-          ticks: {
-            callback: function(value, index, values) {
-              return groupNames[value] || '';
-            }
-          }
-        }
-      },
-      plugins: {
-        title: {
-          display: true,
-          text: `${columnField.field_name}的分布（箱线图+散点图）`,
-          font: {
-            size: 16
-          }
-        },
-        tooltip: {
-          callbacks: {
-            label: function(context) {
-              // 现在可以根据datasetIndex获取对应的分组名称
-              const groupName = scatterDatasets[context.datasetIndex]?.label || '未知分组';
-              return `${groupName}: ${context.parsed.y.toFixed(2)}`;
-            }
-          }
-        }
-      },
-        legend: {
-          position: 'top'
-        }
-    },
-        plugins: [{
-      // 自定义插件绘制箱线图
-      afterDraw: function(chart) {
-        const ctx = chart.ctx;
-        const xAxis = chart.scales.x;
-        const yAxis = chart.scales.y;
+        // 获取该分组所有小鼠在该字段上的值
+        const values = groupItems
+        .map(item => {
+            const value = parseFloat(item[`field_${columnField.id}`]);
+            return isNaN(value) ? null : value;
+        })
+        .filter(val => val !== null);
         
-        // 绘制每个分组的箱线图
-        groupNames.forEach((groupName, groupIndex) => {
-          const stats = boxPlotStats[groupIndex];
-          if (!stats) return;
-          
-          const xCenter = xAxis.getPixelForValue(groupIndex);
-          const boxWidth = 20;
-          const whiskerWidth = 10;
-          
-          // 设置颜色
-          ctx.strokeStyle = groupColors[groupName];
-          ctx.fillStyle = groupColors[groupName] + '40'; // 半透明填充
-          ctx.lineWidth = 1.5;
-          
-          // 绘制箱体 (Q1到Q3)
-          const boxTop = yAxis.getPixelForValue(stats.q3);
-          const boxBottom = yAxis.getPixelForValue(stats.q1);
-          const boxHeight = boxBottom - boxTop;
-          
-          ctx.fillRect(xCenter - boxWidth/2, boxTop, boxWidth, boxHeight);
-          ctx.strokeRect(xCenter - boxWidth/2, boxTop, boxWidth, boxHeight);
-          
-          // 绘制中位数线
-          const medianY = yAxis.getPixelForValue(stats.median);
-          ctx.beginPath();
-          ctx.moveTo(xCenter - boxWidth/2, medianY);
-          ctx.lineTo(xCenter + boxWidth/2, medianY);
-          ctx.strokeStyle = groupColors[groupName];
-          ctx.lineWidth = 2;
-          ctx.stroke();
-          
-          // 绘制须线
-          const minY = yAxis.getPixelForValue(stats.min);
-          const maxY = yAxis.getPixelForValue(stats.max);
-          
-          // 上须线
-          ctx.beginPath();
-          ctx.moveTo(xCenter, boxTop);
-          ctx.lineTo(xCenter, minY);
-          ctx.stroke();
-          
-          // 下须线
-          ctx.beginPath();
-          ctx.moveTo(xCenter, boxBottom);
-          ctx.lineTo(xCenter, maxY);
-          ctx.stroke();
-          
-          // 绘制须线端点
-          // 上端点
-          ctx.beginPath();
-          ctx.moveTo(xCenter - whiskerWidth/2, minY);
-          ctx.lineTo(xCenter + whiskerWidth/2, minY);
-          ctx.stroke();
-          
-          // 下端点
-          ctx.beginPath();
-          ctx.moveTo(xCenter - whiskerWidth/2, maxY);
-          ctx.lineTo(xCenter + whiskerWidth/2, maxY);
-          ctx.stroke();
-        });
-      }
-    }]
-  });
+        if (values.length > 0) {
+            // 排序以便计算分位数
+            values.sort((a, b) => a - b);
+            
+            // 计算五数概括
+            const min = values[0];
+            const q1 = calculateQuartile(values, 0.25);
+            const median = calculateMedian(values);
+            const q3 = calculateQuartile(values, 0.75);
+            const max = values[values.length - 1];
+            
+            boxPlotStats.push({ min, q1, median, q3, max });
+            
+            // 为每个分组创建单独的散点图数据集
+            const scatterData = values.map((value, index) => {
+                // 为散点添加一些随机偏移，避免重叠
+                const xOffset = (Math.random() - 0.5) * 0.2;
+                return {
+                x: groupIndex + xOffset,
+                y: value
+                };
+            });
+        
+            scatterDatasets.push({
+                type: 'scatter',
+                label: groupName,  // 使用分组名称作为标签
+                data: scatterData,
+                backgroundColor: groupColor + 'AA',  // 使用分组颜色
+                borderColor: '#FFFFFF',
+                borderWidth: 1,
+                pointRadius: 4,
+                pointHoverRadius: 6
+            });
+        } else {
+            boxPlotStats.push({ min: 0, q1: 0, median: 0, q3: 0, max: 0 });
+            // 即使没有数据也添加一个空的数据集以保持图例一致
+            scatterDatasets.push({
+                type: 'scatter',
+                label: groupName,
+                data: [],
+                backgroundColor: groupColor + 'AA',
+                borderColor: '#FFFFFF',
+                borderWidth: 1,
+                pointRadius: 4,
+                pointHoverRadius: 6
+            });
+        }
+
+        if (values.length > 0) {
+            globalMin = Math.min(globalMin, ...values);
+            globalMax = Math.max(globalMax, ...values);
+        }
+    });
+
+    // 如果全局最小值和最大值仍然是Infinity，则设置为0
+    if (globalMin === Infinity) globalMin = 0;
+    if (globalMax === -Infinity) globalMax = 1;
+    
+    // 计算y轴的范围，留出一些边距
+    const padding = (globalMax - globalMin) * 0.1;
+    const yMin = globalMin - padding;
+    const yMax = globalMax + padding;
+    
+    // 创建组合图表
+    new Chart(ctx, {
+        data: {
+        labels: groupNames,
+        datasets: scatterDatasets  // 使用多个散点图数据集
+        },
+        // ... 其余配置保持不变
+        options: {
+        responsive: true,
+        maintainAspectRatio: false,
+        scales: {
+            y: {
+            beginAtZero: false,
+            min: yMin,
+            max: yMax,
+            title: {
+                display: true,
+                text: `${columnField.field_name}${columnField.unit ? ` (${columnField.unit})` : ''}`
+            }
+            },
+            x: {
+            title: {
+                display: true,
+                text: '分组'
+            },
+            min: -0.5,
+            max: groupNames.length - 0.5,
+            ticks: {
+                callback: function(value, index, values) {
+                return groupNames[value] || '';
+                }
+            }
+            }
+        },
+        plugins: {
+            title: {
+            display: true,
+            text: `${columnField.field_name}的分布（箱线图+散点图）`,
+            font: {
+                size: 16
+            }
+            },
+            tooltip: {
+            callbacks: {
+                label: function(context) {
+                // 现在可以根据datasetIndex获取对应的分组名称
+                const groupName = scatterDatasets[context.datasetIndex]?.label || '未知分组';
+                return `${groupName}: ${context.parsed.y.toFixed(2)}`;
+                }
+            }
+            }
+        },
+            legend: {
+            position: 'top'
+            }
+        },
+            plugins: [{
+        // 自定义插件绘制箱线图
+        afterDraw: function(chart) {
+            const ctx = chart.ctx;
+            const xAxis = chart.scales.x;
+            const yAxis = chart.scales.y;
+            
+            // 绘制每个分组的箱线图
+            groupNames.forEach((groupName, groupIndex) => {
+            const stats = boxPlotStats[groupIndex];
+            if (!stats) return;
+            
+            const xCenter = xAxis.getPixelForValue(groupIndex);
+            const boxWidth = 20;
+            const whiskerWidth = 10;
+            
+            // 设置颜色
+            ctx.strokeStyle = groupColors[groupName];
+            ctx.fillStyle = groupColors[groupName] + '40'; // 半透明填充
+            ctx.lineWidth = 1.5;
+            
+            // 绘制箱体 (Q1到Q3)
+            const boxTop = yAxis.getPixelForValue(stats.q3);
+            const boxBottom = yAxis.getPixelForValue(stats.q1);
+            const boxHeight = boxBottom - boxTop;
+            
+            ctx.fillRect(xCenter - boxWidth/2, boxTop, boxWidth, boxHeight);
+            ctx.strokeRect(xCenter - boxWidth/2, boxTop, boxWidth, boxHeight);
+            
+            // 绘制中位数线
+            const medianY = yAxis.getPixelForValue(stats.median);
+            ctx.beginPath();
+            ctx.moveTo(xCenter - boxWidth/2, medianY);
+            ctx.lineTo(xCenter + boxWidth/2, medianY);
+            ctx.strokeStyle = groupColors[groupName];
+            ctx.lineWidth = 2;
+            ctx.stroke();
+            
+            // 绘制须线
+            const minY = yAxis.getPixelForValue(stats.min);
+            const maxY = yAxis.getPixelForValue(stats.max);
+            
+            // 上须线
+            ctx.beginPath();
+            ctx.moveTo(xCenter, boxTop);
+            ctx.lineTo(xCenter, minY);
+            ctx.stroke();
+            
+            // 下须线
+            ctx.beginPath();
+            ctx.moveTo(xCenter, boxBottom);
+            ctx.lineTo(xCenter, maxY);
+            ctx.stroke();
+            
+            // 绘制须线端点
+            // 上端点
+            ctx.beginPath();
+            ctx.moveTo(xCenter - whiskerWidth/2, minY);
+            ctx.lineTo(xCenter + whiskerWidth/2, minY);
+            ctx.stroke();
+            
+            // 下端点
+            ctx.beginPath();
+            ctx.moveTo(xCenter - whiskerWidth/2, maxY);
+            ctx.lineTo(xCenter + whiskerWidth/2, maxY);
+            ctx.stroke();
+            });
+        }
+        }]
+    });
 }
 
 // 计算中位数的辅助函数
 function calculateMedian(values) {
-  const sorted = [...values].sort((a, b) => a - b);
-  const mid = Math.floor(sorted.length / 2);
-  
-  if (sorted.length % 2 === 0) {
-    return (sorted[mid - 1] + sorted[mid]) / 2;
-  } else {
-    return sorted[mid];
-  }
+    const sorted = [...values].sort((a, b) => a - b);
+    const mid = Math.floor(sorted.length / 2);
+    
+    if (sorted.length % 2 === 0) {
+        return (sorted[mid - 1] + sorted[mid]) / 2;
+    } else {
+        return sorted[mid];
+    }
 }
 
 // 计算四分位数的辅助函数
 function calculateQuartile(values, quartile) {
-  const sorted = [...values].sort((a, b) => a - b);
-  const pos = (sorted.length - 1) * quartile;
-  const base = Math.floor(pos);
-  const rest = pos - base;
-  
-  if (sorted[base + 1] !== undefined) {
-    return sorted[base] + rest * (sorted[base + 1] - sorted[base]);
-  } else {
-    return sorted[base];
-  }
+    const sorted = [...values].sort((a, b) => a - b);
+    const pos = (sorted.length - 1) * quartile;
+    const base = Math.floor(pos);
+    const rest = pos - base;
+    
+    if (sorted[base + 1] !== undefined) {
+        return sorted[base] + rest * (sorted[base + 1] - sorted[base]);
+    } else {
+        return sorted[base];
+    }
 }
 
 function createDistributionChart(canvas, xField, groupedData) {
@@ -1385,14 +1382,18 @@ async function deleteRecord() {
 async function saveExperimentRecord() {
 try {
     if (!recordTabulatorInstance.value) {
-    toast.error('表格未初始化');
-    return;
+        toast.error('表格未初始化');
+        return;
     }
     
     const allRows = recordTabulatorInstance.value.getData();
     
+    if (allRows.length === 0) {
+        toast.info('请填写数据');
+        return;
+    }
     if (recordDate.value === '') {
-        toast.error('请填写记录日期');
+        toast.info('请填写记录日期');
         return;
     }
     isSubmitting.value = true;
@@ -1417,7 +1418,7 @@ try {
                 }
             }
             if (!is_integrated) {
-                toast.error(`小鼠 ${row.mouse_id} 的字段 ${lack_field} 是必填的`);
+                toast.info(`小鼠 ${row.mouse_id} 的字段 ${lack_field} 是必填的`);
                 return;
             } else {
                 continue; // 跳过未填写的行
@@ -1459,23 +1460,17 @@ gap: 10px;
 margin-bottom: 20px;
 }
 
-.action-buttons .btn {
-display: flex;
-align-items: center;
-gap: 5px;
-}
-
 .chart-container {
 display: grid;
 grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
-  gap: 20px;
-  justify-content: center;
-  align-items: start;
-  padding: 20px;
-  overflow-y: auto;
-  height: 90%;
-  width: 90%;
-  min-height: 500px;
+gap: 20px;
+justify-content: center;
+align-items: start;
+padding: 20px;
+overflow-y: auto;
+height: 90%;
+width: 90%;
+min-height: 500px;
 }
 
 .chart-canvas {
@@ -1588,14 +1583,6 @@ margin-right: 0.5rem;
 margin-top: 1rem;
 }
 
-.text-muted {
-color: #6c757d;
-}
-
-.text-danger {
-color: #e74c3c;
-}
-
 .d-grid {
 display: grid;
 }
@@ -1684,29 +1671,20 @@ box-shadow: 0 2px 8px rgba(0,0,0,0.1);
 }
 
 .chart-card {
-  flex: 0 0 calc(50% - 20px);
-  margin-bottom: 20px;
-  background: white;
-  border-radius: 8px;
-  box-shadow: 0 2px 8px rgba(0,0,0,0.1);
-  padding: 15px;
-  width: 330px; /* 400px + 左右padding */
-  height: 430px; /* 最小宽度 */
+flex: 0 0 calc(50% - 20px);
+margin-bottom: 20px;
+background: white;
+border-radius: 8px;
+box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+padding: 15px;
+width: 330px; /* 400px + 左右padding */
+height: 430px; /* 最小宽度 */
 }
 
 @media (max-width: 1024px) {
-  .chart-card {
-    flex: 0 0 100%;
-    min-width: auto;
-  }
+.chart-card {
+flex: 0 0 100%;
+min-width: auto;
 }
-
-.mouse-group-manager {
-  max-width: 1200px;
-  margin: 0 auto;
-  background: white;
-  border-radius: 8px;
-  box-shadow: 0 2px 10px rgba(0,0,0,0.1);
-  padding: 20px;
 }
 </style>

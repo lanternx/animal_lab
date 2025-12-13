@@ -51,10 +51,16 @@ export const useCageStore = defineStore('cage', () => {
         cages.value = response.data
         
         // 设置默认选中的section为第一个
-        if (locations.value.length > 0 && section_key.value) {
-        activeSection.value = locations.value[0].identifier
-        section_key.value = false
-        console.log('设置默认section为:', activeSection.value)
+        if (section_key.value) {
+            if (locations.value.length > 0) {
+                activeSection.value = locations.value[0].identifier
+                section_key.value = false
+                console.log('设置默认section为:', activeSection.value)
+            } else {
+                activeSection.value = ''
+                section_key.value = false
+                console.log('无区域')
+            }
         }
         console.log('笼位数据获取完成')
     } catch (error) {
