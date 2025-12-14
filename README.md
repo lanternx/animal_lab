@@ -63,7 +63,7 @@ Mac版不能直接在Mac上用网盘下载，应该用windows或者安卓手机�
 
 在terminal中输入
 ```bash
-sudo xattr -cr /Applications/MurisPro_V3.app
+sudo xattr -cr /Applications/MurisPro_V3.1.app
 ```
 
 
