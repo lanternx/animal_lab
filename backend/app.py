@@ -56,6 +56,9 @@ import logging
 # 获取主日志记录器
 logger = logging.getLogger("Main")
 
+import time
+last_heartbeat = time.time()
+
 
 app = Flask(__name__, static_folder='dist', static_url_path='')
 CORS(app)  # 允许跨域请求
@@ -170,6 +173,20 @@ def index():
 @app.route('/<path:path>')
 def static_files(path):
     return app.send_static_file(path)
+
+def check_and_shutdown():
+    """检查并关闭服务器"""
+    # 如果一段时间内没有心跳
+    if (time.time() - last_heartbeat) > 30:
+        logger.info("无活动客户端，正在关闭服务器...")
+        sys.exit(0)
+
+@app.route('/heartbeat', methods=['POST'])
+def heartbeat():
+    global last_heartbeat
+    last_heartbeat = time.time()
+    
+    return jsonify({'status': 'ok'})
 
 
 @app.before_request

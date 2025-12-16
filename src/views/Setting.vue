@@ -2217,7 +2217,7 @@ const handleDbImportComplete = async () => {
         }
         })
         
-        toast.success('数据库导入成功')
+        toast.success('数据库导入成功，请重启软件')
     } catch (error) {
         console.error('数据库导入失败:', error)
         toast.error('数据库导入失败')

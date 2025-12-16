@@ -1,4 +1,4 @@
-from app import app
+from app import app, check_and_shutdown
 import webview
 import threading
 import time
@@ -272,6 +272,50 @@ def mac_save_file(data, filename):
         logger.error(f"macOS 保存异常: {str(e)}")
         return {"success": False, "message": f"macOS 错误: {str(e)}"}
 
+class ControlledThread:
+    """可控线程，支持优雅停止"""
+    
+    def __init__(self, target, daemon=False):
+        self.target = target
+        self.daemon = daemon
+        self._stop_event = threading.Event()
+        self._thread: threading.Thread = None
+    
+    def _wrapper(self, *args, **kwargs):
+        """包装器，添加停止检查"""
+        try:
+            return self.target(
+                self._stop_event,  # 传入停止事件
+                *args, **kwargs
+            )
+        except Exception as e:
+            print(f"线程异常: {e}")
+    
+    def start(self, *args, **kwargs):
+        """启动线程"""
+        if self._thread and self._thread.is_alive():
+            raise RuntimeError("线程已在运行")
+        
+        self._stop_event.clear()
+        self._thread = threading.Thread(
+            target=self._wrapper,
+            args=args,
+            kwargs=kwargs,
+            daemon=self.daemon
+        )
+        self._thread.start()
+    
+    def stop(self, timeout=None):
+        """请求停止线程"""
+        if not self._thread or not self._thread.is_alive():
+            return
+        
+        self._stop_event.set()
+        self._thread.join(timeout=timeout)
+        
+        if self._thread.is_alive():
+            print(f"警告: 线程未在 {timeout} 秒内停止")
+
 def handle_exception(exctype, value, traceback):
     """全局异常处理"""
     logger.critical(f"未捕获的异常: {exctype.__name__}: {value}")
@@ -377,19 +421,48 @@ if __name__ == '__main__':
                 time.sleep(0.2)
             main_window.show()
         main_window.expose(notify_frontend_ready)
-    
+
     # 在单独的线程中执行初始化
-    init_thread = threading.Thread(target=initialize_app)
+    init_thread = ControlledThread(target=initialize_app, daemon=True)
     init_thread.start()
-    
+
     try:
         # 启动webview
         logger.info("启动Webview窗口")
+        # raise ValueError("测试")
         webview.start(
             private_mode=False,  # 禁用私有模式以允许文件访问
             http_server=False,   # 禁用内置HTTP服务器
         )
     except Exception as e:
         logger.exception(f"窗口创建失败: {str(e)}")
+        init_thread.stop()
+        # Webview启动失败，切换到浏览器模式
+        logger.info("正在切换到浏览器模式...")
+        # 在后台线程中执行初始化工作
+        def initialize_browser():
+            # 查找可用端口
+            port = find_free_port()
+            if port is None:
+                logger.error("无法找到可用端口，退出应用")
+                return
 
+            # 启动Flask服务器线程
+            flask_thread = threading.Thread(target=run_flask, args=(port,), daemon=True)
+            flask_thread.start()
+
+            # 等待服务器启动
+            if not wait_for_server(port):
+                logger.error("服务器启动失败，退出应用")
+                return
+            import webbrowser
+            time.sleep(2)
+            webbrowser.open(f"http://localhost:{port}")
+            print("应用已在浏览器中打开")
+        browser_thread = threading.Thread(target=initialize_browser, daemon=True)
+        browser_thread.start()
+        while True:
+            time.sleep(10)
+            check_and_shutdown()
+    
     logger.info("应用程序正常退出")

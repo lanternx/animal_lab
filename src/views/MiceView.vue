@@ -639,7 +639,6 @@ import 'vue3-toastify/dist/index.css'
 import MouseDetailModal from './MouseDetailView.vue'
 import { useGeneStore, useCageStore, useExperimentStore } from '@/stores'
 import { storeToRefs } from 'pinia'
-import { index } from 'd3'
 
 const geneStore = useGeneStore()
 const { mice, loading, genotypes, selectedGenes, alleleSuggestions } = storeToRefs(geneStore)
