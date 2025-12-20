@@ -67,6 +67,23 @@ export const useExperimentStore = defineStore('experiment', () => {
     const databaseNotChanged = ref(true)
     const trueCurrentDatabase = ref('')
 
+    const showColumns = ref({
+        id: true,
+        genotype: true,
+        strain: true,
+        sex: true,
+        birth_date: true,
+        days_old: true,
+        weeks_old: true,
+        live_status: true,
+
+        death_date: false,
+        tests_planned: false,
+        tests_done: false,
+        cage: true
+    })
+
+
     return {
         experiments,
         showedExperiments,
@@ -76,6 +93,7 @@ export const useExperimentStore = defineStore('experiment', () => {
         showChartType,
         databaseNotChanged,
         trueCurrentDatabase,
+        showColumns,
 
         fetchExperiments,
         loadInitialData,

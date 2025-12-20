@@ -42,7 +42,7 @@
           </div>
           <div class="info-row">
             <span class="info-label">笼位位置:</span>
-            <span class="info-value">{{ mouseData.cage_section && mouseData.cage_id ? `${mouseData.cage_section}-${mouseData.cage_id}` : '未分配' }}</span>
+            <span class="info-value">{{ mouseData.cage_name ? mouseData.cage_name : '未分配' }}</span>
           </div>
           <div class="info-row">
             <span class="info-label">完成实验:</span>

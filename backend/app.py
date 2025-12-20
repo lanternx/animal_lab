@@ -177,7 +177,7 @@ def static_files(path):
 def check_and_shutdown():
     """检查并关闭服务器"""
     # 如果一段时间内没有心跳
-    if (time.time() - last_heartbeat) > 30:
+    if (time.time() - last_heartbeat) > 20:
         logger.info("无活动客户端，正在关闭服务器...")
         sys.exit(0)
 
@@ -233,7 +233,6 @@ def get_all_mice():
                 'sex': m.sex,
                 'birth_date': birth_date,
                 'death_date': m.death_date.strftime('%Y-%m-%d') if m.death_date else None,
-                'cage_id': m.cage_id,
                 'live_status': m.live_status,
                 'father': father,
                 'mother': mother,
@@ -701,16 +700,13 @@ def get_mice_info(mouse_tid):
     try:
         mouse = Mouse.query.get_or_404(mouse_tid)
         if mouse.cage_id is None:
-            c_cage = None
+            content['cage_name'] = ''
         else:
-            c_cage = Cage.query.get_or_404(mouse.cage_id)
+            content['cage_name'] = mouse.cage.display()
         content['id'] = mouse.id
         content['genotype'] = mouse.get_genotypes()
         content['sex'] = mouse.sex
         content['live_status'] = mouse.live_status
-        if c_cage:
-            content['cage_id'] = c_cage.cage_id
-            content['cage_section'] = c_cage.section
         if mouse.birth_date:
             content['birth_date'] = mouse.birth_date.strftime('%Y-%m-%d')
         if mouse.tests_done:

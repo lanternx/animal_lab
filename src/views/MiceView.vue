@@ -71,41 +71,46 @@
       <table class="mouse-table">
         <thead>
           <tr>
-            <th @click="sortBy('id')">
+            <th v-if="showColumns.id" @click="sortBy('id')">
               小鼠ID <i :class="sortIcon('id')"></i>
             </th>
-            <th @click="sortBy('genotype')">
+            <th v-if="showColumns.genotype" @click="sortBy('genotype')">
               基因型 <i :class="sortIcon('genotype')"></i>
             </th>
-            <th @click="sortBy('strain')">
+            <th v-if="showColumns.strain" @click="sortBy('strain')">
               品系 <i :class="sortIcon('strain')"></i>
             </th>
-            <th @click="sortBy('sex')">
+            <th v-if="showColumns.sex" @click="sortBy('sex')">
               性别 <i :class="sortIcon('sex')"></i>
             </th>
-            <th @click="sortBy('birth_date')">
+            <th v-if="showColumns.birth_date" @click="sortBy('birth_date')">
               出生日期 <i :class="sortIcon('birth_date')"></i>
             </th>
-            <th @click="sortBy('days_old')">
+            <th v-if="showColumns.death_date" @click="sortBy('death_date')">
+              死亡日期 <i :class="sortIcon('death_date')"></i>
+            </th>
+            <th v-if="showColumns.days_old" @click="sortBy('days_old')">
               日龄 <i :class="sortIcon('days_old')"></i>
             </th>
-            <th @click="sortBy('weeks_old')">
+            <th v-if="showColumns.weeks_old" @click="sortBy('weeks_old')">
               周龄 <i :class="sortIcon('weeks_old')"></i>
             </th>
-            <th @click="sortBy('live_status')">
+            <th v-if="showColumns.live_status" @click="sortBy('live_status')">
               存活状态 <i :class="sortIcon('live_status')"></i>
             </th>
-            <th @click="sortBy('tests_planned')">
+            <th v-if="showColumns.cage" @click="sortBy('cage')">
+              笼位 <i :class="sortIcon('cage')"></i>
+            </th>
+            <th v-if="showColumns.tests_planned" @click="sortBy('tests_planned')">
               计划实验 <i :class="sortIcon('tests_planned')"></i>
             </th>
-            <th @click="sortBy('tests_done')">
+            <th v-if="showColumns.tests_done" @click="sortBy('tests_done')">
               完成实验 <i :class="sortIcon('tests_done')"></i>
             </th>
           </tr>
-
           <tr class="filter-row">
-            <th><input v-model="filters.id" @input="applyFilters" placeholder="筛选ID"></th>
-            <th>
+            <th v-if="showColumns.id"><input v-model="filters.id" @input="applyFilters" placeholder="筛选ID"></th>
+            <th v-if="showColumns.genotype">
               <!-- 基因型筛选 -->
               <div class="genotype-filter">
                 <select v-model="filters.genotypeLocus" @change="onLocusChange">
@@ -114,14 +119,12 @@
                     {{ locus.symbol }}
                   </option>
                 </select>
-                
                 <select v-if="filters.genotypeLocus && filters.genotypeLocus !== 'WT'" v-model="filters.genotypeAllele" @change="onAlleleChange" :disabled="!filters.genotypeLocus">
                   <option value="">所有等位基因</option>
                   <option v-for="allele in filteredAlleles" :key="allele.id" :value="allele.symbol">
                     {{ allele.symbol }}
                   </option>
                 </select>
-
                 <select v-if="filters.genotypeLocus && filters.genotypeLocus !== 'WT' && filters.genotypeAllele" v-model="filters.genotypeHomo" @change="applyFilters" :disabled="!filters.genotypeLocus || !filters.genotypeAllele" >
                   <option value="">所有形式</option>
                   <option value="homo">纯合</option>
@@ -129,24 +132,25 @@
                 </select>
               </div>
             </th>
-            <th><input v-model="filters.strain" @input="applyFilters" placeholder="筛选品系"></th>
-            <th>
+            <th v-if="showColumns.strain"><input v-model="filters.strain" @input="applyFilters" placeholder="筛选品系"></th>
+            <th v-if="showColumns.sex">
               <select v-model="filters.sex" @change="applyFilters">
                 <option value="">全部</option>
                 <option value="M">雄性</option>
                 <option value="F">雌性</option>
               </select>
             </th>
-            <th><input type="date" v-model="filters.birth_date" @change="applyFilters"></th>
-            <th>
+            <th v-if="showColumns.birth_date"><input type="date" v-model="filters.birth_date" @change="applyFilters"></th>
+            <th v-if="showColumns.death_date"><input type="date" v-model="filters.death_date" @change="applyFilters"></th>
+            <th v-if="showColumns.days_old">
               <input v-model.number="filters.days_old_min" @input="applyFilters" placeholder="最小日龄" type="number">
               <input v-model.number="filters.days_old_max" @input="applyFilters" placeholder="最大日龄" type="number">
             </th>
-            <th>
+            <th v-if="showColumns.weeks_old">
               <input v-model.number="filters.weeks_old_min" @input="applyFilters" placeholder="最小周龄" type="number">
               <input v-model.number="filters.weeks_old_max" @input="applyFilters" placeholder="最大周龄" type="number">
             </th>
-            <th>
+            <th v-if="showColumns.live_status">
               <select v-model.number="filters.live_status" @change="applyFilters">
                 <option value=-1>全部</option>
                 <option value=1>存活</option>
@@ -156,15 +160,27 @@
                 <option value=4>丢弃</option>
               </select>
             </th>
-            <th>
+            <th v-if="showColumns.cage">
+              <select v-model="filters.location" @change="onLocationChange">
+                <option value="">所有区域</option>
+                <option value="unassigned">未分配</option>
+                <option v-for="location in locations" :value="location.identifier">{{ location.identifier }}</option>
+              </select>
+              <select v-model.number="filters.cage" @change="applyFilters">
+                <option :value=null>所有笼位</option>
+                <option value="unassigned">未分配</option>
+                <option v-for="cage in locationCages" :value="cage.id">{{ cage.cage_id }}</option>
+              </select>
+            </th>
+            <th v-if="showColumns.tests_planned">
               <input v-model.number="filters.tests_planned" @input="applyFilters" placeholder="实验编号" type="number">
             </th>
-            <th>
+            <th v-if="showColumns.tests_done">
               <input v-model.number="filters.tests_done" @input="applyFilters" placeholder="实验编号" type="number">
             </th>
           </tr>
-
         </thead>
+
         <tbody>
           <tr v-for="(mouse, index) in filteredMice" :key="mouse.tid"
           @click="selectMice(mouse, $event, index)"
@@ -174,19 +190,20 @@
               'selected': isSelected(mouse.tid),
               'selected-multiple': selectedMice.length > 1 && isSelected(mouse.tid)
           }">
-            <td>{{ mouse.id }}</td>
-            <td v-html="mouse.genotype.symbol"></td>
-            <td>{{ mouse.strain }}</td>
-            <td>
+            <td v-if="showColumns.id">{{ mouse.id }}</td>
+            <td v-if="showColumns.genotype" v-html="mouse.genotype.symbol"></td>
+            <td v-if="showColumns.strain">{{ mouse.strain }}</td>
+            <td v-if="showColumns.sex">
               <div class="mouse-sex" :class="mouse.sex === 'F' ? 'sex-female' : 'sex-male'">
                 {{ mouse.sex === 'F' ? '♀' : '♂' }}
               </div>
             </td>
-            <td>{{ mouse.birth_date }}</td>
-            <td>{{ mouse.days_old }}</td>
-            <td>{{ mouse.weeks_old }}</td>
-            <td>
-              {{ 
+            <td v-if="showColumns.birth_date">{{ mouse.birth_date }}</td>
+            <td v-if="showColumns.death_date">{{ mouse.death_date }}</td>
+            <td v-if="showColumns.days_old">{{ mouse.days_old }}</td>
+            <td v-if="showColumns.weeks_old">{{ mouse.weeks_old }}</td>
+            <td v-if="showColumns.live_status">
+              {{
                 mouse.live_status === 0 ? '死亡' : 
                 mouse.live_status === 1 ? '存活' : 
                 mouse.live_status === 2 ? '解剖' : 
@@ -195,10 +212,11 @@
                 '未知状态' 
               }}
             </td>
-            <td>
+            <td v-if="showColumns.cage">{{ mouseCageMap.get(mouse.tid) ? mouseCageMap.get(mouse.tid)[2]: '未分配'}}</td>
+            <td v-if="showColumns.tests_planned">
               {{ mouse.tests_planned.length > 0 ? mouse.tests_planned.join(', ') : '无' }}
             </td>
-            <td>
+            <td v-if="showColumns.tests_done">
               {{ mouse.tests_done.length > 0 ? mouse.tests_done.join(', ') : '无' }}
             </td>
           </tr>
@@ -573,12 +591,8 @@
               </span>
             </div>
             <div class="detail-item">
-              <span class="detail-label">区域</span>
-              <span class="detail-value">{{ templateMouseCage.section }}</span>
-            </div>
-            <div class="detail-item">
               <span class="detail-label">笼位</span>
-              <span class="detail-value">{{ templateMouseCage.cage_id }}</span>
+              <span class="detail-value">{{ templateMouse.cage }}</span>
             </div>
             <div class="detail-item">
               <span class="detail-label">父本</span>
@@ -645,11 +659,11 @@ const { mice, loading, genotypes, selectedGenes, alleleSuggestions } = storeToRe
 const { loadMice, onFormLocusChange, onFormAlleleChange, deleteGene, addGene, deleteGenes } = geneStore
 
 const cageStore = useCageStore()
-const { cages } = storeToRefs(cageStore)
+const { cages, locations } = storeToRefs(cageStore)
 const { fetchCages } = cageStore
 
 const experimentStore = useExperimentStore()
-const { experiments } = storeToRefs(experimentStore)
+const { experiments, showColumns } = storeToRefs(experimentStore)
 
 // 响应式数据
 const filteredMice = ref([])
@@ -671,8 +685,32 @@ const batchSelectedTests = ref([])
 const showModal = ref(false)
 const modalMode = ref('') // 'add', 'edit', 'template'
 const templateMouse = ref(null)
-const templateMouseCage = ref({})
 const newMice = ref([])
+const locationCages = computed(() => {
+  if (!filters.location) return cages.value
+  return cages.value.filter(cage => cage.section === filters.location)
+})
+const mouseCageMap = computed(() => {
+  const map = new Map()
+  // 预先构建老鼠ID到笼子的反向映射
+  const cageByMouseId = new Map()
+  // 只遍历一次笼子数组
+  cages.value.forEach(cage => {
+    cage.mice.forEach(mouse => {
+      cageByMouseId.set(mouse.tid, cage)
+    })
+  })
+  // 然后构建结果
+  mice.value.forEach(mouse => {
+    const cage = cageByMouseId.get(mouse.tid)
+    if (cage) {
+      map.set(mouse.tid, [cage.id, cage.section, cage.section+'-'+cage.cage_id])
+    } else {
+      map.set(mouse.tid, null)
+    }
+  })
+  return map
+})
 
 let clickTimer = ref(null);
 const delay = 250;
@@ -706,13 +744,16 @@ const filters = reactive({
   strain: '',
   sex: '',
   birth_date: '',
+  death_date: '',
   days_old_min: null,
   days_old_max: null,
   weeks_old_min: null,
   weeks_old_max: null,
   live_status: 1,
   tests_done: null,
-  tests_planned: null
+  tests_planned: null,
+  location: '',
+  cage:null
 })
 const filteredAlleles = ref([])
 
@@ -885,13 +926,16 @@ const resetSearch = () => {
     strain:'',
     sex: '',
     birth_date: '',
+    death_date: '',
     days_old_min: null,
     days_old_max: null,
     weeks_old_min: null,
     weeks_old_max: null,
     live_status: -1,
     tests_done: null,
-    tests_planned: null
+    tests_planned: null,
+    location: '',
+    cage:null
   })
   applyFilters()
 }
@@ -920,6 +964,11 @@ const onLocusChange = () => {
 const onAlleleChange = () => {
   // 重置下级筛选条件
   filters.genotypeHomo = '';
+  applyFilters()
+}
+
+const onLocationChange = () => {
+  filters.cage = null
   applyFilters()
 }
 
@@ -957,6 +1006,9 @@ const applyFilters = () => {
   if (filters.birth_date) {
     result = result.filter(m => m.birth_date === filters.birth_date)
   }
+  if (filters.death_date) {
+    result = result.filter(m => m.death_date === filters.death_date)
+  }
   if (filters.days_old_min) {
     result = result.filter(m => m.days_old >= filters.days_old_min)
   }
@@ -971,6 +1023,38 @@ const applyFilters = () => {
   }
   if (filters.live_status >= 0) {
     result = result.filter(m => m.live_status === filters.live_status)
+  }
+  if (filters.location) {
+    if (filters.location === 'unassigned') {
+      // 筛选未分配笼子的老鼠
+      result = result.filter(m => {
+        const cageInfo = mouseCageMap.value.get(m.tid)
+        return !cageInfo
+      })
+    } else {
+      result = result.filter(m => {
+        const mCage = mouseCageMap.value.get(m.tid)
+        if (mCage) {
+          return mCage[1] === filters.location
+        }
+      })
+    }
+  }
+  if (filters.cage) {
+    if (filters.cage === 'unassigned') {
+      // 筛选未分配笼子的老鼠
+      result = result.filter(m => {
+        const cageInfo = mouseCageMap.value.get(m.tid)
+        return !cageInfo
+      })
+    } else {
+      result = result.filter(m => {
+        const mCage = mouseCageMap.value.get(m.tid)
+        if (mCage) {
+          return mCage[0] === filters.cage
+        }
+      })
+    }
   }
   if (filters.tests_done) {
     result = result.filter(m => m.tests_done.includes(filters.tests_done))
@@ -987,6 +1071,11 @@ const applyFilters = () => {
     if (sortField.value === 'birth_date') {
       const dateA = a.birth_date ? new Date(a.birth_date) : 0
       const dateB = b.birth_date ? new Date(b.birth_date) : 0
+      return (dateA - dateB) * modifier
+    }
+    if (sortField.value === 'death_date') {
+      const dateA = a.death_date ? new Date(a.death_date) : 0
+      const dateB = b.death_date ? new Date(b.death_date) : 0
       return (dateA - dateB) * modifier
     }
     
@@ -1137,6 +1226,12 @@ const openModal = async (mode, mouse = null) => {
         }
       })
     }
+    const mCage = mouseCageMap.value.get(mouse.tid)
+    if (mCage) {
+      mouse = { ...mouse, cage_id: mCage[0] }
+    } else {
+      mouse = { ...mouse, cage_id: null }
+    }
     // 设置父本母本
     if (mouse.father && mouse.father.length > 0) {
       selectedFathers.value = mouse.father.map(tid => mice.value.find(m => m.tid === tid)).filter(Boolean)
@@ -1145,8 +1240,11 @@ const openModal = async (mode, mouse = null) => {
       selectedMothers.value = mouse.mother.map(tid => mice.value.find(m => m.tid === tid)).filter(Boolean)
     }
     if (mode === 'template') {
-      templateMouse.value = { ...mouse }
-      templateMouseCage.value = templateMouse.value.cage_id ? cages.value.find(cage => cage.id === templateMouse.value.cage_id) : {'section':'', 'cage_id':''}
+      if (mCage) {
+        templateMouse.value = { ...mouse, cage: mCage[2] }
+      } else {
+        templateMouse.value = { ...mouse, cage: '未分配' }
+      }
       newMice.value = [{ id: '', sex: mouse.sex }]
       return
     }
@@ -1196,7 +1294,6 @@ const closeModal = () => {
   showModal.value = false
   modalMode.value = ''
   templateMouse.value = null
-  templateMouseCage.value = {}
   newMice.value = []
   fatherQuery.value = ''
   motherQuery.value = ''
@@ -1257,12 +1354,8 @@ const saveMouse = async () => {
       toast.success(`小鼠 ${formData.id} 信息已更新！`)
     }
     applyFilters()
-    if (formData.cage_id) {
-      closeModal()
-      fetchCages()
-    } else {
-      closeModal()
-    }
+    closeModal()
+    fetchCages()
   } catch (error) {
     console.error('保存小鼠失败:', error)
     
@@ -1430,29 +1523,29 @@ const searchCage = () => {
     cage.cage_id.includes(thisQuery))
   
   cageSuggestions.value = suggestions.sort((a, b) => {
-      const aStartsWith = a.cage_id.startsWith(thisQuery)
-      const bStartsWith = b.cage_id.startsWith(thisQuery)
-      const aIncludes = a.cage_id.includes(thisQuery)
-      const bIncludes = b.cage_id.includes(thisQuery)
-      
-      // 完全匹配或开头匹配的优先
-      if (aStartsWith && !bStartsWith) return -1
-      if (!aStartsWith && bStartsWith) return 1
-      
-      // 开头匹配的按ID长度排序（较短的优先）
-      if (aStartsWith && bStartsWith) {
-        return a.id.length - b.id.length
-      }
-      
-      // 包含匹配的按匹配位置排序
-      if (aIncludes && bIncludes) {
-        const aIndex = a.cage_id.indexOf(thisQuery)
-        const bIndex = b.cage_id.indexOf(thisQuery)
-        return aIndex - bIndex
-      }
-      
-      return 0
-    }).slice(0, 10)
+    const aStartsWith = a.cage_id.startsWith(thisQuery)
+    const bStartsWith = b.cage_id.startsWith(thisQuery)
+    const aIncludes = a.cage_id.includes(thisQuery)
+    const bIncludes = b.cage_id.includes(thisQuery)
+    
+    // 完全匹配或开头匹配的优先
+    if (aStartsWith && !bStartsWith) return -1
+    if (!aStartsWith && bStartsWith) return 1
+    
+    // 开头匹配的按ID长度排序（较短的优先）
+    if (aStartsWith && bStartsWith) {
+      return a.id.length - b.id.length
+    }
+    
+    // 包含匹配的按匹配位置排序
+    if (aIncludes && bIncludes) {
+      const aIndex = a.cage_id.indexOf(thisQuery)
+      const bIndex = b.cage_id.indexOf(thisQuery)
+      return aIndex - bIndex
+    }
+    
+    return 0
+  }).slice(0, 10)
 }
 
 const selectCage = (cage) => {

@@ -202,17 +202,19 @@ onMounted(() => {
   if (savedState !== null) {
     sidebarCollapsed.value = savedState === 'true'
   }
-  // 定期心跳
-  const heartbeatInterval = setInterval(() => {
-      fetch('/heartbeat', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          // 低优先级，不阻塞用户交互
-          priority: 'low',
-          // 允许在页面卸载时发送
-          keepalive: true
-      }).catch(() => {});  // 静默失败
-  }, 10000);
+  if (!window.pywebview || !window.pywebview.api) {
+    // 定期心跳
+    const heartbeatInterval = setInterval(() => {
+        fetch('/heartbeat', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            // 低优先级，不阻塞用户交互
+            priority: 'low',
+            // 允许在页面卸载时发送
+            keepalive: true
+        }).catch(() => {});  // 静默失败
+    }, 10000);
+  }
 })
 
 import { useRoute } from 'vue-router'

@@ -90,6 +90,9 @@ class Cage(db.Model):
     mice_count = db.Column(db.Integer)
     mice_sex = db.Column(db.String(10))  # 'M'/'F'/'Mixed'
     mice_genotype = db.Column(db.String(50))
+
+    def display(self):
+        return self.section + "-" + self.cage_id
     
 class WeightRecord(db.Model):
     __tablename__ = 'weight_record'
