@@ -1,9 +1,10 @@
 import { useGeneStore } from './geneStore'
 import { useCageStore } from './cageStore'
 import { useExperimentStore } from './experimentStore'
+import { useSettingStore } from './settingStore'
 
 // 统一导出所有 Store
-export { useGeneStore, useCageStore, useExperimentStore }
+export { useGeneStore, useCageStore, useExperimentStore, useSettingStore }
 
 // // 工具函数
 // export const resetAllStores = () => {
@@ -17,7 +18,8 @@ export class StoreUtils {
     const stores = [
       useGeneStore,
       useCageStore,
-      useExperimentStore
+      useExperimentStore, 
+      useSettingStore
     ]
   
     for (const Store of stores) {

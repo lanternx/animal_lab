@@ -72,40 +72,40 @@
         <thead>
           <tr>
             <th v-if="showColumns.id" @click="sortBy('id')">
-              小鼠ID <i :class="sortIcon('id')"></i>
+              小鼠ID <i :class="sortIcon('id')">keyboard_arrow_down</i>
             </th>
             <th v-if="showColumns.genotype" @click="sortBy('genotype')">
-              基因型 <i :class="sortIcon('genotype')"></i>
+              基因型 <i :class="sortIcon('genotype')">keyboard_arrow_down</i>
             </th>
             <th v-if="showColumns.strain" @click="sortBy('strain')">
-              品系 <i :class="sortIcon('strain')"></i>
+              品系 <i :class="sortIcon('strain')">keyboard_arrow_down</i>
             </th>
             <th v-if="showColumns.sex" @click="sortBy('sex')">
-              性别 <i :class="sortIcon('sex')"></i>
+              性别 <i :class="sortIcon('sex')">keyboard_arrow_down</i>
             </th>
             <th v-if="showColumns.birth_date" @click="sortBy('birth_date')">
-              出生日期 <i :class="sortIcon('birth_date')"></i>
+              出生日期 <i :class="sortIcon('birth_date')">keyboard_arrow_down</i>
             </th>
             <th v-if="showColumns.death_date" @click="sortBy('death_date')">
-              死亡日期 <i :class="sortIcon('death_date')"></i>
+              死亡日期 <i :class="sortIcon('death_date')">keyboard_arrow_down</i>
             </th>
             <th v-if="showColumns.days_old" @click="sortBy('days_old')">
-              日龄 <i :class="sortIcon('days_old')"></i>
+              日龄 <i :class="sortIcon('days_old')">keyboard_arrow_down</i>
             </th>
             <th v-if="showColumns.weeks_old" @click="sortBy('weeks_old')">
-              周龄 <i :class="sortIcon('weeks_old')"></i>
+              周龄 <i :class="sortIcon('weeks_old')">keyboard_arrow_down</i>
             </th>
             <th v-if="showColumns.live_status" @click="sortBy('live_status')">
-              存活状态 <i :class="sortIcon('live_status')"></i>
+              存活状态 <i :class="sortIcon('live_status')">keyboard_arrow_down</i>
             </th>
             <th v-if="showColumns.cage" @click="sortBy('cage')">
-              笼位 <i :class="sortIcon('cage')"></i>
+              笼位 <i :class="sortIcon('cage')">keyboard_arrow_down</i>
             </th>
             <th v-if="showColumns.tests_planned" @click="sortBy('tests_planned')">
-              计划实验 <i :class="sortIcon('tests_planned')"></i>
+              计划实验 <i :class="sortIcon('tests_planned')">keyboard_arrow_down</i>
             </th>
             <th v-if="showColumns.tests_done" @click="sortBy('tests_done')">
-              完成实验 <i :class="sortIcon('tests_done')"></i>
+              完成实验 <i :class="sortIcon('tests_done')">keyboard_arrow_down</i>
             </th>
           </tr>
           <tr class="filter-row">
@@ -651,7 +651,7 @@ import axios from 'axios'
 import { toast } from 'vue3-toastify'
 import 'vue3-toastify/dist/index.css'
 import MouseDetailModal from './MouseDetailView.vue'
-import { useGeneStore, useCageStore, useExperimentStore } from '@/stores'
+import { useGeneStore, useCageStore, useExperimentStore, useSettingStore } from '@/stores'
 import { storeToRefs } from 'pinia'
 
 const geneStore = useGeneStore()
@@ -663,7 +663,11 @@ const { cages, locations } = storeToRefs(cageStore)
 const { fetchCages } = cageStore
 
 const experimentStore = useExperimentStore()
-const { experiments, showColumns } = storeToRefs(experimentStore)
+const { experiments } = storeToRefs(experimentStore)
+
+const settingStore = useSettingStore()
+const {showColumns} = storeToRefs(settingStore)
+
 
 // 响应式数据
 const filteredMice = ref([])
@@ -1068,20 +1072,34 @@ const applyFilters = () => {
     let modifier = sortDirection.value === 'asc' ? 1 : -1
     
     // 处理日期排序
-    if (sortField.value === 'birth_date') {
-      const dateA = a.birth_date ? new Date(a.birth_date) : 0
-      const dateB = b.birth_date ? new Date(b.birth_date) : 0
-      return (dateA - dateB) * modifier
-    }
-    if (sortField.value === 'death_date') {
-      const dateA = a.death_date ? new Date(a.death_date) : 0
-      const dateB = b.death_date ? new Date(b.death_date) : 0
+    if (['birth_date', 'death_date'].includes(sortField.value)) {
+      const dateA = a[sortField.value] ? new Date(a[sortField.value]) : 0
+      const dateB = b[sortField.value] ? new Date(b[sortField.value]) : 0
       return (dateA - dateB) * modifier
     }
     
     // 处理数字排序
     if (['days_old', 'weeks_old'].includes(sortField.value)) {
       return ((a[sortField.value] || 0) - (b[sortField.value] || 0)) * modifier
+    }
+
+    if (sortField.value === 'genotype') {
+      const geneA = a['genotype']['symbol']
+      const geneB = b['genotype']['symbol']
+      return (geneA > geneB ? 1 : geneA < geneB ? -1 : 0) * modifier
+    }
+
+    if (sortField.value === 'cage') {
+      const [cageA = null, locationA = null] = mouseCageMap.value.get(a.tid) || []
+      const [cageB = null, locationB = null] = mouseCageMap.value.get(b.tid) || []
+      
+      // 先按location排序，再按cage排序，null值排最后
+      return (
+        (locationA === null ? 1 : locationB === null ? -1 : 0) ||  // null处理
+        (locationA > locationB ? 1 : locationA < locationB ? -1 : 0) ||  // location比较
+        (cageA === null ? 1 : cageB === null ? -1 : 0) ||  // cage null处理
+        (cageA > cageB ? 1 : cageA < cageB ? -1 : 0)  // cage比较
+      ) * modifier
     }
     
     // 默认排序
@@ -1763,7 +1781,7 @@ onMounted(async () => {
   text-align: left;
   padding: 14px 12px;
   border-bottom: 2px solid #e2e8f0;
-  min-width: 90px;
+  min-width: 110px;
 }
 
 .mouse-table th i {
@@ -1806,19 +1824,19 @@ onMounted(async () => {
 }
 
 .mouse-table tbody tr.selected {
-    background-color: #d4e6f1;
+  background-color: #d4e6f1;
 }
 .mouse-table tbody tr.selected-multiple {
-    background-color: #d1ecf1;
+  background-color: #d1ecf1;
 }
         
 /* 选中行悬停样式 */
 .mouse-table tbody tr.selected:hover {
-    background-color: #c2d9e9 !important;
+  background-color: #c2d9e9 !important;
 }
 
 .mouse-table tbody tr.selected-multiple:hover {
-    background-color: #bde1e6 !important;
+  background-color: #bde1e6 !important;
 }
 
 /* 模态框样式 */

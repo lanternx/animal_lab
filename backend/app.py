@@ -3258,5 +3258,14 @@ def delete_predefined_groups(g_id):
         logger.error(f"删除预设分组失败: {str(e)}")
         return jsonify({'error': f'删除预设分组失败: {str(e)}'}), 404
 
+@app.route('/api/setting', methods=['GET'])
+def display_setting():
+    pass
+
+@app.route('/api/setting/<string:type>', methods=['POST'])
+def change_display_setting(type):
+    if type == 'mouse':
+        pass
+
 if __name__ == '__main__':
     app.run(debug=True, host='localhost', port=5000)

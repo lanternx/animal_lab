@@ -1371,6 +1371,56 @@
     </div>
     </div>
 
+    <!-- 自定义显示设置 -->
+    <div v-if="activeTab === 'display'" class="form-container">
+        <h2 class="section-title">自定义显示设置</h2>
+        
+        <!-- 列显示设置 -->
+        <div class="form-section">
+            <h3>显示列设置</h3>
+            <div class="preset-selector">
+                <label>选择预设：</label>
+                <select v-model="selectedSetting" @change="applyPreset">
+                    <option value="">-- 请选择预设 --</option>
+                    <option v-for="(name, key) in settings" :key="key" :value="key">
+                    {{ name }}
+                    </option>
+                </select>
+            </div>
+            <!-- 基本信息列 -->
+            <div v-if="selectedSetting === 'mouse'" class="column-category">
+                <h4>小鼠列表</h4>
+                <div class="column-grid">
+                    <label class="column-item" :class="{seen : showColumns[column.key]}" v-for="column in mouseColumns" :key="column.key" :for="column.key">
+                        <input type="checkbox" :id="column.key" v-model="showColumns[column.key]" style="visibility: hidden;">
+                        <label :for="column.key">{{ column.label }}</label>
+                        <i class="material-icons" v-if="showColumns[column.key]">visibility</i>
+                        <i class="material-icons" v-else>visibility_off</i>
+                    </label>
+                </div>
+            </div>
+            
+            <!-- 操作按钮 -->
+            <div v-if="selectedSetting" class="form-group-row">
+                <button class="btn btn-primary" @click="saveDisplaySettings">
+                    <i class="material-icons">save</i> 保存设置
+                </button>
+                <button class="btn btn-outline" @click="resetToDefault(selectedSetting)">
+                    <i class="material-icons">refresh</i> 恢复默认
+                </button>
+            </div>
+        </div>
+
+        <!-- 重置设置 -->
+        <div class="reset-section">
+            <h4>重置设置</h4>
+            <p>这将重置所有显示设置为默认值，此操作不可撤销。</p>
+            <button class="btn btn-danger" @click="confirmReset">
+                <i class="material-icons">warning</i> 重置所有设置
+            </button>
+        </div>
+    </div>
+    
     <!-- 编辑基因位点对话框 -->
     <div v-if="editLocusDialogVisible" class="dialog-overlay">
     <div class="dialog-container">
@@ -1534,12 +1584,13 @@ import { toast } from 'vue3-toastify'
 import 'vue3-toastify/dist/index.css'
 import IdGroupingManager from '@/components/IdGroupingManager.vue'
 
-import { useGeneStore, useCageStore, useExperimentStore } from '@/stores'
+import { useGeneStore, useCageStore, useExperimentStore, useSettingStore } from '@/stores'
 import { storeToRefs } from 'pinia'
 
 const geneStore = useGeneStore()
 const cageStore = useCageStore()
 const experimentStore = useExperimentStore()
+const settingStore = useSettingStore()
 
 const { genotypes, selectedGenes, alleleSuggestions, mice } = storeToRefs(geneStore)
 const { loadGenotypes, colors, onFormLocusChange, onFormAlleleChange, deleteGene, addGene, deleteGenes } = geneStore
@@ -1547,8 +1598,11 @@ const { loadGenotypes, colors, onFormLocusChange, onFormAlleleChange, deleteGene
 const {locations, section_key} = storeToRefs(cageStore)
 const {calculateCages, fetchCages} = cageStore
 
-const {experiments, experimentPresets, predefinedGroups, trueCurrentDatabase, databaseNotChanged} = storeToRefs(experimentStore)
+const {experiments, experimentPresets, predefinedGroups} = storeToRefs(experimentStore)
 const {fetchExperiments, fetchPredefinedGroups} = experimentStore
+
+const {showColumns, trueCurrentDatabase, databaseNotChanged, selectedSetting, settings} = storeToRefs(settingStore)
+const {mouseColumns, resetToDefault, changeSettings} = settingStore
 
 // UI状态
 const activeTab = ref('genotype')
@@ -1559,7 +1613,8 @@ const tabs = ref([
 { id: 'group', title: '预设分组' },
 { id: 'export', title: '导出设置' },
 { id: 'import', title: '导入数据' },
-{ id: 'database', title: '数据库管理' }
+{ id: 'database', title: '数据库管理' },
+{ id: 'display', title: '自定义显示设置' }
 ])
 
 // 基因型相关状态
@@ -2045,46 +2100,46 @@ editingExperimentType.fields = []
 }
 
 const deleteExperimentType = async (id) => {
-if (!confirm('确定要删除这个实验类型吗？')) return
+    if (!confirm('确定要删除这个实验类型吗？')) return
 
-try {
-await axios.delete(`/api/experiment-types/${id}`)
-toast.success('删除成功')
-await fetchExperiments()
-} catch (error) {
-console.error('删除实验类型失败:', error)
-toast.error(error.response?.data?.error || '删除实验类型失败')
-}
+    try {
+        await axios.delete(`/api/experiment-types/${id}`)
+        toast.success('删除成功')
+        await fetchExperiments()
+    } catch (error) {
+        console.error('删除实验类型失败:', error)
+        toast.error(error.response?.data?.error || '删除实验类型失败')
+    }
 }
 
 const applyPreset = () => {
-if (selectedPreset.value && experimentPresets.value[selectedPreset.value]) {
-const preset = experimentPresets.value[selectedPreset.value]
+    if (selectedPreset.value && experimentPresets.value[selectedPreset.value]) {
+    const preset = experimentPresets.value[selectedPreset.value]
 
-// 保留当前已编辑的内容，只添加预设的字段
-const currentFields = editingExperimentType.fields || []
-const presetFields = JSON.parse(JSON.stringify(preset.fields))
+    // 保留当前已编辑的内容，只添加预设的字段
+    const currentFields = editingExperimentType.fields || []
+    const presetFields = JSON.parse(JSON.stringify(preset.fields))
 
-// 设置显示顺序
-const maxOrder = currentFields.length > 0 ? 
-    Math.max(...currentFields.map(f => f.display_order)) : -1
+    // 设置显示顺序
+    const maxOrder = currentFields.length > 0 ? 
+        Math.max(...currentFields.map(f => f.display_order)) : -1
 
-presetFields.forEach((field, index) => {
-    field.display_order = maxOrder + index + 1
-})
+    presetFields.forEach((field, index) => {
+        field.display_order = maxOrder + index + 1
+    })
 
-// 合并字段
-editingExperimentType.fields = [...currentFields, ...presetFields]
+    // 合并字段
+    editingExperimentType.fields = [...currentFields, ...presetFields]
 
-// 如果名称和描述为空，则使用预设的值
-if (!editingExperimentType.name) {
-    editingExperimentType.name = preset.name
-}
-if (!editingExperimentType.description) {
-    editingExperimentType.description = preset.description
-}
-editingExperimentType.is_show = preset.is_show
-}
+    // 如果名称和描述为空，则使用预设的值
+    if (!editingExperimentType.name) {
+        editingExperimentType.name = preset.name
+    }
+    if (!editingExperimentType.description) {
+        editingExperimentType.description = preset.description
+    }
+    editingExperimentType.is_show = preset.is_show
+    }
 }
 
 const resetForm = () => {
@@ -2709,10 +2764,27 @@ const toggleGroupDetails = (groupId) => {
     }
 }
 
+// 保存显示设置
+const saveDisplaySettings = () => {
+    changeSettings(selectedSetting.value)
+    toast.success('设置保存成功')
+}
+
+// 确认重置
+const confirmReset = () => {
+    if (confirm('确定要重置所有显示设置吗？此操作不可撤销。')) {
+        Object.keys(settings.value).forEach(s => {
+            resetToDefault(s)
+            changeSettings(s)
+        })
+        toast.success("重置所有显示设置")
+    }
+}
+
 // 初始化数据
 onMounted(() => {
-fetchDbInfo()
-refreshDbInfo()
+    fetchDbInfo()
+    refreshDbInfo()
 })
 </script>
 
@@ -3903,4 +3975,65 @@ margin-bottom: 1rem;
 .btn i {
   margin-right: 5px;
 }
+
+.column-category {
+    margin-bottom: 20px;
+    padding: 15px;
+    background-color: #f0f7ff;
+    border-radius: 8px;
+    border-left: 4px solid var(--primary);
+}
+
+.column-category h4 {
+    margin-bottom: 10px;
+    color: #2c3e50;
+    font-weight: 600;
+}
+
+.column-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+    gap: 15px;
+    margin-top: 15px;
+}
+
+.column-item {
+    display: flex;
+    align-items: center;
+    padding: 12px 15px;
+    background-color: gainsboro;
+    border-radius: 6px;
+    border: 1px solid #e0e0e0;
+    user-select: none;
+}
+
+.column-item.seen{
+    background-color: #f8f9fa;
+}
+
+.column-item label {
+    margin-left: 10px;
+    font-weight: 500;
+    flex: 1;
+}
+
+.column-item .material-icons {
+    color: #666;
+}
+
+.column-category {
+    margin-bottom: 20px;
+    padding: 15px;
+    background-color: #f0f7ff;
+    border-radius: 8px;
+    border-left: 4px solid var(--primary);
+}
+
+.column-category h4 {
+    margin-bottom: 10px;
+    color: #2c3e50;
+    font-weight: 600;
+}
+
+
 </style>
