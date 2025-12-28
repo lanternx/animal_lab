@@ -44,7 +44,7 @@
             </div>
             <div class="result-info">
               <div class="mouse-id">{{ result.mouse.id }}</div>
-              <div class="cage-info">{{ result.cage.section }} - {{ result.cage.cage_id }} ({{ result.cage.location }})</div>
+              <div class="cage-info">{{ result.cage.section }} - {{ result.cage.cage_id }} {{ result.cage.location ? `(${result.cage.location})` : "" }}</div>
             </div>
           </div>
         </div>

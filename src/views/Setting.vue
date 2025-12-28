@@ -2521,7 +2521,7 @@ const toggleReadOnly = async (key) => {
         if (currentDatabase.value === key) {
             const message = db.readOnly 
                 ? "当前数据库正在使用中，确定要将其设为可写吗？" 
-                : "当前数据库正在使用中，确定要将其设为只读吗？设为只读后可能无法进行写操作。"
+                : "当前数据库正在使用中，确定要将其设为只读吗？设为只读后可能无法进行写操作。（功能尚未实装）"
             
             if (!confirm(message)) return
         }

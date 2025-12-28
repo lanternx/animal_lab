@@ -84,6 +84,22 @@ if not os.path.exists(config_path):
         "db": {
             "default_db": "mice.db",
             "db_list": {'mice.db': {'projectName': '默认数据库', 'startAt':None, 'endAt':None, 'readOnly': False} }
+        },
+        "config": {
+            'mouse': {
+                'id': True,
+                'genotype': True,
+                'strain': True,
+                'sex': True,
+                'birth_date': True,
+                'days_old': True,
+                'weeks_old': True,
+                'live_status': True,
+                'death_date': False,
+                'tests_planned': False,
+                'tests_done': False,
+                'cage': True
+            }
         }
     }
     with open(config_path, 'w', encoding='utf-8') as f:
@@ -2864,6 +2880,17 @@ def import_database():
         if not file.filename.endswith('.db'):
             return jsonify({'error': '请选择.db格式的数据库文件'}), 400
         
+        # 获取数据库文件信息
+        total_records = get_total_records_count()
+        stat = os.stat(db_path)
+        file_size = stat.st_size
+        last_modified = datetime.fromtimestamp(stat.st_mtime)
+        config['db']['db_list'][default_db].update({        
+            'fileSize': file_size,
+            'lastModified': last_modified.strftime('%Y-%m-%d %H:%M:%S'),
+            'totalRecords': total_records
+        })
+
         db_item = json.loads(request.form.get('project_info'))
         version_change = db_item['databaseUpdate']
         timestamp_name = datetime.now().strftime("%Y%m%d_%H%M%S") + '.db'
@@ -2887,9 +2914,6 @@ def import_database():
         config['db']['db_list'] = db_list
         config['db']['default_db'] = timestamp_name
         
-        with open(config_path, 'w', encoding='utf-8') as f:
-            json.dump(config, f, indent=4)
-        
         if version_change:
             OLD_DB_URL = f"sqlite:///{base_dir / (timestamp_name + timestamp_name)}"
             NEW_DB_URL = f"sqlite:///{base_dir / timestamp_name}"
@@ -2897,6 +2921,9 @@ def import_database():
             migrator = DatabaseMigrator(OLD_DB_URL, NEW_DB_URL)
             clear_all_tables(migrator.for_clear_new_tables())
             migrator.run_migration()
+
+        with open(config_path, 'w', encoding='utf-8') as f:
+            json.dump(config, f, indent=4)
         return jsonify({
             'success': True,
             'message': '数据库导入成功'
@@ -3260,12 +3287,16 @@ def delete_predefined_groups(g_id):
 
 @app.route('/api/setting', methods=['GET'])
 def display_setting():
-    pass
+    return jsonify({'show_columns':config['config']['mouse'], 'success': True}), 200
 
 @app.route('/api/setting/<string:type>', methods=['POST'])
 def change_display_setting(type):
     if type == 'mouse':
-        pass
+        mouse_config = request.json
+        config['config']['mouse'] = mouse_config
+        with open(config_path, 'w', encoding='utf-8') as f:
+            json.dump(config, f, indent=4)
+    return jsonify(), 200
 
 if __name__ == '__main__':
     app.run(debug=True, host='localhost', port=5000)

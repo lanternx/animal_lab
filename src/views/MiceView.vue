@@ -166,9 +166,8 @@
                 <option value="unassigned">未分配</option>
                 <option v-for="location in locations" :value="location.identifier">{{ location.identifier }}</option>
               </select>
-              <select v-model.number="filters.cage" @change="applyFilters">
+              <select v-if="filters.location !== 'unassigned'" v-model.number="filters.cage" @change="applyFilters">
                 <option :value=null>所有笼位</option>
-                <option value="unassigned">未分配</option>
                 <option v-for="cage in locationCages" :value="cage.id">{{ cage.cage_id }}</option>
               </select>
             </th>
@@ -1045,20 +1044,12 @@ const applyFilters = () => {
     }
   }
   if (filters.cage) {
-    if (filters.cage === 'unassigned') {
-      // 筛选未分配笼子的老鼠
-      result = result.filter(m => {
-        const cageInfo = mouseCageMap.value.get(m.tid)
-        return !cageInfo
-      })
-    } else {
-      result = result.filter(m => {
-        const mCage = mouseCageMap.value.get(m.tid)
-        if (mCage) {
-          return mCage[0] === filters.cage
-        }
-      })
-    }
+    result = result.filter(m => {
+      const mCage = mouseCageMap.value.get(m.tid)
+      if (mCage) {
+        return mCage[0] === filters.cage
+      }
+    })
   }
   if (filters.tests_done) {
     result = result.filter(m => m.tests_done.includes(filters.tests_done))

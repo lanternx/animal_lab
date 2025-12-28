@@ -77,7 +77,9 @@ export const useSettingStore = defineStore('setting', () => {
     const loadSettings = async () => {
         try {
                 const response = await api.get('/setting')
-                showColumns.value = response.data['show_columns']
+                if (response.data['success']) {
+                    showColumns.value = response.data['show_columns']
+                }
                 console.log('加载显示设置:', showColumns.value)
             } catch (error) {
                 console.error('获取显示设置失败:', error)
@@ -86,7 +88,7 @@ export const useSettingStore = defineStore('setting', () => {
 
     const changeSettings = async (type) => {
         try {
-                await api.post(`/setting/${type}`)
+                await api.post(`/setting/${type}`, showColumns.value)
                 if (type === 'mouse') {
                     console.log('保存显示设置:', showColumns.value)
                 }
