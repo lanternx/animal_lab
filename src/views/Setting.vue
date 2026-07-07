@@ -323,8 +323,8 @@
                             <td><span class="required">genotype</span></td>
                             <td>字符串</td>
                             <td><span class="required">是</span></td>
-                            <td>基因型描述，格式为：{位点1}[等位基因1]/[等位基因2]&{位点2}[等位基因3]/[等位基因4]</td>
-                            <td class="example-row">{Trp53}[KO]/[+]或{WT}</td>
+                            <td>基因型描述：花括号{}中为基因位点、中括号[]中为等位基因（若无基因编辑，则为{WT}，其他情况都需要写好两个等位基因）。如果有多个基因位点，之间以&相连。格式为：{位点1}[等位基因1]/[等位基因2]&{位点2}[等位基因3]/[等位基因4]</td>
+                            <td class="example-row">{Trp53}[KO]/[+]或{Trp53}[-]/[+]&{Cdkn2a}[-]/[-]或{WT}</td>
                         </tr>
                         <tr>
                             <td><span class="required">sex</span></td>
@@ -2209,26 +2209,26 @@ expandedExperimentType.value = id
 
 // 数据库管理相关方法
 const handleDbFileUpload = (event) => {
-  selectedDbFile.value = event.target.files[0]
-  event.target.value = null
+    selectedDbFile.value = event.target.files[0]
+    event.target.value = null
 }
 
 const handleDbDrop = (event) => {
-  event.preventDefault()
-  isDbDragging.value = false
+    event.preventDefault()
+    isDbDragging.value = false
 
-  if (event.dataTransfer.files && event.dataTransfer.files.length > 0) {
-    const file = event.dataTransfer.files[0]
-    if (file.name.endsWith('.db')) {
-      selectedDbFile.value = file
-    } else {
-      toast.error('请选择.db格式的数据库文件')
+    if (event.dataTransfer.files && event.dataTransfer.files.length > 0) {
+        const file = event.dataTransfer.files[0]
+        if (file.name.endsWith('.db')) {
+        selectedDbFile.value = file
+        } else {
+        toast.error('请选择.db格式的数据库文件')
+        }
     }
-  }
 }
 
 const clearDbFile = () => {
-  selectedDbFile.value = null
+    selectedDbFile.value = null
 }
 
 const importDatabase = () => {
@@ -2520,8 +2520,8 @@ const toggleReadOnly = async (key) => {
     if (db) {
         if (currentDatabase.value === key) {
             const message = db.readOnly 
-                ? "当前数据库正在使用中，确定要将其设为可写吗？" 
-                : "当前数据库正在使用中，确定要将其设为只读吗？设为只读后可能无法进行写操作。（功能尚未实装）"
+                ? "当前数据库正在使用中，确定要将其设为可写吗？重启后生效。（功能尚处于实验阶段）" 
+                : "当前数据库正在使用中，确定要将其设为只读吗？设为只读后可能无法进行写操作，重启后生效。（功能尚处于实验阶段）"
             
             if (!confirm(message)) return
         }

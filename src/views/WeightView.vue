@@ -114,7 +114,7 @@
             <label>选中小鼠信息:</label>
             <div class="mouse-info">
             <p>ID: {{ selectedMouse.id }}</p>
-            <p>基因型: {{ selectedMouse.genotype }}</p>
+            <p>基因型: <span v-html="selectedMouse.genotype"></span></p>
             <p>性别: {{ selectedMouse.sex === 'M' ? '雄性' : '雌性' }}</p>
             <p>生日: {{ formatDate(selectedMouse.birth_date) }}</p>
             </div>

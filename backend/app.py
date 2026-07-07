@@ -129,7 +129,10 @@ base_dir.mkdir(parents=True, exist_ok=True)
 if not os.path.exists(db_path):
     open(db_path, "w").close()
     
-app.config['SQLALCHEMY_DATABASE_URI'] = f'sqlite:///{db_path}'
+app.config['SQLALCHEMY_DATABASE_URI'] = f'sqlite:///file:{db_path}?uri=true'
+if db_list.get(default_db, {}).get('readOnly', False):
+    print("数据库处于只读模式")
+    app.config['SQLALCHEMY_DATABASE_URI'] += "&mode=ro"
 app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
 app.config['ALLOWED_EXTENSIONS'] = {'xlsx', 'xls'}
 app.config['UPLOAD_FOLDER'] = os.path.join(base_dir, 'uploads')
@@ -1447,10 +1450,9 @@ def import_mice_data(df, result, conflict_resolution):
                 allele2 = match.group(3).strip()
                 parsed_loci.append((locus_symbol, allele1, allele2))
             else:
-                match = re.match(r'\{([^}]+)\}', locus)
-                if match:
-                    locus_symbol = match.group(1).strip()
-                    parsed_loci.append((locus_symbol, None, None))
+                match = re.fullmatch(r'\{([^}]+)\}', locus)
+                if match and match.group(1).strip() == "WT":
+                    parsed_loci.append(("WT", None, None))
                 else:
                     raise ValueError(f"无法解析基因型格式: {locus}")
 
