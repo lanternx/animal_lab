@@ -1454,12 +1454,6 @@ try {
 </script>
 
 <style scoped>
-.action-buttons {
-display: flex;
-gap: 10px;
-margin-bottom: 20px;
-}
-
 .chart-container {
 display: grid;
 grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
@@ -1494,19 +1488,6 @@ font-size: 3rem;
 margin-bottom: 10px;
 }
 
-.modal-backdrop {
-position: fixed;
-top: 0;
-left: 0;
-width: 100%;
-height: 100%;
-background-color: rgba(0, 0, 0, 0.5);
-z-index: 1000;
-display: flex;
-align-items: center;
-justify-content: center;
-}
-
 .modal-container {
 background-color: white;
 border-radius: 8px;
@@ -1526,65 +1507,10 @@ justify-content: space-between;
 align-items: center;
 }
 
-.modal-title {
-margin: 0;
-font-size: 1.25rem;
-}
-
-.modal-body {
-padding: 1.5rem;
-}
-
-.form-group {
-margin-bottom: 1rem;
-}
-
-.form-label {
-display: block;
-margin-bottom: 0.5rem;
-font-weight: 500;
-}
-
-.form-control, .form-select {
-display: block;
-width: 100%;
-padding: 0.5rem;
-font-size: 1rem;
-line-height: 1.5;
-color: #495057;
-background-color: #fff;
-border: 1px solid #ced4da;
-border-radius: 4px;
-}
-
 .form-select-sm {
 width: auto;
 padding: 0.25rem 0.5rem;
 font-size: 0.875rem;
-}
-
-.d-flex {
-display: flex;
-}
-
-.justify-content-between {
-justify-content: space-between;
-}
-
-.mb-4 {
-margin-bottom: 1.5rem;
-}
-
-.me-2 {
-margin-right: 0.5rem;
-}
-
-.mt-3 {
-margin-top: 1rem;
-}
-
-.d-grid {
-display: grid;
 }
 
 .tabs {
@@ -1677,8 +1603,8 @@ background: white;
 border-radius: 8px;
 box-shadow: 0 2px 8px rgba(0,0,0,0.1);
 padding: 15px;
-width: 330px; /* 400px + 左右padding */
-height: 430px; /* 最小宽度 */
+width: 330px;
+height: 430px;
 }
 
 @media (max-width: 1024px) {

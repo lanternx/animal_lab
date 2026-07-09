@@ -41,7 +41,7 @@
             <i class="material-icons">add</i> 添加分组
             </button>
             <button id="addGroupBtn" class="btn btn-sm btn-danger" @click="clearGroups">
-            <i class="material-icons">add</i> 清空分组
+            <i class="material-icons">clear</i> 清空分组
             </button>
         </div>
         
@@ -184,6 +184,12 @@
                     </div>
                 </div>
             </div>
+
+            <div class="control-group" style="align-self: flex-end;">
+                <button class="primary-btn" @click="exportWeightChart">
+                    <i class="material-icons" style="font-size: 18px;">download</i> 导出图表
+                </button>
+            </div>
         </div>
             
         <!-- 图表容器 -->
@@ -205,7 +211,7 @@
     <!-- 录入模态框 -->
     <div v-if="showModal">
         <div class="dialog-container">
-            <div class="modal-header">
+            <div class="modal-header-B">
             <h5 class="modal-title">批量录入体重信息</h5>
             <button type="button" class="btn-close" @click="closeModal">
                 <i class="material-icons">close</i>
@@ -889,6 +895,111 @@ try {
     }
 }
 
+const exportWeightChart = () => {
+    if (!weightChart) {
+        toast.info('请先生成图表')
+        return
+    }
+
+    const W = 1600, H = 800
+    const tempCanvas = document.createElement('canvas')
+    tempCanvas.width = W
+    tempCanvas.height = H
+    tempCanvas.style.position = 'fixed'
+    tempCanvas.style.left = '-9999px'
+    tempCanvas.style.top = '-9999px'
+    document.body.appendChild(tempCanvas)
+
+    const datasets = weightChart.config.data.datasets.map(ds => ({
+        label: ds.label,
+        data: ds.data.map(p => ({ x: p.x, y: p.y })),
+        borderColor: ds.borderColor,
+        backgroundColor: ds.backgroundColor,
+        borderWidth: ds.borderWidth,
+        pointRadius: ds.pointRadius,
+        pointBackgroundColor: ds.pointBackgroundColor,
+        pointBorderColor: ds.pointBorderColor,
+        fill: ds.fill,
+        type: ds.type,
+        showLine: ds.showLine,
+        tension: ds.tension,
+        borderDash: ds.borderDash,
+        stepped: ds.stepped,
+        spanGaps: ds.spanGaps,
+        order: ds.order
+    }))
+
+    const yScale = weightChart.scales.y
+    const xScale = weightChart.scales.x
+
+    let xTitle = '生存天数(天)'
+    if (averageMethod.value === 'weekly') xTitle = '生存周数'
+    else if (averageMethod.value === 'monthly') xTitle = '生存月数'
+
+    const exportChart = new Chart(tempCanvas.getContext('2d'), {
+        type: 'scatter',
+        data: { datasets },
+        options: {
+            responsive: false,
+            maintainAspectRatio: true,
+            animation: false,
+            devicePixelRatio: 2,
+            plugins: {
+                legend: {
+                    position: 'top',
+                    labels: {
+                        filter: item => !item.text.includes('数据点') && !item.text.includes('置信区间下界')
+                    }
+                },
+                tooltip: { enabled: false }
+            },
+            scales: {
+                y: {
+                    title: { display: true, text: '体重 (g)' },
+                    beginAtZero: false,
+                    min: yScale.min,
+                    max: yScale.max
+                },
+                x: {
+                    type: 'linear',
+                    title: { display: true, text: xTitle },
+                    min: xScale.min,
+                    max: xScale.max,
+                    ticks: { stepSize: 7 }
+                }
+            }
+        }
+    })
+
+    setTimeout(async () => {
+        const filename = `体重曲线_${new Date().toISOString().slice(0, 10)}.png`
+        if (window.pywebview && window.pywebview.api) {
+            tempCanvas.toBlob(async (blob) => {
+                const arrayBuffer = await blob.arrayBuffer()
+                const uint8array = new Uint8Array(arrayBuffer)
+                const dataArray = Array.from(uint8array)
+                const state = await window.pywebview.api.save_file_dialog(dataArray, filename)
+                if (state.success) {
+                    toast.success(`导出成功，文件路径：${state.path}`)
+                } else {
+                    toast.info(state.message || '导出失败')
+                }
+                exportChart.destroy()
+                document.body.removeChild(tempCanvas)
+            }, 'image/png')
+        } else {
+            const link = document.createElement('a')
+            link.download = filename
+            link.href = tempCanvas.toDataURL('image/png')
+            document.body.appendChild(link)
+            link.click()
+            document.body.removeChild(link)
+            exportChart.destroy()
+            document.body.removeChild(tempCanvas)
+        }
+    }, 300)
+}
+
 // 监听图表选项变化
 watch([averageMethod, showTrendLine, showConfidenceBand, showDot], () => {
 if (hasData.value) {
@@ -903,73 +1014,12 @@ init()
 </script>
 
 <style scoped>
-/* 使用与dashboard一致的卡片样式 */
-.card {
-margin-bottom: 1.5rem;
-border-radius: 8px;
-box-shadow: 0 2px 8px rgba(0,0,0,0.1);
-background-color: white;
-overflow: hidden;
-}
-
-.card-header {
-padding: 1rem;
-background-color: #f8f9fa;
-border-bottom: 1px solid #dee2e6;
-font-weight: 600;
-}
-
-.card-body {
-padding: 1.5rem;
-}
-
-.content-header {
-display: flex;
-justify-content: space-between;
-align-items: center;
-margin-bottom: 20px;
-}
-
-.page-title {
-font-size: 1.5rem;
-font-weight: 600;
-margin: 0;
-}
-
-.action-buttons {
-display: flex;
-gap: 10px;
-}
-
-.form-group {
-margin-bottom: 1rem;
-}
-
-.form-label {
-display: block;
-margin-bottom: 0.5rem;
-font-weight: 500;
-}
-
-.form-control {
-display: block;
-width: 100%;
-padding: 0.5rem;
-font-size: 1rem;
-line-height: 1.5;
-color: #495057;
-background-color: #fff;
-border: 1px solid #ced4da;
-border-radius: 4px;
-transition: border-color 0.15s;
-}
-
 .dialog-container {
 position: fixed;
 top: 50%;
 left: 50%;
 transform: translate(-50%, -50%);
-z-index: 1001; /* 高于遮罩层 */
+z-index: 1001;
 background-color: white;
 border-radius: 8px;
 width: 90%;
@@ -979,7 +1029,7 @@ overflow: auto;
 box-shadow: 0 4px 20px rgba(0, 0, 0, 0.2);
 }
 
-.modal-header {
+.modal-header-B {
 padding: 1rem;
 background-color: var(--primary);
 color: white;
@@ -989,43 +1039,8 @@ justify-content: space-between;
 align-items: center;
 }
 
-.modal-title {
-margin: 0;
-font-size: 1.25rem;
-}
-
-.modal-body {
-padding: 1.5rem;
-}
-
 .input-table {
 margin-top: 1rem;
-}
-
-.table-wrapper {
-overflow-x: auto;
-}
-
-.table {
-width: 100%;
-border-collapse: collapse;
-margin-bottom: 1rem;
-}
-
-.table th, 
-.table td {
-padding: 0.75rem;
-border: 1px solid #dee2e6;
-text-align: left;
-}
-
-.table th {
-background-color: #f8f9fa;
-font-weight: 600;
-}
-
-.table tbody tr:hover {
-background-color: #f5f7fa;
 }
 
 .weight-input {
@@ -1036,26 +1051,10 @@ border-radius: 4px;
 font-size: 1rem;
 }
 
-.d-grid {
-display: grid;
-}
-
-.mt-3 {
-margin-top: 1rem;
-}
-
 .chart-container {
 position: relative;
 height: 400px;
 width: 100%;
-}
-
-.mb-4 {
-margin-bottom: 1.5rem;
-}
-
-.me-2 {
-margin-right: 0.5rem;
 }
 
 /* 图表控制区域 */
@@ -1080,14 +1079,7 @@ margin-right: 0.5rem;
     font-size: 14px;
 }
 
-/* 响应式调整 */
 @media (max-width: 992px) {
-.content-header {
-    flex-direction: column;
-    align-items: flex-start;
-    gap: 10px;
-}
-
 .chart-container {
     height: 300px;
 }
@@ -1099,73 +1091,6 @@ margin-right: 0.5rem;
     }
 }
 
-/* 添加分组容器样式 */
-.groups-container {
-  display: grid;
-  grid-template-columns: repeat(4, 1fr); /* 每行最多四个 */
-  gap: 15px;
-  margin-bottom: 20px;
-}
-
-/* 分组卡片样式 */
-.group-card {
-  width: 200px;
-  height: 210px;
-  border-radius: 8px;
-  overflow: hidden;
-  box-shadow: 0 2px 4px rgba(0,0,0,0.05);
-  transition: all 0.3s ease;
-}
-
-.group-card:hover {
-  transform: translateY(-3px);
-  box-shadow: 0 5px 10px rgba(0,0,0,0.1);
-}
-
-/* 添加分组卡片样式 */
-.add-card {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  justify-content: center;
-  background-color: #f8f9fa;
-  border: 1px dashed #ced4da;
-  cursor: pointer;
-}
-
-.add-card:hover {
-  background-color: #e9ecef;
-  border-color: #adb5bd;
-}
-
-.add-card i {
-  font-size: 2rem;
-  margin-bottom: 8px;
-  color: #6c757d;
-}
-
-.add-card span {
-  font-weight: 500;
-  color: #495057;
-}
-
-/* 卡片内部调整 */
-.group-card .card {
-  height: 100%;
-  margin: 0;
-}
-
-.group-card .card-header {
-  padding: 8px;
-  font-size: 0.9rem;
-}
-
-.group-card .card-body {
-  padding: 10px;
-  height: calc(100% - 40px); /* 减去头部高度 */
-  overflow-y: auto;
-}
-
 .group-card .form-label {
   font-size: 0.8rem;
   margin-bottom: 4px;
@@ -1173,69 +1098,6 @@ margin-right: 0.5rem;
 
 .group-card .form-check {
   font-size: 0.8rem;
-}
-
-/* 响应式调整 */
-@media (max-width: 768px) {
-  .groups-container {
-    grid-template-columns: repeat(auto-fill, minmax(130px, 1fr));
-  }
-  
-  .group-card {
-    width: 130px;
-    height: 130px;
-  }
-}
-
-@media (max-width: 576px) {
-  .groups-container {
-    grid-template-columns: repeat(2, 1fr); /* 小屏幕每行两个 */
-  }
-}
-
-.modal-backdrop {
-position: fixed;
-top: 0;
-left: 0;
-width: 100%;
-height: 100%;
-background-color: rgba(0, 0, 0, 0.5);
-display: flex;
-justify-content: center;
-align-items: center;
-z-index: 950;
-}
-
-.compact-header {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  padding: 0.3rem 0.5rem;
-  background-color: #f8f9fa;
-  border-bottom: 1px solid #e9ecef;
-  font-size: 0.85rem;
-  font-weight: 600;
-}
-
-.compact-header button {
-  background: none;
-  border: none;
-  padding: 0;
-  color: #6c757d;
-  cursor: pointer;
-  font-size: 0.9rem;
-}
-
-.compact-header button:hover {
-  color: #dc3545;
-}
-
-.text-center {
-  text-align: center;
-}
-
-.text-muted {
-  color: #6c757d;
 }
 
 /* 确认对话框样式 */

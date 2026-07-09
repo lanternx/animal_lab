@@ -1185,22 +1185,11 @@ function isCageHighlighted(cageId) {
   cursor: pointer;
 }
 
-/* 保持其他样式不变 */
-.content-header {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  margin-bottom: 20px;
-}
-
 .page-title {
-  font-size: 1.5rem;
+  font-size: 1.8rem;
   font-weight: 600;
-}
-
-.action-buttons {
-  display: flex;
-  gap: 10px;
+  color: var(--primary);
+  white-space: nowrap;
 }
 
 /* 笼位卡片样式 */
@@ -1255,29 +1244,8 @@ function isCageHighlighted(cageId) {
   background-color: #f8f9fa;
 }
 
-.mouse-sex {
-  width: 24px;
-  height: 24px;
-  border-radius: 50%;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  margin-right: 8px;
-  font-size: 12px;
-  color: white;
-  font-weight: bold;
-  flex-shrink: 0; /* 防止在flex容器中缩小 */
-  overflow: hidden; /* 防止内容溢出导致变形 */
-  box-sizing: border-box; /* 确保内边距不影响尺寸 */
-}
 
-.sex-female {
-  background-color: #ff4081;
-}
 
-.sex-male {
-  background-color: #2196f3;
-}
 
 .mouse-info {
   flex-grow: 1;
@@ -1312,60 +1280,13 @@ function isCageHighlighted(cageId) {
 }
 
 /* 对话框样式 */
-.dialog-overlay {
-  position: fixed;
-  top: 0;
-  left: 0;
-  width: 100%;
-  height: 100%;
-  background-color: rgba(0, 0, 0, 0.5);
-  display: flex;
-  justify-content: center;
-  align-items: center;
-  z-index: 1000;
-}
-
 .dialog-container {
   z-index: 2;
-  background-color: white;
-  padding: 20px;
-  border-radius: 8px;
-  width: 90%;
-  max-width: 500px;
-  max-height: 90vh;
-  overflow-y: auto;
-  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.2);
 }
 
 .dialog-container h2 {
   margin-top: 0;
   margin-bottom: 20px;
-}
-
-.form-group {
-  margin-bottom: 15px;
-}
-
-.form-group label {
-  display: block;
-  margin-bottom: 5px;
-  font-weight: 500;
-}
-
-.form-group input, .form-group select {
-  width: 100%;
-  padding: 8px 10px;
-  border: 1px solid #ddd;
-  border-radius: 4px;
-  font-size: 14px;
-  box-sizing: border-box;
-}
-
-.dialog-buttons {
-  display: flex;
-  justify-content: flex-end;
-  gap: 10px;
-  margin-top: 20px;
 }
 
 .empty-cage {
@@ -1455,11 +1376,6 @@ function isCageHighlighted(cageId) {
 .modal-backdrop {
   position: absolute;
   z-index: 1;
-  top: 0;
-  left: 0;
-  right: 0;
-  bottom: 0;
-  background: rgba(0, 0, 0, 0.5);
   backdrop-filter: blur(4px);
 }
 
@@ -1515,15 +1431,6 @@ function isCageHighlighted(cageId) {
 .cage-info {
   margin-top: 10px;
   text-align: center;
-}
-
-.modal-footer {
-  display: flex;
-  justify-content: flex-end;
-  gap: 15px;
-  padding: 15px 20px;
-  background: #f8fafc;
-  border-top: 1px solid #e2e8f0;
 }
 
 /* 搜索相关样式 */
@@ -1661,15 +1568,8 @@ function isCageHighlighted(cageId) {
   flex-shrink: 0;
 }
 
-.search-result-item .sex-female {
-  background-color: #ff4081;
-  color: white;
-}
 
-.search-result-item .sex-male {
-  background-color: #2196f3;
-  color: white;
-}
+
 
 .result-info {
   display: flex;
@@ -1700,43 +1600,11 @@ function isCageHighlighted(cageId) {
   100% { box-shadow: 0 0 0 0 rgba(25, 118, 210, 0); }
 }
 
-/* 调整内容头部布局 */
-.content-header {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  margin-bottom: 20px;
-  flex-wrap: wrap;
-  gap: 15px;
-}
-
-.page-title {
-  font-size: 1.8rem;
-  font-weight: 600;
-  color: var(--primary);
-  white-space: nowrap;
-}
-
-.action-buttons {
-  display: flex;
-  gap: 10px;
-  flex-wrap: wrap;
-}
-
 /* 响应式调整 */
 @media (max-width: 768px) {
-  .content-header {
-    flex-direction: column;
-    align-items: stretch;
-  }
-  
   .search-container {
     max-width: 100%;
     margin: 10px 0;
-  }
-  
-  .action-buttons {
-    justify-content: center;
   }
 }
 

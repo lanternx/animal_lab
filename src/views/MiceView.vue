@@ -259,7 +259,7 @@
     />
 
     <!-- 统一的小鼠编辑/添加模态框 -->
-    <div v-if="showModal" class="modal">
+    <div v-if="showModal" class="modal-backdrop">
       <div class="modal-overlay" @click.self="closeModal"></div>
       <div class="modal-content">
         <div class="modal-header">
@@ -541,7 +541,7 @@
     </div>
 
     <!-- 批量添加小鼠模态框 -->
-    <div v-if="modalMode === 'template' && templateMouse" class="modal">
+    <div v-if="modalMode === 'template' && templateMouse" class="modal-backdrop">
       <div class="modal-overlay" @click.self="closeModal"></div>
       <div class="modal-content">
         <div class="modal-header">
@@ -1651,33 +1651,6 @@ onMounted(async () => {
 </script>
 
 <style scoped>
-.section {
-  margin-bottom: 30px;
-  padding: 25px;
-  background: #ffffff;
-  border-radius: 12px;
-  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.05);
-  position: relative;
-  overflow: hidden;
-}
-
-/* 头部按钮 */
-.header-with-button {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  margin-bottom: 25px;
-  flex-wrap: wrap;
-  gap: 15px;
-}
-
-.header-with-button h2 {
-  font-size: 1.8rem;
-  font-weight: 600;
-  color: #2c3e50;
-  margin: 0;
-}
-
 .add-button {
   padding: 10px 20px;
   background: #4a9bff;
@@ -1697,81 +1670,13 @@ onMounted(async () => {
   transform: translateY(-2px);
 }
 
-/* 搜索控件 */
-.search-controls {
-  display: flex;
-  gap: 12px;
-  margin-bottom: 25px;
-  flex-wrap: wrap;
-  align-items: center;
-}
-
-.search-controls input {
-  flex-grow: 1;
-  padding: 10px 15px;
-  border: 1px solid #dcdfe6;
-  border-radius: 6px;
-  font-size: 1rem;
-  min-width: 250px;
-  transition: border 0.3s;
-}
-
-.search-controls input:focus {
-  border-color: #4a9bff;
-  outline: none;
-  box-shadow: 0 0 0 2px rgba(74, 155, 255, 0.2);
-}
-
-.search-btn, .reset-btn {
-  padding: 10px 20px;
-  border-radius: 6px;
-  cursor: pointer;
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  font-weight: 500;
-  transition: all 0.3s;
-}
-
-.search-btn {
-  background: #f5f7fa;
-  color: #606266;
-  border: 1px solid #dcdfe6;
-}
-
-.search-btn:hover {
-  background: #e4e7ed;
-  color: #4a9bff;
-}
-
-.reset-btn {
-  background: #f8f9fa;
-  color: #606266;
-  border: 1px solid #dcdfe6;
-}
-
-.reset-btn:hover {
-  background: #e2e8f0;
-}
-
-/* 表格样式 */
 .mouse-table {
-  width: 100%;
-  border-collapse: collapse;
-  font-size: 0.95rem;
-  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.05);
   cursor: pointer;
   position: relative;
   user-select: none;
 }
 
 .mouse-table th {
-  background: #f8fafc;
-  color: #64748b;
-  font-weight: 600;
-  text-align: left;
-  padding: 14px 12px;
-  border-bottom: 2px solid #e2e8f0;
   min-width: 110px;
 }
 
@@ -1790,38 +1695,23 @@ onMounted(async () => {
 }
 
 .mouse-table td {
-  padding: 12px;
-  border-bottom: 1px solid #f1f5f9;
   overflow: auto;
   max-width: 200px;
 }
 
-.mouse-table tr:nth-child(even) {
-  background-color: #f9fafc;
-}
-
-.mouse-table tr:hover {
-  background-color: #f1f5ff;
-}
-
-/* 添加悬停效果 */
 .mouse-table tr {
   cursor: pointer;
   transition: background-color 0.2s;
 }
 
-.mouse-table tr:hover {
-  background-color: #f1f5ff !important;
-}
-
 .mouse-table tbody tr.selected {
   background-color: #d4e6f1;
 }
+
 .mouse-table tbody tr.selected-multiple {
   background-color: #d1ecf1;
 }
-        
-/* 选中行悬停样式 */
+
 .mouse-table tbody tr.selected:hover {
   background-color: #c2d9e9 !important;
 }
@@ -1830,76 +1720,12 @@ onMounted(async () => {
   background-color: #bde1e6 !important;
 }
 
-/* 模态框样式 */
-.modal {
-  position: fixed;
-  top: 0;
-  left: 0;
-  right: 0;
-  bottom: 0;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  z-index: 1000;
-}
-
 .modal-overlay {
   position: absolute;
   width: 100%;
   height: 100%;
   background: rgba(0, 0, 0, 0.5);
   backdrop-filter: blur(3px);
-}
-
-.modal-content {
-  background: white;
-  border-radius: 12px;
-  width: 90%;
-  max-width: 600px;
-  max-height: 90vh;
-  box-shadow: 0 10px 25px rgba(0, 0, 0, 0.2);
-  position: relative;
-  z-index: 10;
-  display: flex;
-  flex-direction: column;
-  overflow: hidden; 
-}
-
-.modal-header {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  flex-shrink: 0; /* 防止头部被压缩 */
-  padding: 20px;
-  border-bottom: 1px solid #eaeaea; /* 可选：添加分隔线 */
-  background: white; /* 确保背景色一致 */
-  position: sticky; /* 粘性定位 */
-  top: 0; /* 粘在顶部 */
-  z-index: 11;
-}
-
-.modal-header h3 {
-  margin: 0;
-  font-size: 1.4rem;
-}
-
-.close-btn {
-  background: none;
-  border: none;
-  cursor: pointer;
-  color: #718096;
-  padding: 5px;
-  border-radius: 50%;
-  width: 32px;
-  height: 32px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-}
-
-.close-btn:hover {
-  background: #f8f9fa;
-  color: #4a5568;
 }
 
 .form-body {
@@ -1913,16 +1739,12 @@ onMounted(async () => {
 }
 
 .form-group label {
-  display: block;
-  margin-bottom: 8px;
-  font-weight: 500;
   color: #4a5568;
 }
 
 .form-group input,
 .form-group select,
 .form-group textarea {
-  width: 100%;
   padding: 12px;
   border: 1px solid #e2e8f0;
   border-radius: 6px;
@@ -1930,76 +1752,13 @@ onMounted(async () => {
   transition: all 0.3s;
 }
 
-.form-group input:focus,
-.form-group select:focus,
-.form-group textarea:focus {
-  border-color: #4a9bff;
-  outline: none;
-  box-shadow: 0 0 0 2px rgba(74, 155, 255, 0.2);
-}
-
 .form-group textarea {
   min-height: 100px;
   resize: vertical;
 }
 
-.button-group {
-  display: flex;
-  justify-content: flex-end;
-  gap: 12px;
-  padding: 20px;
-  border-top: 1px solid #f1f5f9;
-}
-
-.cancel-btn:hover {
-  background: #e2e8f0;
-}
-
-/* 加载状态 */
 .loading-overlay {
   position: absolute;
-  top: 0;
-  left: 0;
-  right: 0;
-  bottom: 0;
-  background: rgba(255, 255, 255, 0.8);
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  justify-content: center;
-  z-index: 10;
-}
-
-.loading-spinner {
-  border: 4px solid rgba(0, 0, 0, 0.1);
-  border-left-color: #4a9bff;
-  border-radius: 50%;
-  width: 40px;
-  height: 40px;
-  animation: spin 1s linear infinite;
-  margin-bottom: 15px;
-}
-
-@keyframes spin {
-  to { transform: rotate(360deg); }
-}
-
-/* 空状态 */
-.empty-state {
-  text-align: center;
-  padding: 50px 20px;
-  color: #718096;
-}
-
-.empty-state .material-icons {
-  font-size: 60px;
-  color: #cbd5e0;
-  margin-bottom: 15px;
-}
-
-.empty-state p {
-  font-size: 1.1rem;
-  margin-bottom: 20px;
 }
 
 .empty-state button {
@@ -2333,14 +2092,6 @@ onMounted(async () => {
   flex-shrink: 0; /* 防止在flex容器中缩小 */
   overflow: hidden; /* 防止内容溢出导致变形 */
   box-sizing: border-box; /* 确保内边距不影响尺寸 */
-}
-
-.sex-female {
-  background-color: #ff4081;
-}
-
-.sex-male {
-  background-color: #2196f3;
 }
 
 .genotype-filter {

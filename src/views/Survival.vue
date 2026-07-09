@@ -37,7 +37,7 @@
               <i class="material-icons">add</i> 添加分组
             </button>
             <button id="addGroupBtn" class="btn btn-sm btn-danger" @click="clearGroups">
-            <i class="material-icons">add</i> 清空分组
+            <i class="material-icons">clear</i> 清空分组
             </button>
         </div>
         
@@ -176,6 +176,11 @@
           <!-- 图表容器 -->
           <div class="chart-container">
             <canvas id="survivalChart" height="400"></canvas>
+          </div>
+          <div class="d-flex justify-content-end mt-3 mb-3">
+            <button class="primary-btn" @click="exportSurvivalChart">
+              <i class="material-icons" style="font-size: 18px;">download</i> 导出图表
+            </button>
           </div>
 
           <!-- 数据表格 -->
@@ -493,6 +498,109 @@ const renderChart = () => {
   });
 };
 
+const exportSurvivalChart = () => {
+  if (!chartInstance.value) {
+    toast.info('请先生成图表');
+    return;
+  }
+
+  const W = 1600, H = 800;
+  const tempCanvas = document.createElement('canvas');
+  tempCanvas.width = W;
+  tempCanvas.height = H;
+  tempCanvas.style.position = 'fixed';
+  tempCanvas.style.left = '-9999px';
+  tempCanvas.style.top = '-9999px';
+  document.body.appendChild(tempCanvas);
+
+  const src = chartInstance.value;
+  const datasets = src.config.data.datasets.map(ds => ({
+    label: ds.label,
+    data: ds.data.map(p => ({ x: p.x, y: p.y })),
+    borderColor: ds.borderColor,
+    backgroundColor: ds.backgroundColor,
+    borderWidth: ds.borderWidth,
+    pointRadius: ds.pointRadius,
+    pointBackgroundColor: ds.pointBackgroundColor,
+    pointBorderColor: ds.pointBorderColor,
+    pointStyle: ds.pointStyle,
+    showLine: ds.showLine,
+    stepped: ds.stepped,
+    tension: ds.tension,
+    spanGaps: ds.spanGaps
+  }));
+
+  const yScale = src.scales.y;
+
+  const exportChart = new Chart(tempCanvas.getContext('2d'), {
+    type: 'line',
+    data: { datasets },
+    options: {
+      responsive: false,
+      maintainAspectRatio: true,
+      animation: false,
+      devicePixelRatio: 2,
+      scales: {
+        x: {
+          type: 'linear',
+          title: { display: true, text: '生存时间 (天)' },
+          min: src.scales.x.min,
+          max: src.scales.x.max
+        },
+        y: {
+          type: 'linear',
+          title: { display: true, text: '生存率' },
+          min: 0,
+          max: 1.1,
+          ticks: {
+            callback: value => (value * 100).toFixed(0) + '%'
+          }
+        }
+      },
+      plugins: {
+        legend: {
+          position: 'top',
+          labels: {
+            boxWidth: 12,
+            padding: 20,
+            font: { size: 12 },
+            filter: item => !item.text.includes('事件')
+          }
+        },
+        tooltip: { enabled: false }
+      }
+    }
+  });
+
+  setTimeout(async () => {
+    const filename = `生存曲线_${new Date().toISOString().slice(0, 10)}.png`;
+    if (window.pywebview && window.pywebview.api) {
+      tempCanvas.toBlob(async (blob) => {
+        const arrayBuffer = await blob.arrayBuffer();
+        const uint8array = new Uint8Array(arrayBuffer);
+        const dataArray = Array.from(uint8array);
+        const state = await window.pywebview.api.save_file_dialog(dataArray, filename);
+        if (state.success) {
+          toast.success(`导出成功，文件路径：${state.path}`);
+        } else {
+          toast.info(state.message || '导出失败');
+        }
+        exportChart.destroy();
+        document.body.removeChild(tempCanvas);
+      }, 'image/png');
+    } else {
+      const link = document.createElement('a');
+      link.download = filename;
+      link.href = tempCanvas.toDataURL('image/png');
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+      exportChart.destroy();
+      document.body.removeChild(tempCanvas);
+    }
+  }, 300);
+};
+
 // 计算属性
 const filteredMice = computed(() => {
   return groups.value.flatMap(group => 
@@ -511,209 +619,6 @@ const displayedMice = computed(() => {
 </script>
 
 <style scoped>
-/* 使用与bodyweight.vue一致的卡片样式 */
-.card {
-  margin-bottom: 1.5rem;
-  border-radius: 8px;
-  box-shadow: 0 2px 8px rgba(0,0,0,0.1);
-  background-color: white;
-  overflow: hidden;
-}
-
-.card-header {
-  padding: 1rem;
-  background-color: #f8f9fa;
-  border-bottom: 1px solid #dee2e6;
-  font-weight: 600;
-}
-
-.card-body {
-  padding: 1.5rem;
-}
-
-.content-header {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  margin-bottom: 20px;
-}
-
-.page-title {
-  font-size: 1.5rem;
-  font-weight: 600;
-  margin: 0;
-}
-
-.btn-icon {
-  margin-right: 5px;
-}
-
-.form-group {
-  margin-bottom: 1rem;
-}
-
-.form-label {
-  display: block;
-  margin-bottom: 0.5rem;
-  font-weight: 500;
-}
-
-.form-control {
-  display: block;
-  width: 100%;
-  padding: 0.5rem;
-  font-size: 1rem;
-  line-height: 1.5;
-  color: #495057;
-  background-color: #fff;
-  border: 1px solid #ced4da;
-  border-radius: 4px;
-  transition: border-color 0.15s;
-}
-
-.form-select {
-  display: block;
-  width: 100%;
-  padding: 0.5rem;
-  font-size: 1rem;
-  background-color: #fff;
-  border: 1px solid #ced4da;
-  border-radius: 4px;
-  height: auto;
-}
-
-.mb-4 {
-  margin-bottom: 1.5rem;
-}
-
-.me-2 {
-  margin-right: 0.5rem;
-}
-
-/* 添加分组容器样式 */
-.groups-container {
-  display: grid;
-  grid-template-columns: repeat(4, 1fr); /* 每行最多四个 */
-  gap: 15px;
-  margin-bottom: 20px;
-}
-
-/* 分组卡片样式 */
-.group-card {
-  width: 200px;
-  height: 210px;
-  border-radius: 8px;
-  overflow: hidden;
-  box-shadow: 0 2px 4px rgba(0,0,0,0.05);
-  transition: all 0.3s ease;
-}
-
-.group-card:hover {
-  transform: translateY(-3px);
-  box-shadow: 0 5px 10px rgba(0,0,0,0.1);
-}
-
-/* 添加分组卡片样式 */
-.add-card {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  justify-content: center;
-  background-color: #f8f9fa;
-  border: 1px dashed #ced4da;
-  cursor: pointer;
-}
-
-.add-card:hover {
-  background-color: #e9ecef;
-  border-color: #adb5bd;
-}
-
-.add-card i {
-  font-size: 2rem;
-  margin-bottom: 8px;
-  color: #6c757d;
-}
-
-.add-card span {
-  font-weight: 500;
-  color: #495057;
-}
-
-/* 卡片内部调整 */
-.group-card .card {
-  height: 100%;
-  margin: 0;
-}
-
-.group-card .card-header {
-  padding: 8px;
-  font-size: 0.9rem;
-}
-
-.group-card .card-body {
-  padding: 10px;
-  height: calc(100% - 40px); /* 减去头部高度 */
-  overflow-y: auto;
-}
-
-.group-card .form-label {
-  font-size: 0.8rem;
-  margin-bottom: 4px;
-}
-
-.group-card .form-select {
-  font-size: 0.8rem;
-  height: 80px;
-}
-
-.group-card .form-check {
-  font-size: 0.8rem;
-}
-
-/* 响应式调整 */
-@media (max-width: 768px) {
-  .groups-container {
-    grid-template-columns: repeat(auto-fill, minmax(130px, 1fr));
-  }
-  
-  .group-card {
-    width: 130px;
-    height: 130px;
-  }
-}
-
-@media (max-width: 576px) {
-  .groups-container {
-    grid-template-columns: repeat(2, 1fr); /* 小屏幕每行两个 */
-  }
-}
-
-.compact-header {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  padding: 0.3rem 0.5rem;
-  background-color: #f8f9fa;
-  border-bottom: 1px solid #e9ecef;
-  font-size: 0.85rem;
-  font-weight: 600;
-}
-
-.compact-header button {
-  background: none;
-  border: none;
-  padding: 0;
-  color: #6c757d;
-  cursor: pointer;
-  font-size: 0.9rem;
-}
-
-.compact-header button:hover {
-  color: #dc3545;
-}
-
-/* 图表容器 */
 .chart-container {
   position: relative;
   height: 400px;
@@ -735,97 +640,43 @@ const displayedMice = computed(() => {
   margin-right: 5px;
 }
 
-.stat-card {
-  text-align: center;
-  padding: 1rem;
+.group-card .form-label {
+  font-size: 0.8rem;
+  margin-bottom: 4px;
 }
 
-.stat-value {
-  font-size: 1.8rem;
-  font-weight: 700;
-  color: #1a2a6c;
+.group-card .form-select {
+  font-size: 0.8rem;
+  height: 80px;
 }
 
-.stat-label {
-  font-size: 0.9rem;
-  color: #6c757d;
+.group-card .form-check {
+  font-size: 0.8rem;
 }
 
-.table-responsive {
-  overflow-x: auto;
+@media (max-width: 768px) {
+  .groups-container {
+    grid-template-columns: repeat(auto-fill, minmax(130px, 1fr));
+  }
+  .group-card {
+    width: 130px;
+    height: 130px;
+  }
 }
 
-.table {
-  width: 100%;
-  border-collapse: collapse;
-  
-}
-
-.table th {
-  background-color: #f8fafc;
-  color: #64748b;
-  font-weight: 600;
-  padding: 15px 12px;
-  text-align: left;
-  position: sticky;
-  top: 0;
-}
-
-.table td {
-  padding: 12px;
-  border-bottom: 1px solid #eee;
-}
-
-.table tr:nth-child(even) {
-  background-color: #f9f9f9;
-}
-
-.table-hover tbody tr:hover {
-  background-color: #f1f5ff;
-}
-
-.badge {
-  padding: 0.4em 0.6em;
-  border-radius: 0.5rem;
-  color: white;
-  font-weight: 500;
-}
-
-.text-success {
-  color: #52c41a;
-}
-
-.text-danger {
-  color: #f5222d;
-}
-
-.text-muted {
-  color: #6c757d;
-}
-
-.mx-2 {
-  margin-left: 0.5rem;
-  margin-right: 0.5rem;
-}
-
-.mx-3 {
-  margin-left: 1rem;
-  margin-right: 1rem;
-}
-
-.text-center {
-  text-align: center;
+@media (max-width: 576px) {
+  .groups-container {
+    grid-template-columns: repeat(2, 1fr);
+  }
 }
 
 .option-item {
     cursor: pointer;
     transition: all 0.2s ease;
-    /* 自动换行设置 */
     white-space: normal;
     word-wrap: break-word;
 }
 
-/* 斑马纹效果 - 行间色差 */
 .option-item:nth-child(odd) {
     background-color: #ffffff;
 }
@@ -843,13 +694,11 @@ const displayedMice = computed(() => {
     color: white;
 }
 
-/* 分页容器样式 */
 .pagination {
     margin: 1.5rem 0;
     font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
 }
 
-/* 分页项基础样式 */
 .page-item {
     display: inline-block;
     margin: 0 4px;
@@ -863,7 +712,6 @@ const displayedMice = computed(() => {
     box-shadow: 0 4px 8px rgba(0, 0, 0, 0.15);
 }
 
-/* 分页链接样式 */
 .page-link {
     display: block;
     min-width: 42px;
@@ -888,7 +736,6 @@ const displayedMice = computed(() => {
     border-color: #c4c9d0;
 }
 
-/* 活动状态分页项 */
 .page-item.active .page-link {
     color: white;
     background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
@@ -900,7 +747,6 @@ const displayedMice = computed(() => {
     background: linear-gradient(135deg, #5a67d8 0%, #6b46c1 100%);
 }
 
-/* 禁用状态分页项 */
 .page-item.disabled .page-link {
     color: #a0aec0;
     background: linear-gradient(135deg, #f8f9fa 0%, #edf2f7 100%);
@@ -915,7 +761,6 @@ const displayedMice = computed(() => {
     box-shadow: 0 2px 5px rgba(0, 0, 0, 0.1);
 }
 
-/* 响应式设计 */
 @media (max-width: 576px) {
     .page-link {
         min-width: 36px;
@@ -924,99 +769,19 @@ const displayedMice = computed(() => {
         padding: 0 8px;
         font-size: 0.9rem;
     }
-    
     .page-item {
         margin: 0 2px;
     }
 }
 
-/* 焦点状态（可访问性） */
 .page-link:focus {
     outline: none;
     box-shadow: 0 0 0 3px rgba(102, 126, 234, 0.25);
 }
 
-.genotype-tree {
-  border: 1px solid #ced4da;
-  border-radius: 4px;
-  max-height: 200px;
-  overflow-y: auto;
-  background-color: #fff;
-}
-
-.locus-item {
-  border-bottom: 1px solid #f0f0f0;
-}
-
-.locus-item:last-child {
-  border-bottom: none;
-}
-
-.locus-header {
-  padding: 8px 12px;
-  background-color: #f8f9fa;
-  border-bottom: 1px solid #e9ecef;
-}
-
-.locus-label {
-  display: flex;
-  align-items: center;
-  font-weight: 600;
-  margin: 0;
-  cursor: pointer;
-}
-
-.locus-checkbox {
-  margin-right: 8px;
-}
-
-.locus-name {
-    font-size: 0.8rem;
-  color: #495057;
-}
-
-.combinations-list {
-  padding-left: 20px;
-}
-
-.combination-item {
-  padding: 6px 12px;
-  border-bottom: 1px solid #f8f9fa;
-}
-
-.combination-item:last-child {
-  border-bottom: none;
-}
-
-.combination-label {
-  display: flex;
-  align-items: center;
-  margin: 0;
-  cursor: pointer;
-}
-
-.combination-checkbox {
-  margin-right: 8px;
-}
-
-.combination-name {
-  color: #6c757d;
-  font-size: 0.7em;
-}
-
-/* 悬停效果 */
-.locus-label:hover,
-.combination-label:hover {
-  background-color: #f8f9fa;
-}
-
-/* 选中状态 */
-.locus-checkbox:checked + .locus-name {
-  color: #007bff;
-}
-
-.combination-checkbox:checked + .combination-name {
-  color: #28a745;
-  font-weight: 500;
+.table th {
+  padding: 15px 12px;
+  position: sticky;
+  top: 0;
 }
 </style>

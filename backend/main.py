@@ -389,6 +389,7 @@ if __name__ == '__main__':
         logger.info("启动Webview窗口")
         # raise ValueError("测试")
         webview.start(
+            #debug=True,  # 启用调试模式以显示错误信息
             private_mode=False,  # 禁用私有模式以允许文件访问
             http_server=False,   # 禁用内置HTTP服务器
         )

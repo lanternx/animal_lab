@@ -2641,14 +2641,19 @@ const reviewRules = async () => {
         toast.info("预览前请设定组别")
         return 
     }
-    const response = await axios.post(`/api/groups/predefined/review`, { editing : editingGroup, candidate: candidateMice.value.map(m => m.tid)})
-    response.data.forEach((g, gIndex) => {
-        if (editingGroup.rules[gIndex]) {
-            Object.assign(editingGroup.rules[gIndex], { mouseId: g })
-        }
-    })
-    showIDList.value = true
-    editingGroup.rules.forEach(g => g.expanded = false)
+    try {
+        const response = await axios.post(`/api/groups/predefined/review`, { editing : editingGroup, candidate: candidateMice.value.map(m => m.tid)})
+        response.data.forEach((g, gIndex) => {
+            if (editingGroup.rules[gIndex]) {
+                Object.assign(editingGroup.rules[gIndex], { mouseId: g })
+            }
+        })
+        showIDList.value = true
+        editingGroup.rules.forEach(g => g.expanded = false)
+    } catch (error) {
+        const message = error.response?.data?.error || error.message || '预览失败'
+        toast.error(message)
+    }
 }
 
 const reviewRulesClose = () => {
@@ -2789,58 +2794,6 @@ onMounted(() => {
 </script>
 
 <style scoped>
-/* 使用与Dashboard.vue相同的样式变量 */
-:root {
---primary: #2c6fbb;
---secondary: #4CAF50;
---danger: #f44336;
---warning: #FF9800;
---light: #f8f9fa;
---dark: #343a40;
---border: #dee2e6;
---header-height: 60px;
---footer-height: 25px;
-}
-
-.content-header {
-display: flex;
-justify-content: space-between;
-align-items: center;
-margin-bottom: 20px;
-}
-
-.page-title {
-font-size: 1.5rem;
-font-weight: 600;
-}
-
-.section-tabs {
-display: flex;
-border-bottom: 1px solid #e0e0e0;
-margin-bottom: 25px;
-padding: 0 10px;
-}
-
-.tab-item {
-padding: 10px 20px;
-cursor: pointer;
-margin-right: 5px;
-border-radius: 5px 5px 0 0;
-font-weight: 500;
-color: #666;
-transition: all 0.2s ease;
-}
-
-.tab-item:hover {
-background-color: #f5f5f5;
-}
-
-.tab-item.active {
-color: var(--primary);
-background-color: rgba(25, 118, 210, 0.08);
-border-bottom: 2px solid var(--primary);
-}
-
 .form-container {
 background: white;
 padding: 20px;
@@ -2940,7 +2893,6 @@ gap: 15px;
 }
 
 .btn-group .btn.active {
-    /* 激活状态样式 */
     background-color: #2ecc71;
     transform: translateY(-2px);
     box-shadow: 0 6px 8px rgba(0, 0, 0, 0.15);
@@ -3011,43 +2963,6 @@ gap: 10px;
 
 .date-range input {
 flex: 1;
-}
-
-.dialog-overlay {
-position: fixed;
-top: 0;
-left: 0;
-width: 100%;
-height: 100%;
-background-color: rgba(0, 0, 0, 0.5);
-display: flex;
-justify-content: center;
-align-items: center;
-z-index: 1000;
-}
-
-.dialog-container {
-background-color: white;
-padding: 25px;
-border-radius: 8px;
-width: 450px;
-max-width: 100%;
-max-height: 80%;
-box-shadow: 0 4px 20px rgba(0, 0, 0, 0.2);
-overflow-y: auto;
-}
-
-.dialog-container h2 {
-margin-top: 0;
-margin-bottom: 20px;
-font-size: 1.3rem;
-}
-
-.dialog-buttons {
-display: flex;
-justify-content: flex-end;
-gap: 10px;
-margin-top: 20px;
 }
 
 .import-result {

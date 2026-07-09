@@ -99,7 +99,7 @@
     </div>
     
     <!-- 添加/编辑体重记录模态框 -->
-    <div v-if="showAddModal || editingRecord" class="modal" @click.self="closeModal">
+    <div v-if="showAddModal || editingRecord" class="modal-backdrop" @click.self="closeModal">
     <div class="modal-content">
         <div class="modal-header">
         <h3>{{ editingRecord ? '编辑体重记录' : '添加体重记录' }}</h3>
@@ -361,35 +361,6 @@ loadWeightRecords
 </script>
 
 <style scoped>
-.section {
-  margin-bottom: 30px;
-  padding: 25px;
-  background: #ffffff;
-  border-radius: 12px;
-  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.05);
-  position: relative;
-  overflow: hidden;
-}
-
-/* 头部按钮 */
-.header-with-button {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  margin-bottom: 25px;
-  flex-wrap: wrap;
-  gap: 15px;
-}
-
-.header-with-button h2 {
-  font-size: 1.8rem;
-  font-weight: 600;
-  color: #2c3e50;
-  margin: 0;
-}
-
-/* 复用MiceView的样式，添加一些特定于体重记录的样式 */
-
 .mouse-info {
 background: #f5f7fa;
 padding: 12px;
@@ -454,18 +425,15 @@ background: #40a9ff;
 background: #ff4d4f;
 }
 
-/* 响应式设计 */
 @media (max-width: 1200px) {
 .search-controls {
     flex-direction: column;
     align-items: flex-start;
 }
-
 .filter-group {
     margin-bottom: 10px;
     width: 100%;
 }
-
 .filter-group input,
 .filter-group select {
     flex-grow: 1;
@@ -473,280 +441,35 @@ background: #ff4d4f;
 }
 
 @media (max-width: 768px) {
-.header-with-button {
-    flex-direction: column;
-    align-items: flex-start;
-}
-
-.header-with-button h2 {
-    margin-bottom: 15px;
-}
-
 .mouse-table {
     font-size: 14px;
 }
-
-.mouse-table th,
-.mouse-table td {
-    padding: 8px 6px;
-}
 }
 
 .mouse-table {
-  width: 100%;
-  border-collapse: collapse;
-  font-size: 0.95rem;
-  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.05);
   cursor: pointer;
   position: relative;
   user-select: none;
 }
 
-.mouse-table th {
-  background: #f8fafc;
-  color: #64748b;
-  font-weight: 600;
-  text-align: left;
-  padding: 14px 12px;
-  border-bottom: 2px solid #e2e8f0;
-}
-
-.mouse-table td {
-  padding: 12px;
-  border-bottom: 1px solid #f1f5f9;
-}
-
-/* 模态框样式 */
-.modal {
-  position: fixed;
-  top: 0;
-  left: 0;
-  right: 0;
-  bottom: 0;
-  background: rgba(0, 0, 0, 0.5);
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  z-index: 1000;
+.modal-backdrop {
   backdrop-filter: blur(3px);
 }
 
 .modal-content {
-  background: white;
-  border-radius: 12px;
-  width: 90%;
-  max-width: 600px;
-  max-height: 90vh;
   overflow-y: auto;
-  box-shadow: 0 10px 25px rgba(0, 0, 0, 0.2);
-}
-
-.modal-header {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  padding: 20px;
-  border-bottom: 1px solid #eaeaea;
-}
-
-.modal-header h3 {
-  margin: 0;
-  font-size: 1.4rem;
-}
-
-.close-btn {
-  background: none;
-  border: none;
-  cursor: pointer;
-  color: #718096;
-  padding: 5px;
-  border-radius: 50%;
-  width: 32px;
-  height: 32px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-}
-
-.close-btn:hover {
-  background: #f8f9fa;
-  color: #4a5568;
 }
 
 .form-body {
   padding: 20px;
 }
 
-.form-group {
-  margin-bottom: 20px;
-}
-
-.form-group label {
-  display: block;
-  margin-bottom: 8px;
-  font-weight: 500;
-  color: #4a5568;
-}
-
-.form-group input,
-.form-group select,
-.form-group textarea {
-  width: 100%;
-  padding: 12px;
-  border: 1px solid #e2e8f0;
-  border-radius: 6px;
-  font-size: 1rem;
-  transition: all 0.3s;
-}
-
-.form-group input:focus,
-.form-group select:focus,
-.form-group textarea:focus {
-  border-color: #4a9bff;
-  outline: none;
-  box-shadow: 0 0 0 2px rgba(74, 155, 255, 0.2);
-}
-
-.form-group textarea {
-  min-height: 100px;
-  resize: vertical;
-}
-
-.button-group {
-  display: flex;
-  justify-content: flex-end;
-  gap: 12px;
-  padding: 20px;
-  border-top: 1px solid #f1f5f9;
-}
-
-.primary-btn {
-  padding: 10px 20px;
-  background: #4a9bff;
-  color: white;
-  border: none;
-  border-radius: 6px;
-  cursor: pointer;
-  font-weight: 500;
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  transition: background 0.3s;
-}
-
-.primary-btn:hover:not(:disabled) {
-  background: #3a8beb;
-}
-
-.primary-btn:disabled {
-  opacity: 0.7;
-  cursor: not-allowed;
-}
-
-.cancel-btn {
-  padding: 10px 20px;
-  background: #f8fafc;
-  color: #4a5568;
-  border: 1px solid #e2e8f0;
-  border-radius: 6px;
-  cursor: pointer;
-  font-weight: 500;
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  transition: background 0.3s;
-}
-
-.cancel-btn:hover {
-  background: #e2e8f0;
-}
-
-/* 加载状态 */
 .loading-overlay {
   position: absolute;
   top: 0;
   left: 0;
   right: 0;
   bottom: 0;
-  background: rgba(255, 255, 255, 0.8);
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  justify-content: center;
-  z-index: 10;
-}
-
-.loading-spinner {
-  border: 4px solid rgba(0, 0, 0, 0.1);
-  border-left-color: #4a9bff;
-  border-radius: 50%;
-  width: 40px;
-  height: 40px;
-  animation: spin 1s linear infinite;
-  margin-bottom: 15px;
-}
-
-@keyframes spin {
-  to { transform: rotate(360deg); }
-}
-
-/* 空状态 */
-.empty-state {
-  text-align: center;
-  padding: 50px 20px;
-  color: #718096;
-}
-
-.empty-state .material-icons {
-  font-size: 60px;
-  color: #cbd5e0;
-  margin-bottom: 15px;
-}
-
-.empty-state p {
-  font-size: 1.1rem;
-  margin-bottom: 20px;
-}
-
-/* 搜索控件 */
-.search-controls {
-  display: flex;
-  gap: 12px;
-  margin-bottom: 25px;
-  flex-wrap: wrap;
-  align-items: center;
-}
-
-.search-btn, .reset-btn {
-  padding: 10px 20px;
-  border-radius: 6px;
-  cursor: pointer;
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  font-weight: 500;
-  transition: all 0.3s;
-}
-
-.search-btn {
-  background: #f5f7fa;
-  color: #606266;
-  border: 1px solid #dcdfe6;
-}
-
-.search-btn:hover {
-  background: #e4e7ed;
-  color: #4a9bff;
-}
-
-.reset-btn {
-  background: #f8f9fa;
-  color: #606266;
-  border: 1px solid #dcdfe6;
-}
-
-.reset-btn:hover {
-  background: #e2e8f0;
 }
 
 .filter-group {

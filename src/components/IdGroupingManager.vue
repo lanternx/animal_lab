@@ -324,21 +324,12 @@ const resetGroup = () => {
 <style scoped>
 .mouse-group-manager {
   width: 90%;
-	max-width: 1200px;
+  max-width: 1200px;
   margin: 0 auto;
   background: white;
   border-radius: 8px;
   box-shadow: 0 2px 10px rgba(0,0,0,0.1);
   padding: 20px;
-}
-
-.section-title {
-  font-size: 1.3rem;
-  font-weight: 600;
-  margin-bottom: 15px;
-  padding-bottom: 10px;
-  border-bottom: 1px solid #eee;
-  color: #2c3e50;
 }
 
 .id-grouping-container {
@@ -535,8 +526,4 @@ const resetGroup = () => {
   border-top: 1px solid #e0e0e0;
 }
 
-.drag-over {
-  background-color: #f0f7ff;
-  border: 2px dashed #2c6fbb;
-}
 </style>
