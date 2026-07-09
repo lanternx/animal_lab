@@ -200,4 +200,9 @@ const showQrModal = ref(false)
   margin: 0;
 }
 
+@media (max-width: 767px) {
+  .bg-image {
+    background-attachment: scroll;
+  }
+}
 </style>
