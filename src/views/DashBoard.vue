@@ -343,6 +343,8 @@ import draggable from 'vuedraggable'
 import html2canvas from 'html2canvas';
 import { jsPDF } from 'jspdf';
 
+const TIMESTAMP_API_URL = 'https://sign.lantern-x.cc.cd' // 云函数地址，待填入
+
 // 设置组件名称
 defineOptions({
   name: 'AnimalLabDashboard'
@@ -766,16 +768,36 @@ const exportToPDF = async () => {
       toast.info("本区域无笼位，无法导出pdf")
       return
     }
+
+    // 序列化笼位数据并获取时间戳签名
+    const jsonStr = serializeCageData(sectionCages);
+    const sha256 = await computeSHA256(jsonStr);
+    let certInfo = null;
+
+    if (TIMESTAMP_API_URL) {
+      try {
+        certInfo = await fetchTimestampSignature(sha256);
+      } catch (e) {
+        console.warn('时间戳获取失败:', e);
+        toast.warning('时间戳获取失败，PDF将不包含认证信息');
+      }
+    } else {
+      toast.info('未配置时间戳服务，PDF将不包含认证信息');
+    }
+    
     // 渲染PDF内容
     renderPDFContent(sectionCages, activeSection.value);
     
     // 等待DOM更新
     await nextTick();
     
+    // 生成PDF对象（含图片页+数据页+认证页）
+    const pdf = await generatePDFObject(jsonStr, certInfo);
+    const arrayBuffer = pdf.output('arraybuffer');
+    
     // 使用 PyWebview 的保存文件对话框
     if (window.pywebview && window.pywebview.api) {
       const filename = `${today_formatted} ${activeSection.value}.pdf`;
-      const arrayBuffer = await generatePDFAsArrayBuffer();
       const uint8array = new Uint8Array(arrayBuffer)
       const dataArray = Array.from(uint8array)
       const state = await window.pywebview.api.save_file_dialog(dataArray, filename)
@@ -785,7 +807,6 @@ const exportToPDF = async () => {
         toast.info(state.message || "导出失败")
       }
     } else {
-      const arrayBuffer = await generatePDFAsArrayBuffer();
       const blob = new Blob([arrayBuffer], { type: 'application/pdf' });
       const url = window.URL.createObjectURL(blob);
       const link = document.createElement('a')
@@ -907,57 +928,99 @@ const renderPDFContent = (cages, sectionName) => {
   }
 };
 
-// 生成PDF文件并返回ArrayBuffer
-const generatePDFAsArrayBuffer = () => {
-  return new Promise((resolve, reject) => {
-    const pdfRenderArea = document.getElementById('pdf-render-area');
-    
-    html2canvas(pdfRenderArea, {
-      scale: 2,
-      useCORS: true,
-      logging: false
-    }).then(canvas => {
-      const pdf = new jsPDF('p', 'mm', 'a4');
-      const imgData = canvas.toDataURL('image/jpeg', 1.0);
-      const imgWidth = 210; // A4宽度（毫米）
-      const imgHeight = (canvas.height * imgWidth) / canvas.width;
-      
-      let position = 0;
-      
-      // 添加第一页
-      pdf.addImage(imgData, 'JPEG', 0, position, imgWidth, imgHeight);
-      
-      // 如果内容超过一页，添加额外页面
-      if (imgHeight > 297) {
-        let remainingHeight = imgHeight;
-        
-        while (remainingHeight > 297) {
-          position -= 297;
-          pdf.addPage();
-          pdf.addImage(imgData, 'JPEG', 0, position, imgWidth, imgHeight);
-          remainingHeight -= 297;
-        }
-      }
-      
-      // 获取PDF文件的ArrayBuffer
-      const blob = pdf.output('blob');
-      const reader = new FileReader();
-      
-      reader.onload = function() {
-        resolve(reader.result);
-      };
-      
-      reader.onerror = function() {
-        reject(new Error('无法读取PDF文件'));
-      };
-      
-      reader.readAsArrayBuffer(blob);
-      
-      // 清空渲染区域
-      pdfRenderArea.innerHTML = '';
-    }).catch(reject);
+// 生成PDF文件并返回jsPDF对象
+const generatePDFObject = async (jsonStr, certInfo) => {
+  const pdfRenderArea = document.getElementById('pdf-render-area');
+  const pdf = new jsPDF('p', 'mm', 'a4');
+  
+  // html2canvas截图隐藏区
+  const canvas = await html2canvas(pdfRenderArea, {
+    scale: 2,
+    useCORS: true,
+    logging: false
   });
+  
+  const imgData = canvas.toDataURL('image/jpeg', 1.0);
+  const imgWidth = 210; // A4宽度（毫米）
+  const imgHeight = (canvas.height * imgWidth) / canvas.width;
+  
+  let position = 0;
+  
+  // 添加第一页
+  pdf.addImage(imgData, 'JPEG', 0, position, imgWidth, imgHeight);
+  
+  // 如果内容超过一页，添加额外页面
+  if (imgHeight > 297) {
+    let remainingHeight = imgHeight;
+    
+    while (remainingHeight > 297) {
+      position -= 297;
+      pdf.addPage();
+      pdf.addImage(imgData, 'JPEG', 0, position, imgWidth, imgHeight);
+      remainingHeight -= 297;
+    }
+  }
+  
+  // 清空渲染区域
+  pdfRenderArea.innerHTML = '';
+  
+  // 将JSON数据写入PDF元数据（隐藏存储，不显示在页面上）
+  pdf.setProperties({ subject: jsonStr });
+  
+  // 添加认证页
+  pdf.addPage();
+  pdf.setFontSize(14);
+  pdf.setFont('helvetica', 'normal');
+  pdf.text('=== Timestamp Certification ===', 20, 20);
+  pdf.setFontSize(10);
+  
+  if (certInfo) {
+    pdf.text('Certified At: ' + certInfo.server_time, 20, 35);
+    pdf.text('Content Hash: ' + certInfo.sha256, 20, 45);
+    pdf.setFontSize(8);
+    const sigLines = pdf.splitTextToSize('Server Signature: ' + certInfo.signature, 170);
+    pdf.text(sigLines, 20, 55);
+    let y = 55 + sigLines.length * 4;
+    const signMaterialLines = pdf.splitTextToSize('Signed Material: ' + certInfo.sign_material, 170);
+    pdf.text(signMaterialLines, 20, y);
+  } else {
+    pdf.text('Not Certified: Timestamp service unavailable', 20, 35);
+    pdf.text('This PDF was not certified by the timestamp server', 20, 45);
+  }
+  
+  return pdf;
 };
+
+// 计算字符串的SHA256
+async function computeSHA256(str) {
+  const encoder = new TextEncoder();
+  const data = encoder.encode(str);
+  const hashBuffer = await crypto.subtle.digest('SHA-256', data);
+  const hashArray = Array.from(new Uint8Array(hashBuffer));
+  return hashArray.map(b => b.toString(16).padStart(2, '0')).join('');
+}
+
+// 调用云函数获取时间戳签名
+async function fetchTimestampSignature(sha256) {
+  const response = await axios.post(TIMESTAMP_API_URL, { sha256 });
+  return response.data;
+}
+
+// 将笼位数据序列化为标准化JSON
+function serializeCageData(cages) {
+  return JSON.stringify(cages.map(cage => ({
+    cage_id: cage.cage_id,
+    location: cage.location || '',
+    section: cage.section,
+    cage_type: cage.cage_type,
+    mice: (cage.mice || []).map(mouse => ({
+      id: mouse.id,
+      sex: mouse.sex,
+      genotype: mouse.genotype,
+      days: mouse.days || 'none'
+    }))
+  })), null, 2);
+}
 
 // 添加搜索方法
 function performSearch() {

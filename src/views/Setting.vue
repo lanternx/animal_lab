@@ -1420,6 +1420,61 @@
             </button>
         </div>
     </div>
+
+    <!-- PDF验证 -->
+    <div v-if="activeTab === 'pdfverify'" class="form-container">
+        <h2 class="section-title">PDF时间戳验证</h2>
+        <p class="section-description">上传PDF文件，验证其时间戳签名是否有效</p>
+
+        <div class="form-section">
+            <h3>选择PDF文件</h3>
+            <div class="file-upload-area" @click="triggerPdfUpload" @dragover.prevent @drop.prevent="onPdfDrop">
+                <input type="file" ref="pdfFileInput" accept=".pdf" @change="onPdfFileSelect" style="display: none">
+                <i class="material-icons" style="font-size: 48px; color: #999;">upload_file</i>
+                <p>点击选择或拖拽PDF文件到此处</p>
+                <p v-if="verifyFileName" style="color: #2196F3;">已选择: {{ verifyFileName }}</p>
+            </div>
+            <div class="form-group" style="margin-top: 15px;">
+                <button class="btn btn-primary" @click="verifyPdf" :disabled="!verifyFileData || isVerifying">
+                    <i class="material-icons">verified</i>
+                    {{ isVerifying ? '验证中...' : '开始验证' }}
+                </button>
+            </div>
+        </div>
+
+        <div v-if="verifyResult" class="form-section">
+            <h3>验证结果</h3>
+            <div :class="verifyResult.valid ? 'verify-result-success' : 'verify-result-fail'">
+                <p style="font-size: 18px; font-weight: bold;">
+                    {{ verifyResult.valid ? '✅ 验证通过' : '❌ 验证失败' }}
+                </p>
+                <table class="settings-table" style="margin-top: 10px;">
+                    <tbody>
+                        <tr>
+                            <td style="width: 150px; font-weight: bold;">内容指纹匹配</td>
+                            <td>{{ verifyResult.hashMatch ? '✅ 是' : '❌ 否' }}</td>
+                        </tr>
+                        <tr>
+                            <td style="font-weight: bold;">签名验证</td>
+                            <td>{{ verifyResult.signatureValid ? '✅ 有效' : '❌ 无效' }}</td>
+                        </tr>
+                        <tr>
+                            <td style="font-weight: bold;">认证时间</td>
+                            <td>{{ verifyResult.serverTime || '无' }}</td>
+                        </tr>
+                        <tr>
+                            <td style="font-weight: bold;">内容指纹</td>
+                            <td>{{ verifyResult.sha256 || '无' }}</td>
+                        </tr>
+                        <tr v-if="verifyResult.error">
+                            <td style="font-weight: bold;">错误信息</td>
+                            <td style="color: red;">{{ verifyResult.error }}</td>
+                        </tr>
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
     
     <!-- 编辑基因位点对话框 -->
     <div v-if="editLocusDialogVisible" class="dialog-overlay">
@@ -1583,6 +1638,9 @@ import axios from 'axios'
 import { toast } from 'vue3-toastify'
 import 'vue3-toastify/dist/index.css'
 import IdGroupingManager from '@/components/IdGroupingManager.vue'
+import * as pdfjsLib from 'pdfjs-dist'
+import pdfjsWorkerUrl from 'pdfjs-dist/build/pdf.worker.min.js?url'
+pdfjsLib.GlobalWorkerOptions.workerSrc = pdfjsWorkerUrl
 
 import { useGeneStore, useCageStore, useExperimentStore, useSettingStore } from '@/stores'
 import { storeToRefs } from 'pinia'
@@ -1614,7 +1672,8 @@ const tabs = ref([
 { id: 'export', title: '导出设置' },
 { id: 'import', title: '导入数据' },
 { id: 'database', title: '数据库管理' },
-{ id: 'display', title: '自定义显示设置' }
+{ id: 'display', title: '自定义显示设置' },
+{ id: 'pdfverify', title: 'PDF验证' }
 ])
 
 // 基因型相关状态
@@ -1658,6 +1717,13 @@ successCount: 0,
 skippedCount: 0,
 errors: []
 })
+
+// PDF验证相关状态
+const pdfFileInput = ref(null)
+const verifyFileName = ref('')
+const verifyFileData = ref(null)
+const isVerifying = ref(false)
+const verifyResult = ref(null)
 
 // 实验类型相关状态
 const editingExperimentType = reactive({
@@ -2783,6 +2849,152 @@ const confirmReset = () => {
             changeSettings(s)
         })
         toast.success("重置所有显示设置")
+    }
+}
+
+// PDF验证相关函数
+const PUBLIC_KEY_PEM = `-----BEGIN PUBLIC KEY-----
+MFkwEwYHKoZIzj0CAQYIKoZIzj0DAQcDQgAEmbBEQ1hfgNtIrzWUNNlW7zJiPlmL
+ge0Gg+JWDKFjA38oB1gxxjVFw3SZ71i4wTsUUzzOJVH1uguto+QO0vWorQ==
+-----END PUBLIC KEY-----`
+
+function triggerPdfUpload() {
+    pdfFileInput.value.click()
+}
+
+function onPdfFileSelect(event) {
+    const file = event.target.files[0]
+    if (file) loadPdfFile(file)
+}
+
+function onPdfDrop(event) {
+    const file = event.dataTransfer.files[0]
+    if (file && file.type === 'application/pdf') loadPdfFile(file)
+}
+
+function loadPdfFile(file) {
+    verifyFileName.value = file.name
+    verifyResult.value = null
+    const reader = new FileReader()
+    reader.onload = (e) => {
+        verifyFileData.value = new Uint8Array(e.target.result)
+    }
+    reader.readAsArrayBuffer(file)
+}
+
+// 计算字符串的SHA256
+async function computeSHA256Verify(str) {
+    const encoder = new TextEncoder()
+    const data = encoder.encode(str)
+    const hashBuffer = await crypto.subtle.digest('SHA-256', data)
+    const hashArray = Array.from(new Uint8Array(hashBuffer))
+    return hashArray.map(b => b.toString(16).padStart(2, '0')).join('')
+}
+
+// PEM转DER
+function pemToDer(pem) {
+    const base64 = pem.replace(/-----.*?-----/g, '').replace(/\s/g, '')
+    const binary = atob(base64)
+    const bytes = new Uint8Array(binary.length)
+    for (let i = 0; i < binary.length; i++) bytes[i] = binary.charCodeAt(i)
+    return bytes
+}
+
+// 验证ECDSA-P256签名
+async function verifyECDSASignature(publicKeyPem, message, signatureBase64) {
+    const derBytes = pemToDer(publicKeyPem)
+    const publicKey = await crypto.subtle.importKey(
+        'spki', derBytes, { name: 'ECDSA', namedCurve: 'P-256' }, false, ['verify']
+    )
+    const sigBinary = atob(signatureBase64)
+    const sigBytes = new Uint8Array(sigBinary.length)
+    for (let i = 0; i < sigBinary.length; i++) sigBytes[i] = sigBinary.charCodeAt(i)
+    const enc = new TextEncoder()
+    return await crypto.subtle.verify(
+        { name: 'ECDSA', hash: 'SHA-256' }, publicKey, sigBytes, enc.encode(message)
+    )
+}
+
+async function verifyPdf() {
+    if (!verifyFileData.value) {
+        toast.warning('请先选择PDF文件')
+        return
+    }
+    
+    isVerifying.value = true
+    verifyResult.value = null
+    
+    try {
+        // 使用pdf.js加载PDF
+        const loadingTask = pdfjsLib.getDocument({ data: verifyFileData.value })
+        const pdfDoc = await loadingTask.promise
+        
+        // 从PDF元数据中提取JSON（隐藏存储在Subject字段）
+        const metadata = await pdfDoc.getMetadata()
+        const jsonStr = metadata.info?.Subject || ''
+        
+        if (!jsonStr) {
+            verifyResult.value = { valid: false, hashMatch: false, signatureValid: false, serverTime: null, sha256: null, error: 'PDF中未找到笼位数据（元数据Subject为空）' }
+            return
+        }
+        
+        // 提取所有页面的文本内容（用于解析认证区）
+        let fullText = ''
+        const numPages = pdfDoc.numPages
+        for (let i = 1; i <= numPages; i++) {
+            const page = await pdfDoc.getPage(i)
+            const textContent = await page.getTextContent()
+            textContent.items.forEach(item => {
+                fullText += item.str
+                fullText += item.hasEOL ? '\n' : ' '
+            })
+        }
+        
+        // 解析认证区信息（英文标签）
+        // 使用[\s\S]*?匹配可能跨多行的签名
+        const certMatch = fullText.match(/Certified At:\s*([\s\S]*?)\n.*Content Hash:\s*([\s\S]*?)\n.*Server Signature:\s*([\s\S]*?)Signed Material:\s*([\s\S]*?)(?:\n|$)/)
+        if (!certMatch) {
+            verifyResult.value = { valid: false, hashMatch: false, signatureValid: false, serverTime: null, sha256: null, error: '未找到认证区信息' }
+            return
+        }
+        
+        const serverTime = certMatch[1].trim()
+        const certSha256 = certMatch[2].trim()
+        // 签名可能跨多行，去掉换行和空格
+        const signature = certMatch[3].replace(/[\r\n\s]/g, '').trim()
+        const signMaterial = certMatch[4].trim()
+        
+        // 重新计算JSON的SHA256
+        const recomputedHash = await computeSHA256Verify(jsonStr)
+        const hashMatch = recomputedHash === certSha256
+        
+        // 验证ECDSA签名
+        let signatureValid = false
+        try {
+            signatureValid = await verifyECDSASignature(PUBLIC_KEY_PEM, signMaterial, signature)
+        } catch (e) {
+            console.warn('签名验证出错:', e)
+        }
+        
+        verifyResult.value = {
+            valid: hashMatch && signatureValid,
+            hashMatch,
+            signatureValid,
+            serverTime,
+            sha256: certSha256
+        }
+        
+        if (hashMatch && signatureValid) {
+            toast.success('PDF验证通过')
+        } else {
+            toast.error('PDF验证失败')
+        }
+    } catch (error) {
+        console.error('PDF验证错误:', error)
+        verifyResult.value = { valid: false, hashMatch: false, signatureValid: false, serverTime: null, sha256: null, error: error.message }
+        toast.error('PDF验证出错: ' + error.message)
+    } finally {
+        isVerifying.value = false
     }
 }
 
@@ -3948,6 +4160,35 @@ margin-bottom: 1rem;
     margin-bottom: 10px;
     color: #2c3e50;
     font-weight: 600;
+}
+
+/* PDF验证样式 */
+.file-upload-area {
+    border: 2px dashed #ccc;
+    border-radius: 8px;
+    padding: 30px;
+    text-align: center;
+    cursor: pointer;
+    transition: border-color 0.3s, background-color 0.3s;
+}
+
+.file-upload-area:hover {
+    border-color: #2196F3;
+    background-color: #f0f7ff;
+}
+
+.verify-result-success {
+    background-color: #e8f5e9;
+    border: 1px solid #4caf50;
+    border-radius: 8px;
+    padding: 15px;
+}
+
+.verify-result-fail {
+    background-color: #ffebee;
+    border: 1px solid #f44336;
+    border-radius: 8px;
+    padding: 15px;
 }
 
 
