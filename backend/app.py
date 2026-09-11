@@ -1571,7 +1571,7 @@ def import_mice_data(df, result, conflict_resolution):
                         db.session.add(new_location)
                         db.session.flush()
                     existing_location = new_location
-                cage_id = str(row['cage_id'].strip())
+                cage_id = str(row['cage_id']).strip()
                 if cage_id and cage_id != "":
                     existing_cage = Cage.query.filter_by(cage_id=cage_id).filter_by(section=existing_location.identifier).first()
                     if not existing_cage:

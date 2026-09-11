@@ -830,7 +830,7 @@ const renderPDFContent = (cages, sectionName) => {
   const pdfRenderArea = document.getElementById('pdf-render-area');
   pdfRenderArea.innerHTML = '';
   
-  // 按每页20个笼位分页
+  // 按每页12个笼位分页
   const cagesPerPage = 12;
   const pageCount = Math.ceil(cages.length / cagesPerPage);
   
@@ -1732,15 +1732,16 @@ p {
     
     .pdf-page {
       width: 100%;
-      padding: 15px;
-      margin-bottom: 20px;
+      height: 1123px;
+      padding: 12px;
+      margin-bottom: 0;
       background: white;
       box-shadow: 0 0 5px rgba(0,0,0,0.1);
     }
     
     .pdf-header {
       text-align: center;
-      margin-bottom: 20px;
+      margin-bottom: 10px;
       padding-bottom: 10px;
       border-bottom: 2px solid #2c3e50;
     }
@@ -1749,13 +1750,13 @@ p {
       display: grid;
       grid-template-columns: repeat(3, 1fr);
       grid-template-rows: repeat(4, 1fr);
-      gap: 12px;
+      gap: 6px;
     }
     
     .pdf-cage-card {
       border: 1px solid #ccc;
       border-radius: 4px;
-      padding: 8px;
+      padding: 6px;
       width: 220px;
       height: 240px;
       display: flex;
@@ -1808,7 +1809,11 @@ p {
       font-size: 10px;
       color: #121111;
       flex-shrink: 0;
+      border: 1.5px solid #333;
+      background-color: transparent !important;
     }
+    .pdf-mouse-sex.sex-female { border-color: #ff4081; color: #ff4081; }
+    .pdf-mouse-sex.sex-male { border-color: #2196f3; color: #2196f3; }
     
     .pdf-mouse-info {
       overflow: hidden;
