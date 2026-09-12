@@ -195,13 +195,13 @@ python3 build_mac.py --disable-console --app-name "MurisPro_V3.1"
 ## 项目结构
 
 ```
-animal-lab-management/
+MurisPro/
 ├── backend/           # Flask后端应用
 │   ├── dist/         # Vue前端编译产物
 │   ├── main.py       # 桌面应用入口
 │   ├── app.py        # 主应用文件
 │   ├── models.py     # 数据模型
-│   ├── pyinstaller.spec
+│   ├── build.py
 │   └── requirements.txt
 ├── src/          # Vue前端应用
 │   ├── components/
@@ -224,6 +224,68 @@ animal-lab-management/
 - **体重曲线** - 动物体重变化追踪和分析
 - **生存曲线** - 生存率统计和可视化
 - **系统设置** - 应用程序配置和管理
+
+## 数据验证与防篡改
+
+### 概述
+
+MurisPro 提供完整的数据审计链（Audit Trail）和 PDF 防篡改机制，确保实验数据的完整性和可追溯性。
+
+### 审计链（Audit Trail）
+
+系统在数据库层面维护一条不可篡改的审计链：
+
+- **记录范围**：所有 DELETE、UPDATE、IMPORT 操作均被记录，包括操作类型（SQL 语句）、操作前后的数据库文件 SHA256 哈希。
+- **链式结构**：每条审计记录的 `record` 字段为 `SHA256(上一条 record)`，形成链式哈希。任何对历史记录的篡改都会导致链断裂。
+- **存储位置**：审计数据存储在数据库的 `audit_log` 表中，与业务数据共存。
+
+```
+操作前数据库 SHA256 → old_values
+操作后数据库 SHA256 → new_values
+审计链哈希 → record = SHA256(prev_record)
+```
+
+### PDF 导出与认证
+
+导出 PDF 时，系统自动附加一个认证页（Certification Page），包含：
+
+| 字段 | 说明 |
+|------|------|
+| DB Hash | 导出时数据库文件的 SHA256 哈希 |
+| Audit Chain | 审计链中最新的 record 值 |
+| DB Name | 数据库文件名 |
+| Certified At | 云函数签名时间 |
+| Server Signature | ECDSA-P256 签名（由云函数生成） |
+
+签名流程：
+1. 前端调用 `GET /api/audit-info` 获取 DB Hash、Audit Chain、数据库名
+2. 前端将 `db_hash|record` 发送到云函数（Cloudflare Worker）进行 ECDSA-P256 签名
+3. 云函数返回签名和时间戳，前端将认证信息写入 PDF 最后一页
+
+### PDF 校验
+
+在系统设置 → PDF 验证页面，选择一个导出的 PDF 文件即可验证：
+
+1. 后端使用 pypdf 解析 PDF 最后一页的认证信息
+2. 在 `audit_log` 表中查找与 PDF 时间相近的 EXPORT 记录
+3. 比对 PDF 中的 DB Hash 与 AuditLog 中记录的 `old_values`
+4. 比对 PDF 中的 Audit Chain 与 AuditLog 中的 `record`
+5. 计算当前数据库文件哈希，检测数据库自导出后是否被修改
+
+校验结果包括：
+- 审计链是否匹配
+- DB 哈希是否匹配
+- 数据库自导出后是否被修改
+- 认证时间、数据库名、哈希值详情
+
+### 安全模型
+
+| 攻击场景 | 防护机制 |
+|----------|----------|
+| 篡改数据库数据 | DB 哈希与审计链不匹配，下次导出 PDF 时可检测 |
+| 篡改 PDF 认证页 | ECDSA 签名验证失败（签名由云函数私钥生成） |
+| 插入/删除审计记录 | 审计链断裂（record 哈希不连续） |
+| 伪造 PDF（从未授权数据库导出） | AuditLog 中无对应 EXPORT 记录 |
 
 ## 贡献指南
 

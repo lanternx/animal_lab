@@ -498,11 +498,19 @@ const renderChart = () => {
   });
 };
 
-const exportSurvivalChart = () => {
+const exportSurvivalChart = async () => {
   if (!chartInstance.value) {
     toast.info('请先生成图表');
     return;
   }
+
+  // 记录导出审计（审计禁用时跳过）
+  try {
+    const resp = await axios.get('/api/audit-info');
+    if (resp.data.audit_enabled === false) {
+      console.info('当前数据库已禁用审计，跳过审计记录')
+    }
+  } catch (e) { console.warn('审计记录失败:', e) }
 
   const W = 1600, H = 800;
   const tempCanvas = document.createElement('canvas');

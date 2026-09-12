@@ -1,7 +1,10 @@
 from flask import Flask, jsonify, request, send_file
 from flask_cors import CORS
 from datetime import datetime, date
-from models import db, Mouse, Cage, WeightRecord, StatusRecord, Pedigree, GeneLocus, Allele, Genotype, Location, ExperimentType, FieldDefinition, Experiment, ExperimentClass, ExperimentValue, PredefinedGroup
+from models import (db, Mouse, Cage, WeightRecord, StatusRecord, Pedigree,
+                    GeneLocus, Allele, Genotype, Location, ExperimentType, FieldDefinition,
+                    Experiment, ExperimentClass, ExperimentValue, PredefinedGroup,
+                    MouseDbInfo, SysDbInfo, SysConfig, SysAuditLog)
 import os
 import sys
 from pathlib import Path
@@ -10,14 +13,22 @@ from io import BytesIO
 from sqlalchemy import text, inspect, or_, and_
 from sqlalchemy.orm import joinedload
 import re
-from migration_script import DatabaseMigrator
+import subprocess
+import sqlite3
 
 import socket
+import ecdsa
+import hashlib
+import base64
+
+PUBLIC_KEY_PEM = """-----BEGIN PUBLIC KEY-----
+MFkwEwYHKoZIzj0CAQYIKoZIzj0DAQcDQgAEmbBEQ1hfgNtIrzWUNNlW7zJiPlmL
+ge0Gg+JWDKFjA38oB1gxxjVFw3SZ71i4wTsUUzzOJVH1uguto+QO0vWorQ==
+-----END PUBLIC KEY-----"""
 
 # 首先应用猴子补丁 - 必须在创建 Flask 应用之前
 def apply_socket_patch():
     """应用安全的 socket 函数补丁"""
-    # 保存原始函数
     _original_getfqdn = socket.getfqdn
     _original_gethostname = socket.gethostname
     
@@ -25,13 +36,11 @@ def apply_socket_patch():
         try:
             name = _original_gethostname()
             if isinstance(name, bytes):
-                # 尝试常见编码
                 for encoding in ['utf-8', 'gbk', 'latin-1']:
                     try:
                         return name.decode(encoding)
                     except UnicodeDecodeError:
                         continue
-                # 所有编码失败则替换无效字节
                 return name.decode('utf-8', errors='replace')
             return name
         except Exception:
@@ -39,21 +48,17 @@ def apply_socket_patch():
     
     def safe_getfqdn(name=''):
         try:
-            # 使用我们安全的主机名函数
             hostname = safe_gethostname()
             return f"{hostname}.local" if hostname else "localhost"
         except Exception:
             return "localhost"
     
-    # 应用补丁
     socket.gethostname = safe_gethostname
     socket.getfqdn = safe_getfqdn
 
-# 应用补丁
 apply_socket_patch()
 
 import logging
-# 获取主日志记录器
 logger = logging.getLogger("Main")
 
 import time
@@ -61,97 +66,130 @@ last_heartbeat = time.time()
 
 
 app = Flask(__name__, static_folder='dist', static_url_path='')
-CORS(app)  # 允许跨域请求
+CORS(app)
+
+def restart_app():
+    """重启应用程序"""
+    subprocess.Popen([sys.executable] + sys.argv)
+    os._exit(0)
 
 
-# 配置数据库 - 修改部分开始
 def get_base_dir():
     """获取应用程序的基础目录"""
     if getattr(sys, 'frozen', False):
-        # 打包后的情况
         return Path(sys.executable).parent
     else:
-        # 开发环境
         return Path(__file__).parent
 
-script_dir = os.path.dirname(os.path.abspath(__file__))
-config_path = os.path.join(script_dir, "config.json")
 import json
-# 读取配置
-if not os.path.exists(config_path):
-    # 创建默认配置文件
-    default_config = {
-        "db": {
-            "default_db": "mice.db",
-            "db_list": {'mice.db': {'projectName': '默认数据库', 'startAt':None, 'endAt':None, 'readOnly': False} }
-        },
-        "config": {
-            'mouse': {
-                'id': True,
-                'genotype': True,
-                'strain': True,
-                'sex': True,
-                'birth_date': True,
-                'days_old': True,
-                'weeks_old': True,
-                'live_status': True,
-                'death_date': False,
-                'tests_planned': False,
-                'tests_done': False,
-                'cage': True
-            }
-        }
-    }
-    with open(config_path, 'w', encoding='utf-8') as f:
-        json.dump(default_config, f, indent=4)
 
-with open(config_path, 'r', encoding='utf-8') as f:
-    config = json.load(f)
-
-def get_db_file():
-    """获取数据库文件名"""
-    current_db = config['db'].get('default_db', '')
-    if current_db:
-        return current_db
-    else:
-        config['db']['default_db'] = 'mice.db'
-        with open(config_path, 'w', encoding='utf-8') as f:
-            json.dump(config, f, indent=4)
-        return 'mice.db'
-
-# 确定基础目录
+# 确定基础目录和数据库目录
 base_dir = get_base_dir()
-db_path = base_dir / get_db_file()
-default_db = config['db']['default_db']
-db_list = config['db']['db_list']
-# 确保目录存在
-base_dir.mkdir(parents=True, exist_ok=True)
+databases_dir = base_dir / 'databases'
+databases_dir.mkdir(parents=True, exist_ok=True)
+
+# 系统数据库路径
+sys_db_path = databases_dir / 'murispro.db'
+
+# ==================== 系统数据库初始化 ====================
+sys_db_uri = f"sqlite:///file:///{sys_db_path.as_posix()}?uri=true"
+
+# ==================== 小鼠数据库初始化 ====================
+db_path = databases_dir / 'mice.db'
+
+# 确保小鼠数据库文件存在
 if not os.path.exists(db_path):
     open(db_path, "w").close()
-    
-app.config['SQLALCHEMY_DATABASE_URI'] = f'sqlite:///file:{db_path}?uri=true'
-if db_list.get(default_db, {}).get('readOnly', False):
-    print("数据库处于只读模式")
-    app.config['SQLALCHEMY_DATABASE_URI'] += "&mode=ro"
+
+app.config['SQLALCHEMY_DATABASE_URI'] = f"sqlite:///file:///{db_path.as_posix()}?uri=true"
+app.config['SQLALCHEMY_BINDS'] = {
+    'sys': sys_db_uri
+}
 app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
 app.config['ALLOWED_EXTENSIONS'] = {'xlsx', 'xls'}
 app.config['UPLOAD_FOLDER'] = os.path.join(base_dir, 'uploads')
 
-# 确保上传目录存在
 os.makedirs(app.config['UPLOAD_FOLDER'], exist_ok=True)
 
 db.init_app(app)
 
-# 确保数据库初始化完成
+def get_total_records_count():
+    """获取数据库中所有表的记录总数"""
+    try:
+        inspector = inspect(db.engine)
+        tables = inspector.get_table_names()
+        user_tables = [table for table in tables if not table.startswith('sqlite_')]
+        total_count = 0
+        for table in user_tables:
+            result = db.session.execute(text(f"SELECT COUNT(*) FROM {table}"))
+            count = result.scalar()
+            if count is not None:
+                total_count += count
+        return total_count
+    except Exception as e:
+        print(f"获取记录总数失败: {str(e)}")
+        return 0
+
+def update_db_stats(db_info):
+    """更新数据库统计信息（直接操作 mice.db）"""
+    db_path = databases_dir / 'mice.db'
+    if db_path.exists():
+        db_info.file_size = db_path.stat().st_size
+        db_info.last_modified = datetime.fromtimestamp(db_path.stat().st_mtime)
+    db_info.total_records = get_total_records_count()
+    db.session.commit()
+
 with app.app_context():
     try:
         db.create_all()
         print("数据库初始化完成")
-        # 测试数据库连接
         db.session.execute(text('SELECT 1'))
         print("数据库连接测试成功")
 
-        # 自动创建默认位置（如果不存在）
+        # 初始化默认配置
+        import time as _time
+        if not SysConfig.query.first():
+            default_mouse_config = {
+                'id': True, 'genotype': True, 'strain': True, 'sex': True,
+                'birth_date': True, 'days_old': True, 'weeks_old': True,
+                'live_status': True, 'death_date': False, 'tests_planned': False,
+                'tests_done': False, 'cage': True
+            }
+            db.session.add(SysConfig(key='mouse_columns', value=json.dumps(default_mouse_config)))
+            db.session.commit()
+
+            timestamp = _time.strftime("%Y%m%d_%H%M%S")
+            file_name = timestamp + '.db'
+            db.session.add(SysDbInfo(
+                name=file_name,
+                project_name='默认数据库',
+                audit_enabled=True
+            ))
+            db.session.commit()
+            if not MouseDbInfo.query.first():
+                db.session.add(MouseDbInfo(
+                    name=file_name
+                ))
+                db.session.commit()
+
+        # 确保小鼠数据库有 db_info 表
+        if not db.session.query(MouseDbInfo).first():
+            timestamp = _time.strftime("%Y%m%d_%H%M%S")
+            file_name = timestamp + '.db'
+            sysDb = SysDbInfo.query.filter_by(name='mice.db').first()
+            if sysDb:
+                sysDb.name = file_name
+            else:
+                db.session.add(SysDbInfo(
+                    name=file_name,
+                    project_name='默认数据库',
+                    audit_enabled=True
+                ))
+            db.session.add(MouseDbInfo(
+                name=file_name
+            ))
+            db.session.commit()
+
         if not db.session.query(Location).first():
             new_location = Location(
                 identifier="默认区域",
@@ -173,16 +211,58 @@ with app.app_context():
             print("已自动创建默认基因型")
         else:
             print("基因型已存在")
+        global current_db_id
+        current_db_id = MouseDbInfo.query.first().name if MouseDbInfo.query.first() else None
 
-            
+        # 为当前数据库计算统计信息
+        if current_db_id:
+            current_info = SysDbInfo.query.filter_by(name=current_db_id).first()
+            if current_info:
+                update_db_stats(current_info)
+
+        db.session.commit()
     except Exception as e:
         print(f"数据库初始化失败: {str(e)}")
         raise
 
-
 def allowed_file(filename):
     return '.' in filename and \
         filename.rsplit('.', 1)[1].lower() in app.config['ALLOWED_EXTENSIONS']
+
+
+import hashlib
+
+def compute_db_hash():
+    """计算当前小鼠数据库文件的 SHA256"""
+    with open(db_path, 'rb') as f:
+        return hashlib.sha256(f.read()).hexdigest()
+
+def compute_record_hash(prev_record):
+    """计算审计链哈希: SHA256(上一条record)"""
+    return hashlib.sha256(prev_record.encode('utf-8')).hexdigest()
+
+def log_audit(action, old_hash=None, is_mutation=True):
+    """插入审计记录到系统数据库。检查 audit_enabled，禁用时跳过。"""
+    db_id = current_db_id
+    if db_id is None:
+        return old_hash
+    db_info = SysDbInfo.query.filter_by(name=db_id).first()
+    if db_info and not db_info.audit_enabled:
+        return old_hash
+    new_hash = compute_db_hash() if is_mutation else old_hash
+    prev = SysAuditLog.query.order_by(SysAuditLog.id.desc()).first()
+    prev_record = prev.record if prev else ''
+    record = compute_record_hash(prev_record)
+    entry = SysAuditLog(
+        action=action,
+        old_values=old_hash,
+        new_values=new_hash,
+        record=record,
+        db_id=db_id
+    )
+    db.session.add(entry)
+    db.session.commit()
+    return new_hash
 
 
 @app.route('/')
@@ -330,7 +410,9 @@ def add_mouse():
                     experiment_id=t
                 )
                 db.session.add(exp)
+        old_hash = compute_db_hash()
         db.session.commit()
+        log_audit(f'INSERT INTO mouse (tid={mouse.tid})', old_hash)
         return jsonify({
             'tid': mouse.tid,
             'id': mouse.id,
@@ -414,7 +496,9 @@ def update_mouse(mouse_tid):
                     parent_type='mother'
                 )
                 db.session.add(parent)
+        old_hash = compute_db_hash()
         db.session.commit()
+        log_audit(f'UPDATE Mouse SET tid={mouse_tid}', old_hash)
         return jsonify(), 201
     except Exception as e:
         db.session.rollback()
@@ -432,8 +516,10 @@ def delete_mouse(mouse_tid):
         Pedigree.query.filter_by(parent_id=mouse_tid).delete()
         WeightRecord.query.filter_by(mouse_id=mouse_tid).delete()
         ExperimentClass.query.filter_by(mouse_id=mouse_tid).delete()
+        old_hash = compute_db_hash()
         db.session.delete(mouse)
         db.session.commit()
+        log_audit(f'DELETE FROM mouse WHERE tid={mouse_tid}', old_hash)
         return jsonify({'message': 'Mouse deleted successfully'})
     except Exception as e:
         db.session.rollback()
@@ -446,6 +532,7 @@ def delete_batch_mice():
     mice_ids_param = request.args.getlist('miceIds[]')
     mice_ids = [int(id.strip()) for id in mice_ids_param] if mice_ids_param else []
     try:
+        old_hash = compute_db_hash()
         for mouse_tid in mice_ids:
             mouse = Mouse.query.get_or_404(mouse_tid)
             Genotype.query.filter_by(mouse_id=mouse_tid).delete()
@@ -456,6 +543,7 @@ def delete_batch_mice():
             ExperimentClass.query.filter_by(mouse_id=mouse_tid).delete()
             db.session.delete(mouse)
         db.session.commit()
+        log_audit(f'DELETE FROM mouse WHERE tid IN {tuple(mice_ids)}', old_hash)
         return jsonify({'message': 'Mouse deleted successfully'})
     except Exception as e:
         db.session.rollback()
@@ -497,7 +585,9 @@ def add_mice_from_template(mouse_tid):
                     parent_id=p.parent_id,
                     parent_type=p.parent_type)
                 db.session.add(new_parent)
+        old_hash = compute_db_hash()
         db.session.commit()
+        log_audit(f'INSERT INTO mouse (tids={[m["id"] for m in data]})', old_hash)
         return jsonify(), 201
     except Exception as e:
         db.session.rollback()
@@ -531,7 +621,9 @@ def batch_experiments_change():
                 if not m:
                     continue
                 m.tests_planned = test_ids
+        old_hash = compute_db_hash()
         db.session.commit()
+        log_audit(f'UPDATE Mouse SET tests_done/tests_planned batch', old_hash)
         return jsonify(), 201
     except Exception as e:
         db.session.rollback()
@@ -616,7 +708,9 @@ def add_cage():
             mice_genotype=data.get('mice_genotype')
         )
         db.session.add(cage)
+        old_hash = compute_db_hash()
         db.session.commit()
+        log_audit(f'INSERT INTO cage (id={cage.id})', old_hash)
         return jsonify({'id': cage.id}), 201
     except Exception as e:
         logger.error(f"添加笼位失败: {str(e)}")
@@ -631,7 +725,9 @@ def move_mouse():
             mouse.cage_id = None
         else:
             mouse.cage_id = data['cage_id']
+        old_hash = compute_db_hash()
         db.session.commit()
+        log_audit(f'UPDATE Mouse SET cage_id={data["cage_id"]} WHERE tid={data["mouse_id"]}', old_hash)
         return jsonify({'message': f'Mouse {data["mouse_id"]} moved to cage {data["cage_id"]}'})
     except Exception as e:
         logger.error(f"调整小鼠笼位失败: {str(e)}")
@@ -674,7 +770,9 @@ def update_cage(cage_id):
             cage.mice_sex = data.get('mice_sex')
         if 'mice_genotype' in data:
             cage.mice_genotype = data.get('mice_genotype')
+        old_hash = compute_db_hash()
         db.session.commit()
+        log_audit(f'UPDATE Cage SET cage_id={cage.cage_id}', old_hash)
         return jsonify({
             'id': cage.id,
             'cage_id': cage.cage_id,
@@ -702,7 +800,9 @@ def update_cage_order():
         temporary = cage_from.order
         cage_from.order = cage_to.order
         cage_to.order = temporary
+        old_hash = compute_db_hash()
         db.session.commit()
+        log_audit(f'UPDATE Cage SET order swapped {id_from}<->{id_to}', old_hash)
         return jsonify({'message': 'successfully'})
     except Exception as e:
         logger.error(f"调整笼位排序失败: {str(e)}")
@@ -781,8 +881,10 @@ def delete_status_record(record_id):
     if not record:
         return jsonify({'error': 'Status record not found'}), 404
     try:
+        old_hash = compute_db_hash()
         db.session.delete(record)
         db.session.commit()
+        log_audit(f'DELETE FROM status_record WHERE id={record_id}', old_hash)
         return jsonify({'message': 'Status record deleted successfully'})
     except Exception as e:
         logger.error(f"删除小鼠状态失败: {str(e)}")
@@ -805,7 +907,9 @@ def add_status_record():
             status=data['status']
         )
         db.session.add(record)
+        old_hash = compute_db_hash()
         db.session.commit()
+        log_audit(f'INSERT INTO status_record (id={record.id})', old_hash)
         return jsonify({
             'id': record.id,
             'record_livingdays': record.record_livingdays,
@@ -853,7 +957,9 @@ def add_weight_records():
             )
             db.session.add(record)
         
+        old_hash = compute_db_hash()
         db.session.commit()
+        log_audit(f'INSERT INTO weight_record ({len(records)} rows)', old_hash)
         return jsonify({'message': f'Successfully added {len(records)} weight records'}), 201
     
     except Exception as e:
@@ -1093,7 +1199,9 @@ def add_gene():
         db.session.flush()
         a_l = Allele(symbol = "+", locus_id = locus.id, description = "野生型，未修饰", is_wildtype = True)
         db.session.add(a_l)
+        old_hash = compute_db_hash()
         db.session.commit()
+        log_audit(f'INSERT INTO gene_locus (id={locus.id})', old_hash)
         return jsonify(locus.to_dict()), 201
     except Exception as e:
         logger.error(f"创建基因位点失败: {str(e)}")
@@ -1109,7 +1217,9 @@ def add_allele(id):
 
     a_l = Allele(symbol = data['symbol'], locus_id = locus.id, description = data.get('description', ''), is_wildtype = data.get('is_wildtype', False))
     db.session.add(a_l)
+    old_hash = compute_db_hash()
     db.session.commit()
+    log_audit(f'INSERT INTO allele (id={a_l.id})', old_hash)
     return jsonify(a_l.to_dict()), 201
 
 @app.route('/api/gene/<int:id>', methods=['PUT'])
@@ -1122,7 +1232,9 @@ def update_gene(id):
     if 'description' in data:
         gene.description = data['description']
     
+    old_hash = compute_db_hash()
     db.session.commit()
+    log_audit(f'UPDATE GeneLocus SET id={gene.id}', old_hash)
     return jsonify(gene.to_dict())
 
 @app.route('/api/gene_allele/<int:allele_id>', methods=['PUT'])
@@ -1137,7 +1249,9 @@ def update_allele(allele_id):
             gene.description = data['description']
         if 'is_wildtype' in data:
             gene.is_wildtype = data['is_wildtype']
+        old_hash = compute_db_hash()
         db.session.commit()
+        log_audit(f'UPDATE Allele SET id={allele_id}', old_hash)
         return jsonify(gene.to_dict())
     except:
         logger.error(f"更新基因位点失败: {str(e)}")
@@ -1150,8 +1264,10 @@ def delete_gene(id):
         gene = GeneLocus.query.get_or_404(id)
         Genotype.query.filter_by(locus_id=gene.id).delete()
         Allele.query.filter_by(locus_id=gene.id).delete()
+        old_hash = compute_db_hash()
         db.session.delete(gene)
         db.session.commit()
+        log_audit(f'DELETE FROM gene_locus WHERE id={id}', old_hash)
         return '', 204
     except:
         logger.error(f"删除基因位点失败: {str(e)}")
@@ -1166,8 +1282,10 @@ def delete_allele(id):
         for genotype in genotypes:
             if genotype.contains_allele(allele.id):
                 db.session.delete(genotype)
+        old_hash = compute_db_hash()
         db.session.delete(allele)
         db.session.commit()
+        log_audit(f'DELETE FROM allele WHERE id={id}', old_hash)
         return '', 204
     except:
         logger.error(f"删除等位基因失败: {str(e)}")
@@ -1203,7 +1321,9 @@ def add_location():
             order=new_order
         )
         db.session.add(location)
+        old_hash = compute_db_hash()
         db.session.commit()
+        log_audit(f'INSERT INTO location (id={location.id})', old_hash)
         return jsonify(location.to_dict()), 201
     except Exception as e:
         db.session.rollback()
@@ -1224,7 +1344,9 @@ def update_location(id):
         if 'description' in data:
             location.description = data['description']
         
+        old_hash = compute_db_hash()
         db.session.commit()
+        log_audit(f'UPDATE Location SET id={id}', old_hash)
         return jsonify(location.to_dict())
     except Exception as e:
         logger.error(f"更新区域失败: {str(e)}")
@@ -1235,6 +1357,7 @@ def delete_location(id):
     try:
         location = Location.query.get_or_404(id)
         cages = Cage.query.filter_by(section=location.identifier).all()
+        old_hash = compute_db_hash()
         db.session.delete(location)
         for cage in cages:
             # 将该笼位中的所有小鼠移动到临时区
@@ -1243,6 +1366,7 @@ def delete_location(id):
                 mouse.cage_id = None
             db.session.delete(cage)
         db.session.commit()
+        log_audit(f'DELETE FROM location WHERE id={id}', old_hash)
         return '', 204
     except Exception as e:
         db.session.rollback()
@@ -1296,11 +1420,31 @@ def export_data(export_type):
                     'survival_days': (m.death_date - m.birth_date).days if m.death_date else (now - m.birth_date).days
                 })
         df = pd.DataFrame(data)
+        old_hash = compute_db_hash()
+        log_audit('EXPORT survival table', old_hash, is_mutation=False)
         return create_export_file(df, export_format, filename='survival_export')
     elif export_type == 'experiment':
         ids = request.args.getlist('experiment_ids[]')
         ids = [int(id) for id in ids] if ids else []
+        old_hash = compute_db_hash()
+        log_audit('EXPORT experiment records table', old_hash, is_mutation=False)
         return export_experiments_to_excel(ids)
+    elif export_type == 'audit-log':
+        db_id = current_db_id
+        logs = SysAuditLog.query.filter_by(db_id=db_id).order_by(SysAuditLog.id.asc()).all() if db_id else []
+        data = [{
+            'id': l.id,
+            'timestamp': l.timestamp.isoformat() if l.timestamp else None,
+            'action': l.action,
+            'old_values': l.old_values,
+            'new_values': l.new_values,
+            'record': l.record,
+            'db_id': l.db_id
+        } for l in logs]
+        df = pd.DataFrame(data)
+        old_hash = compute_db_hash()
+        log_audit('EXPORT audit log table', old_hash, is_mutation=False)
+        return create_export_file(df, export_format, filename='audit_log_export')
     else:
         return jsonify({'error': '无效的导出类型'}), 400
 
@@ -1350,6 +1494,8 @@ def export_data(export_type):
     else:
         df = pd.DataFrame(data)
     
+    old_hash = compute_db_hash()
+    log_audit(f'EXPORT {export_type} table', old_hash, is_mutation=False)
     return create_export_file(df, export_format, filename)
 
 def create_export_file(df, export_format, filename):
@@ -1404,6 +1550,7 @@ def import_data():
         'errors': []
     }
     
+    old_hash = compute_db_hash()
     if import_type == 'mice':
         import_mice_data(df, result, conflict_resolution)
     elif import_type == 'weights':
@@ -1418,6 +1565,7 @@ def import_data():
     # 清理上传的文件
     os.remove(filepath)
     
+    log_audit(f'IMPORT {import_type} file={file.filename}', old_hash)
     return jsonify(result)
 
 def import_mice_data(df, result, conflict_resolution):
@@ -1798,7 +1946,9 @@ def update_sections_order():
             section = Location.query.get_or_404(item['id'])
             section.order = item['order']
         
+        old_hash = compute_db_hash()
         db.session.commit()
+        log_audit(f'UPDATE Location SET order', old_hash)
         return jsonify({'message': '部分顺序已更新'})
     except Exception as e:
         db.session.rollback()
@@ -1890,7 +2040,9 @@ def add_weight_record():
         )
         
         db.session.add(record)
+        old_hash = compute_db_hash()
         db.session.commit()
+        log_audit(f'INSERT INTO weight_record (id={record.id})', old_hash)
         
         return jsonify({
             'id': record.id,
@@ -1922,7 +2074,9 @@ def update_weight_record(id):
             if mouse and mouse.birth_date:
                 record.record_livingdays = (record.record_date.date() - mouse.birth_date).days
         
+        old_hash = compute_db_hash()
         db.session.commit()
+        log_audit(f'UPDATE WeightRecord SET id={record.id}', old_hash)
         
         return jsonify({
             'id': record.id,
@@ -1941,9 +2095,10 @@ def update_weight_record(id):
 def delete_weight_record(id):
     try:
         record = WeightRecord.query.get_or_404(id)
+        old_hash = compute_db_hash()
         db.session.delete(record)
         db.session.commit()
-        
+        log_audit(f'DELETE FROM weight_record WHERE id={id}', old_hash)
         return jsonify({'message': '记录删除成功'})
     except Exception as e:
         db.session.rollback()
@@ -1995,7 +2150,9 @@ def create_experiment_type():
             )
             db.session.add(field)
         
+        old_hash = compute_db_hash()
         db.session.commit()
+        log_audit(f'INSERT INTO experiment_type (id={experiment_type.id})', old_hash)
         return jsonify(experiment_type.to_dict())
     except Exception as e:
         db.session.rollback()
@@ -2059,7 +2216,9 @@ def update_experiment_type(id):
             ~FieldDefinition.id.in_(field_ids)
         ).delete(synchronize_session=False)
         
+        old_hash = compute_db_hash()
         db.session.commit()
+        log_audit(f'UPDATE ExperimentType SET id={id}', old_hash)
         return jsonify(experiment_type.to_dict())
     except Exception as e:
         db.session.rollback()
@@ -2080,9 +2239,10 @@ def delete_experiment_type(id):
         FieldDefinition.query.filter_by(experiment_type_id=id).delete()
         
         # 删除实验类型
+        old_hash = compute_db_hash()
         db.session.delete(experiment_type)
         db.session.commit()
-        
+        log_audit(f'DELETE FROM experiment_type WHERE id={id}', old_hash)
         return jsonify({'message': '删除成功'})
     except Exception as e:
         db.session.rollback()
@@ -2283,7 +2443,9 @@ def input_experiment_records():
                 
                 db.session.add(exp_value)
         
+        old_hash = compute_db_hash()
         db.session.commit()
+        log_audit(f'INSERT INTO experiment (id={experiment.id})', old_hash)
         return jsonify({'message': '实验记录保存成功', 'count': len(records)})
     except Exception as e:
         db.session.rollback()
@@ -2363,7 +2525,9 @@ def update_experiment(experiment_id):
                     return jsonify({'error': f'字段 {field_def.field_name} 需要日期值 (YYYY-MM-DD)'}), 400
             else:
                 return jsonify({'error': f'未知的数据类型 {field_def.data_type}'}), 400
+        old_hash = compute_db_hash()
         db.session.commit()
+        log_audit(f'UPDATE Experiment SET id={experiment_id}', old_hash)
         return jsonify({
             'message': '记录更新成功',
             'data': experiment.to_dict()
@@ -2382,8 +2546,10 @@ def delete_experiment(experiment_id):
         experiment = Experiment.query.get_or_404(experiment_id)
         
         # 删除实验记录（关联的实验值会自动删除，因为有 cascade='all, delete-orphan'）
+        old_hash = compute_db_hash()
         db.session.delete(experiment)
         db.session.commit()
+        log_audit(f'DELETE FROM experiment WHERE id={experiment_id}', old_hash)
         
         return jsonify({
             'message': '实验记录删除成功',
@@ -2647,33 +2813,6 @@ def clear_database():
             'details': str(e)
         }), 500
 
-def get_total_records_count():
-    """获取数据库中所有表的记录总数"""
-    try:
-        # 获取数据库引擎
-        engine = db.engine
-        
-        # 获取所有表名
-        inspector = inspect(engine)
-        tables = inspector.get_table_names()
-        
-        # 过滤掉 SQLite 系统表
-        user_tables = [table for table in tables if not table.startswith('sqlite_')]
-        
-        total_count = 0
-        
-        # 对每个表执行 COUNT 查询
-        for table in user_tables:
-            # 使用 SQLAlchemy 的 text() 函数执行原始 SQL
-            result = db.session.execute(text(f"SELECT COUNT(*) FROM {table}"))
-            count = result.scalar()
-            total_count += count
-        
-        return total_count
-    except Exception as e:
-        logger.error(f"获取记录总数失败: {str(e)}")
-        return 0
-
 def clear_all_tables(db):
     """清空所有表的数据但保留表结构"""
     try:
@@ -2720,120 +2859,157 @@ def clear_all_tables(db):
 @app.route('/api/database', methods=['GET'])
 def get_database():
     """获取数据库列表"""
-    return jsonify({'databases': db_list, 'current_database': get_db_file()}), 200
+    all_dbs = SysDbInfo.query.all()
+    return jsonify({'databases': {db.name: db.to_dict() for db in all_dbs}, 'current_database': current_db_id}), 200
 
 @app.route('/api/database/create', methods=['POST'])
 def create_database():
-    """创建新数据库"""
+    """创建新数据库并切换"""
     db_item = request.get_json()
-    database = {
-        'projectName': db_item['projectName'],
-        'startAt': db_item['startAt'],
-        'endAt': db_item['endAt'],
-        'readOnly': db_item['readOnly']
-    }
     timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-    db_list[timestamp+'.db'] = database
-    config['db']['db_list'] = db_list
-    with open(config_path, 'w', encoding='utf-8') as f:
-        json.dump(config, f, indent=4)
-    return jsonify({'message': '数据库创建成功', 'database': database, 'key': timestamp+'.db'}), 201
+    file_name = timestamp + '.db'
+
+    start_at = None
+    end_at = None
+    if db_item.get('startAt'):
+        start_at = datetime.strptime(db_item['startAt'], '%Y-%m-%d').date()
+    if db_item.get('endAt'):
+        end_at = datetime.strptime(db_item['endAt'], '%Y-%m-%d').date()
+
+    # 创建新 DB 文件
+    new_db_path = databases_dir / file_name
+    open(new_db_path, "w").close()
+
+    new_db = SysDbInfo(
+        name=file_name,
+        project_name=db_item.get('projectName', ''),
+        start_at=start_at,
+        end_at=end_at,
+        audit_enabled=not db_item.get('readOnly', False)
+    )
+    db.session.add(new_db)
+    db.session.commit()
+
+    # 找到旧 SysDbInfo
+    old_db_info = None
+    for info in SysDbInfo.query.all():
+        if info.name == file_name:
+            continue
+        if not (databases_dir / info.name).exists():
+            old_db_info = info
+            break
+
+    # 更新旧数据库统计
+    if old_db_info:
+        update_db_stats(old_db_info)
+
+    # 切换到新数据库
+    try:
+        db.engine.dispose()
+
+        if old_db_info:
+            current_path = databases_dir / 'mice.db'
+            old_original_path = databases_dir / old_db_info.name
+            if current_path.exists():
+                os.rename(str(current_path), str(old_original_path))
+
+        # 新文件重命名为 mice.db
+        mice_path = databases_dir / 'mice.db'
+        if new_db_path.exists():
+            os.rename(str(new_db_path), str(mice_path))
+
+        restart_app()
+    except Exception as e:
+        return jsonify({'error': f'创建切换失败: {str(e)}'}), 500
+
+    return jsonify({'message': '数据库创建成功', 'database': new_db.to_dict(), 'key': file_name}), 201
 
 @app.route('/api/database/<string:db_key>', methods=['PUT'])
 def select_database(db_key):
-    """选择数据库"""
-    if db_key not in db_list:
+    """选择数据库 - 通过文件重命名切换"""
+    new_db_info = SysDbInfo.query.filter_by(name=db_key).first()
+    if not new_db_info:
         return jsonify({'error': '数据库不存在'}), 404
-    config['db']['default_db'] = db_key
 
-    # 获取数据库文件信息
-    total_records = get_total_records_count()
-    stat = os.stat(db_path)
-    file_size = stat.st_size
-    last_modified = datetime.fromtimestamp(stat.st_mtime)
-    config['db']['db_list'][default_db].update({        
-        'fileSize': file_size,
-        'lastModified': last_modified.strftime('%Y-%m-%d %H:%M:%S'),
-        'totalRecords': total_records
-    })
+    # 找到当前活跃数据库的 SysDbInfo（原始文件已被重命名为 mice.db，文件不存在的那个）
+    old_db_info = None
+    for info in SysDbInfo.query.all():
+        if info.name == db_key:
+            continue
+        if not (databases_dir / info.name).exists():
+            old_db_info = info
+            break
 
-    with open(config_path, 'w', encoding='utf-8') as f:
-        json.dump(config, f, indent=4)
+    # 如果没找到且没有文件冲突，可能是首次切换
+    if old_db_info and old_db_info.name == db_key:
+        return jsonify({'message': '已经是当前数据库'}), 200
 
-    return jsonify({'message': f'已切换到新数据库，重启后生效'}), 200
+    try:
+        # 更新旧数据库统计
+        if old_db_info:
+            update_db_stats(old_db_info)
+
+        db.engine.dispose()
+
+        if old_db_info:
+            # 把当前 mice.db 重命名回旧文件名
+            current_path = databases_dir / 'mice.db'
+            old_original_path = databases_dir / old_db_info.name
+            if current_path.exists():
+                os.rename(str(current_path), str(old_original_path))
+
+        # 把目标文件重命名为 mice.db
+        target_path = databases_dir / db_key
+        mice_path = databases_dir / 'mice.db'
+        if target_path.exists():
+            os.rename(str(target_path), str(mice_path))
+
+        restart_app()
+    except Exception as e:
+        return jsonify({'error': f'切换失败: {str(e)}'}), 500
 
 @app.route('/api/database/<string:db_key>', methods=['DELETE'])
 def delete_database(db_key):
     """删除数据库"""
-    if db_key not in db_list:
+    db_info = SysDbInfo.query.filter_by(name=db_key).first()
+    if not db_info:
         return jsonify({'error': '数据库不存在'}), 404
-    if db_key == default_db:
+
+    if db_key == current_db_id:
         return jsonify({'error': '无法删除当前使用的数据库'}), 400
-    del db_list[db_key]
-    config['db']['db_list'] = db_list
-    with open(config_path, 'w', encoding='utf-8') as f:
-        json.dump(config, f, indent=4)
-    if os.path.exists(os.path.join(base_dir, db_key)):
-        os.remove(os.path.join(base_dir, db_key))
+    db.session.delete(db_info)
+    db.session.commit()
+    db_file_path = databases_dir / db_key
+    if os.path.exists(db_file_path):
+        os.remove(db_file_path)
     return jsonify({'message': '数据库删除成功'}), 200
 
 @app.route('/api/database/<string:db_key>', methods=['POST'])
 def modify_database(db_key):
     """修改数据库信息"""
     db_item = request.get_json()
-    if db_key not in db_list.keys():
+    db_info = SysDbInfo.query.filter_by(name=db_key).first()
+    if not db_info:
         return jsonify({'error': '数据库不存在'}), 404
-    
-    database = {
-        'projectName': db_item['projectName'],
-        'startAt': db_item['startAt'],
-        'endAt': db_item['endAt'],
-        'readOnly': db_item['readOnly']
-    }
-    db_list[db_key].update(database)
-    config['db']['db_list'] = db_list
-    with open(config_path, 'w', encoding='utf-8') as f:
-        json.dump(config, f, indent=4)
-    return jsonify({'message': '数据库信息修改成功', 'database': database}), 200
 
-@app.route('/api/database/info', methods=['GET'])
-def get_database_info():
-    """获取数据库信息"""
-    try:
-        if not os.path.exists(db_path):
-            return jsonify({
-                'fileName': 'mice.db',
-                'fileSize': 0,
-                'lastModified': '文件不存在',
-                'recordCount': 0
-            })
+    db_info.project_name = db_item.get('projectName', db_info.project_name)
+    if db_item.get('startAt'):
+        db_info.start_at = datetime.strptime(db_item['startAt'], '%Y-%m-%d').date()
+    if db_item.get('endAt'):
+        db_info.end_at = datetime.strptime(db_item['endAt'], '%Y-%m-%d').date()
+    if 'readOnly' in db_item:
+        db_info.audit_enabled = not db_item['readOnly']
+    if 'auditEnabled' in db_item:
+        db_info.audit_enabled = db_item['auditEnabled']
 
-        total_records = get_total_records_count()
-
-        # 获取数据库文件信息
-        stat = os.stat(db_path)
-        file_size = stat.st_size
-        last_modified = datetime.fromtimestamp(stat.st_mtime)
-
-        info = {
-            'fileSize': file_size,
-            'lastModified': last_modified,
-            'totalRecords': total_records
-        }
-        return jsonify(info)
-        
-    except Exception as e:
-        logger.error(f"获取数据库信息失败: {str(e)}")
-        return jsonify({
-            'error': '获取数据库信息失败',
-            'details': str(e)
-        }), 500
+    db.session.commit()
+    return jsonify({'message': '数据库信息修改成功', 'database': db_info.to_dict()}), 200
 
 @app.route('/api/database/export/<string:key>', methods=['GET'])
 def export_database(key):
     """导出数据库文件"""
     try:
-        db_path = os.path.join(base_dir, key)
+        db_path = os.path.join(databases_dir, key)
         if not os.path.exists(db_path):
             return jsonify({'error': '数据库文件不存在'}), 404
         
@@ -2870,7 +3046,7 @@ def export_log_file():
 
 @app.route('/api/database/import', methods=['POST'])
 def import_database():
-    """导入数据库文件"""
+    """导入数据库文件并切换"""
     try:
         if 'file' not in request.files:
             return jsonify({'error': '没有选择文件'}), 400
@@ -2882,50 +3058,58 @@ def import_database():
         if not file.filename.endswith('.db'):
             return jsonify({'error': '请选择.db格式的数据库文件'}), 400
         
-        # 获取数据库文件信息
-        total_records = get_total_records_count()
-        stat = os.stat(db_path)
-        file_size = stat.st_size
-        last_modified = datetime.fromtimestamp(stat.st_mtime)
-        config['db']['db_list'][default_db].update({        
-            'fileSize': file_size,
-            'lastModified': last_modified.strftime('%Y-%m-%d %H:%M:%S'),
-            'totalRecords': total_records
-        })
-
         db_item = json.loads(request.form.get('project_info'))
-        version_change = db_item['databaseUpdate']
         timestamp_name = datetime.now().strftime("%Y%m%d_%H%M%S") + '.db'
-        if version_change:
-            # 保存上传的文件
-            import shutil
-            file.save(timestamp_name+timestamp_name)
-            new_db_path = base_dir / timestamp_name
-            shutil.copy2(db_path, new_db_path)
-            new_db_url = f"sqlite:///{new_db_path}"
-            app.config['SQLALCHEMY_DATABASE_URI'] = new_db_url
-        else:
-            file.save(timestamp_name)
-        database = {
-            'projectName': db_item['projectName'],
-            'startAt': db_item['startAt'],
-            'endAt': db_item['endAt'],
-            'readOnly': db_item['readOnly']
-        }
-        db_list[timestamp_name] = database
-        config['db']['db_list'] = db_list
-        config['db']['default_db'] = timestamp_name
-        
-        if version_change:
-            OLD_DB_URL = f"sqlite:///{base_dir / (timestamp_name + timestamp_name)}"
-            NEW_DB_URL = f"sqlite:///{base_dir / timestamp_name}"
+        save_path = str(databases_dir / timestamp_name)
+        file.save(save_path)
 
-            migrator = DatabaseMigrator(OLD_DB_URL, NEW_DB_URL)
-            clear_all_tables(migrator.for_clear_new_tables())
-            migrator.run_migration()
+        start_at = None
+        end_at = None
+        if db_item.get('startAt'):
+            start_at = datetime.strptime(db_item['startAt'], '%Y-%m-%d').date()
+        if db_item.get('endAt'):
+            end_at = datetime.strptime(db_item['endAt'], '%Y-%m-%d').date()
 
-        with open(config_path, 'w', encoding='utf-8') as f:
-            json.dump(config, f, indent=4)
+        new_db_info = SysDbInfo(
+            name='mice.db',
+            project_name=db_item.get('projectName', '导入数据库'),
+            start_at=start_at,
+            end_at=end_at,
+            audit_enabled=db_item.get('auditEnabled', True)
+        )
+        db.session.add(new_db_info)
+        db.session.commit()
+
+        # 找到旧 SysDbInfo
+        old_db_info = None
+        for info in SysDbInfo.query.all():
+            if info.name == timestamp_name:
+                continue
+            if not (databases_dir / info.name).exists():
+                old_db_info = info
+                break
+
+        # 更新旧数据库统计
+        if old_db_info:
+            update_db_stats(old_db_info)
+
+        # 切换到导入的数据库
+        db.engine.dispose()
+
+        if old_db_info:
+            current_path = databases_dir / 'mice.db'
+            old_original_path = databases_dir / old_db_info.name
+            if current_path.exists():
+                os.rename(str(current_path), str(old_original_path))
+
+        # 新文件重命名为 mice.db
+        new_db_path = databases_dir / timestamp_name
+        mice_path = databases_dir / 'mice.db'
+        if new_db_path.exists():
+            os.rename(str(new_db_path), str(mice_path))
+
+        restart_app()
+
         return jsonify({
             'success': True,
             'message': '数据库导入成功'
@@ -3203,7 +3387,9 @@ def modify_predefined_groups(gIndex):
         new_rule.Gtype = group_type
         new_rule.rules = rules
         new_rule.experiment_id = experiment_id
+        old_hash = compute_db_hash()
         db.session.commit()
+        log_audit(f'UPDATE PredefinedGroup SET id={gIndex}', old_hash)
         return jsonify(), 200
     except json.JSONDecodeError:
         return jsonify({'error': '分组参数JSON格式错误'}), 400
@@ -3232,7 +3418,9 @@ def add_predefined_groups():
                 experiment_id = experiment_id
             )
             db.session.add(new_rule)
+            old_hash = compute_db_hash()
             db.session.commit()
+            log_audit(f'INSERT INTO predefined_group (id={new_rule.id})', old_hash)
             return jsonify(), 200
         else:
             return jsonify(), 403
@@ -3280,8 +3468,10 @@ def get_predefined_groups():
 def delete_predefined_groups(g_id):
     try:
         pre_group = PredefinedGroup.query.get_or_404(g_id)
+        old_hash = compute_db_hash()
         db.session.delete(pre_group)
         db.session.commit()
+        log_audit(f'DELETE FROM predefined_group WHERE id={g_id}', old_hash)
         return jsonify(), 200
     except Exception as e:
         logger.error(f"删除预设分组失败: {str(e)}")
@@ -3289,16 +3479,145 @@ def delete_predefined_groups(g_id):
 
 @app.route('/api/setting', methods=['GET'])
 def display_setting():
-    return jsonify({'show_columns':config['config']['mouse'], 'success': True}), 200
+    cfg = SysConfig.query.get('mouse_columns')
+    show_columns = json.loads(cfg.value) if cfg else {}
+    return jsonify({'show_columns': show_columns, 'success': True}), 200
 
 @app.route('/api/setting/<string:type>', methods=['POST'])
 def change_display_setting(type):
     if type == 'mouse':
         mouse_config = request.json
-        config['config']['mouse'] = mouse_config
-        with open(config_path, 'w', encoding='utf-8') as f:
-            json.dump(config, f, indent=4)
+        cfg = SysConfig.query.get('mouse_columns')
+        if cfg:
+            cfg.value = json.dumps(mouse_config)
+        else:
+            db.session.add(SysConfig(key='mouse_columns', value=json.dumps(mouse_config)))
+        db.session.commit()
     return jsonify(), 200
+
+
+@app.route('/api/audit-info', methods=['GET'])
+def get_audit_info():
+    """供前端导出PDF时调用，返回当前数据库哈希和审计链，并记录EXPORT审计"""
+    try:
+        db_id = current_db_id
+        if db_id is None:
+            return jsonify({'error': '未找到当前数据库'}), 500
+        
+        db_info = SysDbInfo.query.filter_by(name=db_id).first()
+        audit_enabled = db_info.audit_enabled if db_info else True
+        
+        db_hash = compute_db_hash()
+        db_name = current_db_id
+        
+        if not audit_enabled:
+            return jsonify({'db_hash': db_hash, 'record': '', 'db_name': db_name, 'audit_enabled': False}), 200
+        
+        # 获取最新审计链
+        latest = SysAuditLog.query.filter_by(db_id=db_id).order_by(SysAuditLog.id.desc()).first()
+        record = latest.record if latest else ''
+        
+        # 记录EXPORT审计条目
+        new_record = compute_record_hash(record)
+        entry = SysAuditLog(
+            action=f'EXPORT pdf db={db_name}',
+            old_values=db_hash,
+            new_values=db_hash,
+            record=new_record,
+            db_id=db_id
+        )
+        db.session.add(entry)
+        db.session.commit()
+        
+        return jsonify({'db_hash': db_hash, 'record': new_record, 'db_name': db_name, 'audit_enabled': True}), 200
+    except Exception as e:
+        logger.error(f"获取审计信息失败: {str(e)}")
+        return jsonify({'error': f'获取审计信息失败: {str(e)}'}), 500
+
+
+@app.route('/api/verify-pdf', methods=['POST'])
+def verify_pdf():
+    """PDF校验: 验证ECDSA签名 + 比对哈希与审计链"""
+    try:
+        import pypdf
+        from io import BytesIO
+        import re as _re
+
+        pdf_data = request.get_data()
+        reader = pypdf.PdfReader(BytesIO(pdf_data))
+
+        full_text = ''
+        for page in reader.pages:
+            full_text += page.extract_text() or ''
+
+        time_match = _re.search(r'Certified At:\s*(.+)', full_text)
+        db_name_match = _re.search(r'DB Name:\s*(.+)', full_text)
+        db_hash_match = _re.search(r'(?:Content Hash|DB Hash):\s*([0-9a-f]{64})', full_text)
+        chain_match = _re.search(r'Audit Chain:\s*([0-9a-f]{64})', full_text)
+        sig_match = _re.search(r'Server Signature:\s*([A-Za-z0-9+/=\s]+)', full_text)
+        sign_material_match = _re.search(r'Signed Material:\s*(.+?)(?:\n|$)', full_text)
+
+        if not all([time_match, db_hash_match, sig_match, sign_material_match]):
+            return jsonify({'valid': False, 'error': 'PDF中未找到完整的认证信息'}), 400
+
+        cert_time = time_match.group(1).strip() if time_match else None
+        cert_db_name = db_name_match.group(1).strip() if db_name_match else None
+        cert_db_hash = db_hash_match.group(1).strip()
+        cert_record = chain_match.group(1).strip() if chain_match else None
+        signature = sig_match.group(1).replace('\r', '').replace('\n', '').replace(' ', '').strip()
+        sign_material = sign_material_match.group(1).strip()
+
+        signature_valid = False
+        try:
+            public_key = ecdsa.VerifyingKey.from_pem(PUBLIC_KEY_PEM)
+            sig_bytes = base64.b64decode(signature)
+            public_key.verify(sig_bytes, sign_material.encode(), hashfunc=hashlib.sha256)
+            signature_valid = True
+        except Exception:
+            signature_valid = False
+
+        hash_match = False
+        chain_match_ok = False
+        audit_entry = None
+
+        if cert_db_name:
+            db_info = SysDbInfo.query.filter_by(name=cert_db_name).first()
+            if db_info:
+                from datetime import datetime as dt
+                cert_dt = None
+                try:
+                    cert_dt = dt.fromisoformat(cert_time.replace('Z', '+00:00'))
+                except Exception:
+                    pass
+
+                candidates = SysAuditLog.query.filter(
+                    SysAuditLog.db_id == db_info.id,
+                    SysAuditLog.action.like('EXPORT%'),
+                ).all()
+                for c in candidates:
+                    if c.timestamp and cert_dt and abs((c.timestamp - cert_dt).total_seconds()) < 30:
+                        audit_entry = c
+                        break
+
+                if audit_entry:
+                    hash_match = audit_entry.old_values == cert_db_hash
+                    chain_match_ok = (cert_record and audit_entry.record == cert_record)
+
+        return jsonify({
+            'valid': hash_match and chain_match_ok and signature_valid,
+            'hashMatch': hash_match,
+            'chainMatch': chain_match_ok,
+            'signatureValid': signature_valid,
+            'db_name': cert_db_name,
+            'cert_db_hash': cert_db_hash,
+            'cert_record': cert_record,
+            'time': cert_time,
+            'audit_entry_id': audit_entry.id if audit_entry else None
+        }), 200
+
+    except Exception as e:
+        logger.error(f"PDF校验失败: {str(e)}")
+        return jsonify({'valid': False, 'error': f'PDF校验失败: {str(e)}'}), 500
 
 if __name__ == '__main__':
     app.run(debug=True, host='localhost', port=5000)

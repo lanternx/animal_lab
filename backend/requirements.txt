@@ -5,3 +5,5 @@ pywebview
 pandas
 openpyxl
 nuitka
+pypdf
+ecdsa

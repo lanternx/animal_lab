@@ -187,7 +187,7 @@
     
     <!-- 导出设置 -->
     <div v-if="activeTab === 'export'" class="form-container">
-    <h2 class="section-title">导出设置</h2>
+    <h2 class="section-title">导出数据</h2>
     <p class="section-description">在此设置导出数据的相关选项</p>
     
     <div class="form-section">
@@ -210,7 +210,7 @@
             <input type="date" v-model="exportEndDate">
             </div>
         </div>
-        <table class="settings-table" v-if="currentExportType === 'experiment'" >
+        <table class="settings-table" v-if="currentExportType === 'experiment' && experiments.length > 0" >
             <thead>
                 <tr>
                 <th>实验类型名称</th>
@@ -233,7 +233,8 @@
                 </tr>
             </template>
             </tbody>   
-        </table> 
+        </table>
+        <p v-if="currentExportType === 'experiment' && experiments.length === 0" style="color: #999; text-align: center; padding: 20px 0;">暂无实验类型</p>
         <div class="form-group">
             <label>文件格式</label>
             <select v-model="exportFormat">
@@ -245,6 +246,14 @@
         <div class="form-group">
             <button class="btn btn-primary" @click="confirmExport">确认导出</button>
         </div>
+        </div>
+    </div>
+
+    <div class="form-section" style="margin-top: 20px;">
+        <h3>审计日志导出</h3>
+        <p class="section-description">导出所有操作审计记录（DELETE、UPDATE、IMPORT、EXPORT）</p>
+        <div class="form-group">
+            <button class="btn btn-primary" @click="exportAuditLog">导出审计日志</button>
         </div>
     </div>
     </div>
@@ -1183,15 +1192,15 @@
                         <span 
                             class="status-badge" 
                             :class="getStatusClasses(db, key)"
-                            @click="toggleReadOnly(key)"
-                            :title="db.readOnly ? '点击设为可写' : '点击设为只读'"
+                            @click="toggleAuditEnabled(key)"
+                            :title="db.auditEnabled ? '点击禁用审计' : '点击启用审计'"
                         >
                             <span class="status-icon">
                                 <template v-if="currentDatabase === key">★</template>
-                                <template v-else-if="db.readOnly">🔒</template>
-                                <template v-else>✓</template>
+                                <template v-else-if="db.auditEnabled">✓</template>
+                                <template v-else>⚠</template>
                             </span>
-                            {{ getDatabaseStatus(db.readOnly, key) }}
+                            {{ getDatabaseStatus(db.auditEnabled, key) }}
                         </span>
                     </div>
                 </div>
@@ -1217,7 +1226,7 @@
                             </template>
                         </span>
                     </div>
-                    <div v-if="db.readOnly" class="detail-item">
+                    <div class="detail-item">
                         <span class="detail-label">项目结束时间：</span>
                         <span class="detail-value">
                             <template v-if="editingIndex === key && editingField === 'endAt'">
@@ -1255,21 +1264,21 @@
                     <button
                         class="action-btn primary" 
                         @click="selectDatabase(key)"
-                        :disabled="currentDatabase === key || databaseNotChanged === false"
+                        :disabled="currentDatabase === key"
                     >
                         设为当前
                     </button>
                     <button
                         class="action-btn secondary" 
                         @click="exportDatabase(key)"
-                        :disabled="(!db.totalRecords && db.totalRecords !== 0) || databaseNotChanged === false"
+                        :disabled="!db.totalRecords && db.totalRecords !== 0"
                     >
                         导出
                     </button>
                     <button
                         class="action-btn btn-danger" 
                         @click="deleteDatabase(key)"
-                        :disabled="currentDatabase === key || databaseNotChanged === false"
+                        :disabled="currentDatabase === key"
                     >
                         删除
                     </button>
@@ -1309,10 +1318,10 @@
                         </span>
                     </div>
                     <div class="detail-item">
-                        <span class="detail-label">只读模式</span>
+                        <span class="detail-label">审计模式</span>
                         <div class="checkbox-group">
-                            <input type="checkbox" v-model="editingDatabase.readOnly" id="edit-readonly-checkbox">
-                            <label for="edit-readonly-checkbox">启用只读模式</label>
+                            <input type="checkbox" v-model="editingDatabase.auditEnabled" id="edit-audit-checkbox">
+                            <label for="edit-audit-checkbox">启用审计</label>
                         </div>
                     </div>
                 </div>
@@ -1451,20 +1460,32 @@
                 <table class="settings-table" style="margin-top: 10px;">
                     <tbody>
                         <tr>
-                            <td style="width: 150px; font-weight: bold;">内容指纹匹配</td>
+                            <td style="width: 150px; font-weight: bold;">审计链匹配</td>
+                            <td>{{ verifyResult.chainMatch ? '✅ 是' : '❌ 否' }}</td>
+                        </tr>
+                        <tr>
+                            <td style="font-weight: bold;">DB哈希匹配</td>
                             <td>{{ verifyResult.hashMatch ? '✅ 是' : '❌ 否' }}</td>
                         </tr>
                         <tr>
                             <td style="font-weight: bold;">签名验证</td>
-                            <td>{{ verifyResult.signatureValid ? '✅ 有效' : '❌ 无效' }}</td>
+                            <td>{{ verifyResult.signatureValid ? '✅ 是' : '❌ 否' }}</td>
                         </tr>
                         <tr>
                             <td style="font-weight: bold;">认证时间</td>
-                            <td>{{ verifyResult.serverTime || '无' }}</td>
+                            <td>{{ verifyResult.time || '无' }}</td>
                         </tr>
                         <tr>
-                            <td style="font-weight: bold;">内容指纹</td>
-                            <td>{{ verifyResult.sha256 || '无' }}</td>
+                            <td style="font-weight: bold;">数据库名</td>
+                            <td>{{ verifyResult.db_name || '无' }}</td>
+                        </tr>
+                        <tr>
+                            <td style="font-weight: bold;">认证时DB哈希</td>
+                            <td style="font-size: 12px; word-break: break-all;">{{ verifyResult.cert_db_hash || '无' }}</td>
+                        </tr>
+                        <tr>
+                            <td style="font-weight: bold;">审计链</td>
+                            <td style="font-size: 12px; word-break: break-all;">{{ verifyResult.cert_record || '无' }}</td>
                         </tr>
                         <tr v-if="verifyResult.error">
                             <td style="font-weight: bold;">错误信息</td>
@@ -1608,17 +1629,10 @@
                 <input type="date" v-model="editingDatabase.endAt">
             </div>
             <div class="form-group">
-                <label>只读模式</label>
+                <label>审计模式</label>
                 <div class="checkbox-group">
-                    <input type="checkbox" v-model="editingDatabase.readOnly" id="edit-readonly-checkbox">
-                    <label for="edit-readonly-checkbox">启用只读模式</label>
-                </div>
-            </div>
-            <div class="detail-item">
-                <span class="detail-label">数据库升级</span>
-                <div class="checkbox-group">
-                    <input type="checkbox" v-model="editingDatabase.databaseUpdate" id="edit-update-checkbox">
-                    <label for="edit-update-checkbox">从V2.X版本升级（基因型无法更新）</label>
+                    <input type="checkbox" v-model="editingDatabase.auditEnabled" id="edit-audit-checkbox">
+                    <label for="edit-audit-checkbox">启用审计</label>
                 </div>
             </div>
         </div>
@@ -1638,9 +1652,6 @@ import axios from 'axios'
 import { toast } from 'vue3-toastify'
 import 'vue3-toastify/dist/index.css'
 import IdGroupingManager from '@/components/IdGroupingManager.vue'
-import * as pdfjsLib from 'pdfjs-dist'
-import pdfjsWorkerUrl from 'pdfjs-dist/build/pdf.worker.min.js?url'
-pdfjsLib.GlobalWorkerOptions.workerSrc = pdfjsWorkerUrl
 
 import { useGeneStore, useCageStore, useExperimentStore, useSettingStore } from '@/stores'
 import { storeToRefs } from 'pinia'
@@ -1659,7 +1670,7 @@ const {calculateCages, fetchCages} = cageStore
 const {experiments, experimentPresets, predefinedGroups} = storeToRefs(experimentStore)
 const {fetchExperiments, fetchPredefinedGroups} = experimentStore
 
-const {showColumns, trueCurrentDatabase, databaseNotChanged, selectedSetting, settings} = storeToRefs(settingStore)
+const {showColumns, selectedSetting, settings} = storeToRefs(settingStore)
 const {mouseColumns, resetToDefault, changeSettings} = settingStore
 
 // UI状态
@@ -1748,8 +1759,7 @@ const editingDatabase = ref({
 projectName: '',
 startAt: '',
 endAt: '',
-readOnly: false,
-databaseUpdate: false
+auditEnabled: true
 })
 const currentDatabase = ref('')
 const databases = ref({})
@@ -2009,6 +2019,39 @@ const confirmExport = async () => {
         currentExportType.value = ""
         exportStartDate.value = ""
         exportEndDate.value = ""
+    }
+}
+
+const exportAuditLog = async () => {
+    try {
+        const response = await axios.get('/api/export/audit-log', {
+            params: { format: 'xlsx' },
+            responseType: 'blob'
+        })
+        if (window.pywebview && window.pywebview.api) {
+            const filename = 'audit_log_export.xlsx'
+            const arrayBuffer = await response.data.arrayBuffer()
+            const uint8array = new Uint8Array(arrayBuffer)
+            const dataArray = Array.from(uint8array)
+            const state = await window.pywebview.api.save_file_dialog(dataArray, filename)
+            if (state.success) {
+                toast.success(`导出成功，文件路径：${state.path}`)
+            } else {
+                toast.info(state.message || "导出失败")
+            }
+        } else {
+            const url = window.URL.createObjectURL(new Blob([response.data]))
+            const link = document.createElement('a')
+            link.href = url
+            link.setAttribute('download', 'audit_log_export.xlsx')
+            document.body.appendChild(link)
+            link.click()
+            document.body.removeChild(link)
+            toast.success("导出成功")
+        }
+    } catch (error) {
+        console.error('导出审计日志失败:', error)
+        toast.error('导出审计日志失败，请重试')
     }
 }
 
@@ -2304,8 +2347,8 @@ const importDatabase = () => {
         projectName: '',
         startAt: '',
         endAt: '',
-        readOnly: false,
-        databaseUpdate: false
+        auditEnabled: true,
+
     }
 }
 
@@ -2316,8 +2359,7 @@ const cancelImportDatabase = () => {
         projectName: '',
         startAt: '',
         endAt: '',
-        readOnly: false,
-        databaseUpdate: false
+        auditEnabled: true
     }
 }
 
@@ -2330,20 +2372,17 @@ const handleDbImportComplete = async () => {
     const formData = new FormData()
     formData.append('file', selectedDbFile.value)
     formData.append('project_info', JSON.stringify(editingDatabase.value))
-
+    toast.info('正在重启导入数据库，请稍候...')
     try {
         const response = await axios.post('/api/database/import', formData, {
         headers: {
             'Content-Type': 'multipart/form-data'
         }
         })
-        
-        toast.success('数据库导入成功，请重启软件')
     } catch (error) {
         console.error('数据库导入失败:', error)
         toast.error('数据库导入失败')
     }
-    selectedDbFile.value = null
 }
 
 const exportDatabase = async (key) => {
@@ -2421,22 +2460,6 @@ const exportLogFile = async () => {
     }
 }
 
-const refreshDbInfo = async () => {
-    try {
-        const response = await axios.get('/api/database/info')
-        const dbInfo = response.data
-        
-        if (databaseNotChanged.value) {
-            databases.value[currentDatabase.value] = {...databases.value[currentDatabase.value], ...dbInfo}
-        } else {
-            databases.value[trueCurrentDatabase.value] = {...databases.value[trueCurrentDatabase.value], ...dbInfo}
-        }
-    } catch (error) {
-        console.error('获取数据库信息失败:', error)
-        toast.error('获取数据库信息失败')
-    }
-}
-
 // 清空数据库方法
 const clearDatabase = async () => {
     if (!isDeleteConfirmed.value) {
@@ -2456,8 +2479,8 @@ const clearDatabase = async () => {
         toast.success('数据库清空成功')
         deleteConfirmation.value = ''
         
-        // 刷新数据库信息
-        await refreshDbInfo()
+        // 刷新数据库列表
+        await fetchDbInfo()
         
     } catch (error) {
         console.error('清空数据库失败:', error)
@@ -2479,20 +2502,20 @@ const addDatabase = async () => {
         projectName: '',
         startAt: '',
         endAt: '',
-        readOnly: false,
-        databaseUpdate: false
+        auditEnabled: true,
+
     }
     addingDatabase.value = true
 }
 
 const createDatabase = async () => {
+    toast.info('正在重启应用...')
     const response = await axios.post('/api/database/create', editingDatabase.value)
     editingDatabase.value = {
         projectName: '',
         startAt: '',
         endAt: '',
-        readOnly: false,
-        databaseUpdate: false
+        auditEnabled: true
     }
     if (response.status === 201) {
         // 确保响应包含必要的数据
@@ -2513,8 +2536,8 @@ const cancelCreateDatabase = () => {
         projectName: '',
         startAt: '',
         endAt: '',
-        readOnly: false,
-        databaseUpdate: false
+        auditEnabled: true,
+
     }
     addingDatabase.value = false
 }
@@ -2548,11 +2571,11 @@ const resetEdit = () => {
 }
 
 // 获取数据库状态文本
-const getDatabaseStatus = (readOnly, key) => {
+const getDatabaseStatus = (auditEnabled, key) => {
     if (currentDatabase.value === key) {
-        return readOnly ? '当前(只读)' : '当前使用中'
+        return auditEnabled ? '当前(审计已启用)' : '当前使用中'
     }
-    return readOnly ? '只读' : '可用'
+    return auditEnabled ? '审计已启用' : '审计已禁用'
 }
 
 // 获取状态徽章的CSS类
@@ -2560,41 +2583,31 @@ const getStatusClasses = (db, key) => {
     const classes = {}
     if (currentDatabase.value === key) {
         classes.current = true
-        classes.readonly = db.readOnly
     } else {
-        if (db.readOnly) {
-            classes['readonly-only'] = true
-        } else {
-            classes.available = true
-        }
+        classes['available'] = true
+    }
+    if (db.auditEnabled) {
+        classes['audit-enabled'] = true
+    } else {
+        classes['audit-disabled'] = true
     }
     return classes
 }
 
 // 选择数据库
 const selectDatabase = async (key) => {
-    trueCurrentDatabase.value = currentDatabase.value
     currentDatabase.value = key
+    toast.info('正在重启应用...')
     await axios.put(`/api/database/${key}`)
-    toast.success('数据库切换成功，重新启动应用后生效')
-    databaseNotChanged.value = false
 }
 
-// 切换只读状态
-const toggleReadOnly = async (key) => {
+// 切换审计状态
+const toggleAuditEnabled = async (key) => {
     const db = databases.value[key]
     if (db) {
-        if (currentDatabase.value === key) {
-            const message = db.readOnly 
-                ? "当前数据库正在使用中，确定要将其设为可写吗？重启后生效。（功能尚处于实验阶段）" 
-                : "当前数据库正在使用中，确定要将其设为只读吗？设为只读后可能无法进行写操作，重启后生效。（功能尚处于实验阶段）"
-            
-            if (!confirm(message)) return
-        }
-        
-        db.readOnly = !db.readOnly
+        db.auditEnabled = !db.auditEnabled
         const response = await axios.post(`/api/database/${key}`, db)
-        toast.success(`数据库已设为${db.readOnly ? '只读' : '可写'}`)
+        toast.success(`数据库审计已${db.auditEnabled ? '启用' : '禁用'}`)
     }
 }
 
@@ -2853,11 +2866,6 @@ const confirmReset = () => {
 }
 
 // PDF验证相关函数
-const PUBLIC_KEY_PEM = `-----BEGIN PUBLIC KEY-----
-MFkwEwYHKoZIzj0CAQYIKoZIzj0DAQcDQgAEmbBEQ1hfgNtIrzWUNNlW7zJiPlmL
-ge0Gg+JWDKFjA38oB1gxxjVFw3SZ71i4wTsUUzzOJVH1uguto+QO0vWorQ==
------END PUBLIC KEY-----`
-
 function triggerPdfUpload() {
     pdfFileInput.value.click()
 }
@@ -2882,39 +2890,6 @@ function loadPdfFile(file) {
     reader.readAsArrayBuffer(file)
 }
 
-// 计算字符串的SHA256
-async function computeSHA256Verify(str) {
-    const encoder = new TextEncoder()
-    const data = encoder.encode(str)
-    const hashBuffer = await crypto.subtle.digest('SHA-256', data)
-    const hashArray = Array.from(new Uint8Array(hashBuffer))
-    return hashArray.map(b => b.toString(16).padStart(2, '0')).join('')
-}
-
-// PEM转DER
-function pemToDer(pem) {
-    const base64 = pem.replace(/-----.*?-----/g, '').replace(/\s/g, '')
-    const binary = atob(base64)
-    const bytes = new Uint8Array(binary.length)
-    for (let i = 0; i < binary.length; i++) bytes[i] = binary.charCodeAt(i)
-    return bytes
-}
-
-// 验证ECDSA-P256签名
-async function verifyECDSASignature(publicKeyPem, message, signatureBase64) {
-    const derBytes = pemToDer(publicKeyPem)
-    const publicKey = await crypto.subtle.importKey(
-        'spki', derBytes, { name: 'ECDSA', namedCurve: 'P-256' }, false, ['verify']
-    )
-    const sigBinary = atob(signatureBase64)
-    const sigBytes = new Uint8Array(sigBinary.length)
-    for (let i = 0; i < sigBinary.length; i++) sigBytes[i] = sigBinary.charCodeAt(i)
-    const enc = new TextEncoder()
-    return await crypto.subtle.verify(
-        { name: 'ECDSA', hash: 'SHA-256' }, publicKey, sigBytes, enc.encode(message)
-    )
-}
-
 async function verifyPdf() {
     if (!verifyFileData.value) {
         toast.warning('请先选择PDF文件')
@@ -2925,74 +2900,21 @@ async function verifyPdf() {
     verifyResult.value = null
     
     try {
-        // 使用pdf.js加载PDF
-        const loadingTask = pdfjsLib.getDocument({ data: verifyFileData.value })
-        const pdfDoc = await loadingTask.promise
+        const response = await axios.post('/api/verify-pdf', verifyFileData.value, {
+            headers: { 'Content-Type': 'application/pdf' }
+        })
+        verifyResult.value = response.data
         
-        // 从PDF元数据中提取JSON（隐藏存储在Subject字段）
-        const metadata = await pdfDoc.getMetadata()
-        const jsonStr = metadata.info?.Subject || ''
-        
-        if (!jsonStr) {
-            verifyResult.value = { valid: false, hashMatch: false, signatureValid: false, serverTime: null, sha256: null, error: 'PDF中未找到笼位数据（元数据Subject为空）' }
-            return
-        }
-        
-        // 提取所有页面的文本内容（用于解析认证区）
-        let fullText = ''
-        const numPages = pdfDoc.numPages
-        for (let i = 1; i <= numPages; i++) {
-            const page = await pdfDoc.getPage(i)
-            const textContent = await page.getTextContent()
-            textContent.items.forEach(item => {
-                fullText += item.str
-                fullText += item.hasEOL ? '\n' : ' '
-            })
-        }
-        
-        // 解析认证区信息（英文标签）
-        // 使用[\s\S]*?匹配可能跨多行的签名
-        const certMatch = fullText.match(/Certified At:\s*([\s\S]*?)\n.*Content Hash:\s*([\s\S]*?)\n.*Server Signature:\s*([\s\S]*?)Signed Material:\s*([\s\S]*?)(?:\n|$)/)
-        if (!certMatch) {
-            verifyResult.value = { valid: false, hashMatch: false, signatureValid: false, serverTime: null, sha256: null, error: '未找到认证区信息' }
-            return
-        }
-        
-        const serverTime = certMatch[1].trim()
-        const certSha256 = certMatch[2].trim()
-        // 签名可能跨多行，去掉换行和空格
-        const signature = certMatch[3].replace(/[\r\n\s]/g, '').trim()
-        const signMaterial = certMatch[4].trim()
-        
-        // 重新计算JSON的SHA256
-        const recomputedHash = await computeSHA256Verify(jsonStr)
-        const hashMatch = recomputedHash === certSha256
-        
-        // 验证ECDSA签名
-        let signatureValid = false
-        try {
-            signatureValid = await verifyECDSASignature(PUBLIC_KEY_PEM, signMaterial, signature)
-        } catch (e) {
-            console.warn('签名验证出错:', e)
-        }
-        
-        verifyResult.value = {
-            valid: hashMatch && signatureValid,
-            hashMatch,
-            signatureValid,
-            serverTime,
-            sha256: certSha256
-        }
-        
-        if (hashMatch && signatureValid) {
+        if (response.data.valid) {
             toast.success('PDF验证通过')
         } else {
             toast.error('PDF验证失败')
         }
     } catch (error) {
         console.error('PDF验证错误:', error)
-        verifyResult.value = { valid: false, hashMatch: false, signatureValid: false, serverTime: null, sha256: null, error: error.message }
-        toast.error('PDF验证出错: ' + error.message)
+        const msg = error.response?.data?.error || error.message
+        verifyResult.value = { valid: false, hashMatch: false, chainMatch: false, error: msg }
+        toast.error('PDF验证出错: ' + msg)
     } finally {
         isVerifying.value = false
     }
@@ -3001,7 +2923,6 @@ async function verifyPdf() {
 // 初始化数据
 onMounted(() => {
     fetchDbInfo()
-    refreshDbInfo()
 })
 </script>
 
@@ -3624,9 +3545,8 @@ border-radius: 3px;
     color: white;
 }
 
-.status-badge.readonly {
-    background-color: #FF9800;
-    color: white;
+.status-badge.audit-enabled {
+    border: 2px solid #FF9800;
 }
 
 .status-badge.available {
@@ -3634,9 +3554,8 @@ border-radius: 3px;
     color: white;
 }
 
-.status-badge.readonly-only {
-    background-color: #9E9E9E;
-    color: white;
+.status-badge.audit-disabled {
+    border: 2px solid #9E9E9E;
 }
 
 .status-icon {

@@ -769,20 +769,36 @@ const exportToPDF = async () => {
       return
     }
 
-    // 序列化笼位数据并获取时间戳签名
-    const jsonStr = serializeCageData(sectionCages);
-    const sha256 = await computeSHA256(jsonStr);
-    let certInfo = null;
+    // 从后端获取审计信息（DB哈希、审计链、数据库名）
+    let auditInfo = null;
+    try {
+      const resp = await axios.get('/api/audit-info');
+      auditInfo = resp.data;
+    } catch (e) {
+      console.warn('获取审计信息失败:', e);
+      toast.warning('获取审计信息失败，PDF将不包含认证信息');
+    }
 
-    if (TIMESTAMP_API_URL) {
+    // 序列化笼位数据
+    const jsonStr = serializeCageData(sectionCages);
+
+    // 获取时间戳签名（审计禁用时跳过）
+    let certInfo = null;
+    if (TIMESTAMP_API_URL && auditInfo && auditInfo.audit_enabled !== false) {
       try {
-        certInfo = await fetchTimestampSignature(sha256);
+        const signMaterial = `${auditInfo.db_hash}|${auditInfo.record}`;
+        certInfo = await fetchTimestampSignature(signMaterial);
+        certInfo.db_hash = auditInfo.db_hash;
+        certInfo.record = auditInfo.record;
+        certInfo.db_name = auditInfo.db_name;
       } catch (e) {
         console.warn('时间戳获取失败:', e);
         toast.warning('时间戳获取失败，PDF将不包含认证信息');
       }
+    } else if (auditInfo && auditInfo.audit_enabled === false) {
+      toast.info('当前数据库已禁用审计，PDF将不包含认证信息');
     } else {
-      toast.info('未配置时间戳服务，PDF将不包含认证信息');
+      toast.info('未配置时间戳服务或审计信息，PDF将不包含认证信息');
     }
     
     // 渲染PDF内容
@@ -976,11 +992,15 @@ const generatePDFObject = async (jsonStr, certInfo) => {
   
   if (certInfo) {
     pdf.text('Certified At: ' + certInfo.server_time, 20, 35);
-    pdf.text('Content Hash: ' + certInfo.sha256, 20, 45);
+    pdf.text('DB Name: ' + (certInfo.db_name || ''), 20, 42);
+    pdf.text('DB Hash: ' + (certInfo.db_hash || ''), 20, 49);
     pdf.setFontSize(8);
     const sigLines = pdf.splitTextToSize('Server Signature: ' + certInfo.signature, 170);
-    pdf.text(sigLines, 20, 55);
-    let y = 55 + sigLines.length * 4;
+    pdf.text(sigLines, 20, 56);
+    let y = 56 + sigLines.length * 4;
+    const chainLines = pdf.splitTextToSize('Audit Chain: ' + (certInfo.record || ''), 170);
+    pdf.text(chainLines, 20, y);
+    y += chainLines.length * 4;
     const signMaterialLines = pdf.splitTextToSize('Signed Material: ' + certInfo.sign_material, 170);
     pdf.text(signMaterialLines, 20, y);
   } else {
@@ -991,18 +1011,9 @@ const generatePDFObject = async (jsonStr, certInfo) => {
   return pdf;
 };
 
-// 计算字符串的SHA256
-async function computeSHA256(str) {
-  const encoder = new TextEncoder();
-  const data = encoder.encode(str);
-  const hashBuffer = await crypto.subtle.digest('SHA-256', data);
-  const hashArray = Array.from(new Uint8Array(hashBuffer));
-  return hashArray.map(b => b.toString(16).padStart(2, '0')).join('');
-}
-
 // 调用云函数获取时间戳签名
-async function fetchTimestampSignature(sha256) {
-  const response = await axios.post(TIMESTAMP_API_URL, { sha256 });
+async function fetchTimestampSignature(signMaterial) {
+  const response = await axios.post(TIMESTAMP_API_URL, { sha256: signMaterial });
   return response.data;
 }
 

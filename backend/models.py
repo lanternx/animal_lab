@@ -1,5 +1,7 @@
 from flask_sqlalchemy import SQLAlchemy
+from datetime import datetime
 
+# 小鼠数据库
 db = SQLAlchemy()
 
 class Mouse(db.Model):
@@ -393,4 +395,90 @@ class PredefinedGroup(db.Model):
             'experiment_id': self.experiment_id,
             'Gtype': self.Gtype,
             'rules': self.rules or []
+        }
+
+class MouseDbInfo(db.Model):
+    """小鼠数据库的身份信息表，单行记录"""
+    __tablename__ = 'db_info'
+
+    id = db.Column(db.Integer, primary_key=True)
+    name = db.Column(db.String(100), nullable=False)
+
+    def to_dict(self):
+        return {
+            'id': self.id,
+            'name': self.name
+        }
+
+
+# ==================== 系统数据库模型 ====================
+
+class SysDbInfo(db.Model):
+    """系统数据库 - 记录所有小鼠数据库"""
+    __bind_key__ = 'sys'
+    __tablename__ = 'db_info'
+
+    id = db.Column(db.Integer, primary_key=True)
+    name = db.Column(db.String(100), unique=True, nullable=False)
+    project_name = db.Column(db.String(200))
+    start_at = db.Column(db.Date)
+    end_at = db.Column(db.Date)
+    audit_enabled = db.Column(db.Boolean, default=True)
+    file_size = db.Column(db.Integer, default=0)
+    last_modified = db.Column(db.DateTime)
+    total_records = db.Column(db.Integer, default=0)
+    created_at = db.Column(db.DateTime, default=datetime.utcnow)
+
+    def to_dict(self):
+        return {
+            'id': self.id,
+            'name': self.name,
+            'projectName': self.project_name,
+            'startAt': self.start_at.isoformat() if self.start_at else None,
+            'endAt': self.end_at.isoformat() if self.end_at else None,
+            'auditEnabled': self.audit_enabled,
+            'fileSize': self.file_size,
+            'lastModified': self.last_modified.isoformat() if self.last_modified else None,
+            'totalRecords': self.total_records,
+            'createdAt': self.created_at.isoformat() if self.created_at else None
+        }
+
+
+class SysConfig(db.Model):
+    """系统数据库 - 应用配置"""
+    __bind_key__ = 'sys'
+    __tablename__ = 'config'
+
+    key = db.Column(db.String(100), primary_key=True)
+    value = db.Column(db.Text)
+
+    def to_dict(self):
+        return {
+            'key': self.key,
+            'value': self.value
+        }
+
+
+class SysAuditLog(db.Model):
+    """系统数据库 - 审计记录"""
+    __bind_key__ = 'sys'
+    __tablename__ = 'audit_log'
+
+    id = db.Column(db.Integer, primary_key=True)
+    timestamp = db.Column(db.DateTime, default=datetime.utcnow)
+    action = db.Column(db.Text, nullable=False)
+    old_values = db.Column(db.String(300))
+    new_values = db.Column(db.String(300))
+    record = db.Column(db.String(300))
+    db_id = db.Column(db.Integer, db.ForeignKey('db_info.id'), nullable=False)
+
+    def to_dict(self):
+        return {
+            'id': self.id,
+            'timestamp': self.timestamp.isoformat() if self.timestamp else None,
+            'action': self.action,
+            'old_values': self.old_values,
+            'new_values': self.new_values,
+            'record': self.record,
+            'db_id': self.db_id
         }

@@ -18,9 +18,6 @@ export const useSettingStore = defineStore('setting', () => {
         loadSettings()
     }
 
-    const databaseNotChanged = ref(true)
-    const trueCurrentDatabase = ref('')
-
     const showColumns = ref({
         id: true,
         genotype: true,
@@ -98,8 +95,6 @@ export const useSettingStore = defineStore('setting', () => {
     }
 
     return {
-        databaseNotChanged,
-        trueCurrentDatabase,
         showColumns,
         selectedSetting,
         settings,
